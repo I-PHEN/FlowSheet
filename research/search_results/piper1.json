@@ -1,0 +1,68 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://github.com/OHF-voice/piper1-gpl",
+    "name": "OHF-Voice/piper1-gpl: Fast and local neural text-to-speech",
+    "snippet": "The Open Home Foundation is looking for maintainers for Piper ! If you're interested, please send a message to voice@openhomefoundation.org. GPL -3.0 license",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/rhasspy/piper/discussions/831",
+    "name": "Confusion confusion! Where do I start? Big changes to Piper",
+    "snippet": "Oct 6, 2025 — on Oct 6, 2025 . Is this Piper TTS repo stop developing due to the new Piper1 - GPL repo that uses eSpeakNG as it's phonemizer? Then the newest ...",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "Oct 6, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://robots.uc3m.es/installation-guides/install-piper.html",
+    "name": "Install Piper - Installation Guides - roboticslab-uc3m at github",
+    "snippet": "Lightweight neural network-based speech synthesis (TTS) system that can run offline. The official repository is OHF-Voice/ piper1 - gpl , can be previewed online ...",
+    "host_name": "robots.uc3m.es",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cekura.ai/discover/piper-tts",
+    "name": "Piper TTS: Definition, Metrics and Why It Matters",
+    "snippet": "2 days ago — Piper TTS is a free, open-source neural TTS engine that runs on-device, now under GPL -3.0. In October 2025 , Active development now lives at OHF ...",
+    "host_name": "www.cekura.ai",
+    "rank": 3,
+    "date": "Aug 27, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://writelog.com/piper1-tts",
+    "name": "Support for Piper1-tts",
+    "snippet": "The w5xd piper server was written to support WriteLog's own performance requirements, but the piper server is an open source GPL licensed product, which means ... Read more",
+    "host_name": "writelog.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://huggingface.co/buckets/ghananlpcommunity/jupyter-notebook-storage/tree/piper1-gpl/docs/PLANS.md",
+    "name": "piper1-gpl/docs/PLANS.md",
+    "snippet": "May 7, 2026 — Plans for future Piper development. Compiled executables for Piper need to be ported from the old repo. efficiently stores files, intelligently ...",
+    "host_name": "huggingface.co",
+    "rank": 5,
+    "date": "May 7, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://aur.archlinux.org/packages/piper-tts-git",
+    "name": "AUR (en) - piper-tts-git - Arch Linux",
+    "snippet": "Oct 21, 2024 — A fast, local neural text to speech system · https://github.com/OHF-Voice/ piper1 - gpl · GPL -3.0-or-later · piper -tts · piper -tts. Read more",
+    "host_name": "aur.archlinux.org",
+    "rank": 6,
+    "date": "Oct 21, 2024",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://github.com/pipecat-ai/pipecat",
+    "name": "Pipecat",
+    "snippet": "Pipecat is an open-source Python framework for building real-time voice and multimodal conversational agents. Build a single voice agent or a full multi-agent",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@mahadise0011/top-voice-ai-agent-frameworks-in-2026-a-complete-guide-for-developers-4349d49dbd2b",
+    "name": "Top Voice AI Agent Frameworks in 2026",
+    "snippet": "In this article, we review and compare the top voice AI agent frameworks in 2025 , helping developers choose the right tool based on use case, ...",
+    "host_name": "medium.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/LangChain/comments/1m0l2mx/my_dream_project_is_finally_live_an_opensource_ai",
+    "name": "My dream project is finally live: An open-source AI voice",
+    "snippet": "Can you tell me what the diff is between this and pipecat or livekit ? I'm building voice agents myself and considering migrating off pipecat . Read more",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.f22labs.com/blogs/difference-between-livekit-vs-pipecat-voice-ai-platforms",
+    "name": "Difference Between LiveKit vs PipeCat Voice AI Platforms",
+    "snippet": "Jul 16, 2026 — - Pipecat is an open-source Python framework for orchestrating voice and multimodal AI pipelines.LiveKit is generally better suited to teams ... Read more",
+    "host_name": "www.f22labs.com",
+    "rank": 3,
+    "date": "Jul 16, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.dograh.com/ai-voice-agents-github-proven-guide-dograh-vs-livekit-vs-pipecat",
+    "name": "AI Voice Agents Github: Proven Guide [Dograh vs LiveKit",
+    "snippet": "Feb 4, 2026 — Discover Vapi vs Open-Source voice agents like Dograh, Pipecat, LiveKit, and Vocode to decide the best option for cost, control, and scale.",
+    "host_name": "blog.dograh.com",
+    "rank": 4,
+    "date": "Feb 4, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.speechmatics.com/company/articles-and-news/best-voice-ai-agent-platforms-2025",
+    "name": "The 7 best AI agent orchestration platforms for building",
+    "snippet": "Oct 9, 2025 — A practical guide to the leading AI agent orchestration platforms shaping real-time Voice AI in 2025 , and what to consider before you build. Read more",
+    "host_name": "www.speechmatics.com",
+    "rank": 5,
+    "date": "Oct 9, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cekura.ai/blogs/pipecat-vs-livekit-the-real-difference",
+    "name": "Pipecat vs. LiveKit: The Real Difference (Not What You Think)",
+    "snippet": "Mar 6, 2026 — Wondering when to use Pipecat vs. LiveKit? Learn key differences , when to use each, and how they apply to production voice agent ...",
+    "host_name": "www.cekura.ai",
+    "rank": 6,
+    "date": "Mar 6, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.pipecat.ai",
+    "name": "Pipecat",
+    "snippet": "Pipecat is the most widely used open source ecosystem for building voice and multimodal AI agents. Coordinate voice, video, text, and images in one pipeline,",
+    "host_name": "www.pipecat.ai",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

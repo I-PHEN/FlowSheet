@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://github.com/pmndrs/react-three-fiber",
+    "name": "pmndrs/react-three-fiber: 🇨🇭 A React renderer for Three.js",
+    "snippet": "react-three-fiber is a React renderer for threejs . Build your scene declaratively with re-usable, self-contained components that react to state, are readily ... Read more",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/topics/react-three-fiber",
+    "name": "react-three-fiber",
+    "snippet": "Build a visually captivating 3D portfolio with React.js and Three.js ! Learn to combine interactive 3D graphics and smooth web performance",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/threejs/comments/1c5gw0l/react_three_fiber",
+    "name": "React Three Fiber : r/threejs",
+    "snippet": "React-three-fiber is not a wrapper around Threejs that requires updates and maintenance, it is a renderer, a small form that instructs React ... Read more",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.pmnd.rs/react-three-fiber?ref=trap.jp",
+    "name": "Introduction - React Three Fiber",
+    "snippet": "React-three-fiber is a React renderer for three.js . Build your scene declaratively with re-usable, self-contained components that react to state, are readily ...",
+    "host_name": "docs.pmnd.rs",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.creativedevjobs.com/blog/react-three-fiber-vs-threejs",
+    "name": "React Three Fiber vs Three.js (2026): Key Differences &",
+    "snippet": "Mar 12, 2026 — React Three Fiber (often called R3F ) is a React renderer for Three . js , It has around 30k GitHub stars and roughly 700k npm downloads a week.",
+    "host_name": "www.creativedevjobs.com",
+    "rank": 4,
+    "date": "Mar 12, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/advantages-and-disadvantages-of-react-three-fiber/49160",
+    "name": "Advantages and disadvantages of react-three-fiber",
+    "snippet": "Mar 17, 2023 — Is there a fundamental difference between using react - three - fiber and three - js + react separately? what are the advantages and disadvantages ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 5,
+    "date": "Mar 17, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/TechnoBlogger14o3/react-three-fiber-tutorials",
+    "name": "TechnoBlogger14o3/react-three-fiber-tutorials",
+    "snippet": "React Three Fiber (R3F ) - a React renderer for Three.js that allows you to build stunning 3D web experiences declaratively with React.",
+    "host_name": "github.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.npmjs.com/package/@react-three/fiber",
+    "name": "react-three/fiber",
+    "snippet": "Jul 31, 2026 — react-three-fiber is a React renderer for threejs . Build your scene declaratively with re-usable, self-contained components that react to state ...",
+    "host_name": "www.npmjs.com",
+    "rank": 7,
+    "date": "Jul 31, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

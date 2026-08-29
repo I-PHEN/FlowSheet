@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://community.openai.com/t/partially-structured-output-free-text-output-but-force-correct-tool-call-json/955147",
+    "name": "Partially structured output? Free text output, but force",
+    "snippet": "Sep 24, 2024 — If using a response schema , AI can write this response to a user in JSON , and also call the tool with structured response being strict . What ... Read more",
+    "host_name": "community.openai.com",
+    "rank": 0,
+    "date": "Sep 24, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://agenta.ai/blog/the-guide-to-structured-outputs-and-function-calling-with-llms",
+    "name": "The guide to structured outputs and function calling with",
+    "snippet": "Sep 10, 2025 — The OpenAI Python SDK supports structured outputs using JSON Schema by allowing you to define a JSON schema that the model's output should ...",
+    "host_name": "agenta.ai",
+    "rank": 1,
+    "date": "Sep 10, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.openai.com/t/difference-between-structured-outputs-and-function-calling-required/937697",
+    "name": "Difference between Structured Outputs and function calling",
+    "snippet": "Sep 12, 2024 — The structured output json schema response format. The “ strict ” attribute is set to true, meaning all properties are required and must be ...",
+    "host_name": "community.openai.com",
+    "rank": 2,
+    "date": "Sep 12, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://arxiv.org/html/2606.09395v1",
+    "name": "Empirical Study for Structured Output Control in LLMs",
+    "snippet": "These tools ensure that model-generated text adheres to a specified schema or grammar (e.g., valid JSON or XML), addressing the unreliability of prompt-only ... Read more",
+    "host_name": "arxiv.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.openai.com/t/structured-outputs-deep-dive/930169",
+    "name": "Structured Outputs Deep-dive - API",
+    "snippet": "Sep 3, 2024 — Limitations associated with structured outputs , such as still being susceptible to hallucinations , 4096 max output token limit and limited JSON ... Read more",
+    "host_name": "community.openai.com",
+    "rank": 4,
+    "date": "Sep 3, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.digitalapplied.com/blog/openai-structured-outputs-complete-guide",
+    "name": "OpenAI Structured Outputs: Complete Developer Guide",
+    "snippet": "Jan 13, 2026 — mode reduces hallucinations by 30%, Structured Outputs is an OpenAI feature that constrains model responses to match a predefined JSON schema .",
+    "host_name": "www.digitalapplied.com",
+    "rank": 5,
+    "date": "Jan 13, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@rosgluk/structured-output-comparison-across-popular-llm-providers-openai-gemini-anthropic-mistral-and-1a5d42fa612a",
+    "name": "Structured Output Comparison across popular LLM providers",
+    "snippet": "Here's a side-by-side support comparison of structured output (getting reliable JSON back) across popular LLM providers, plus minimal Python ... Read more",
+    "host_name": "medium.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Python/comments/1tagc2g/i_tested_structured_output_from_288_llm_calls_and",
+    "name": "I tested structured output from 288 LLM calls and logged",
+    "snippet": "I tested structured output from 288 LLM calls and logged every way JSON breaks. Here's what I found · A taxonomy of the 8 most common structured ... Read more",
+    "host_name": "www.reddit.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

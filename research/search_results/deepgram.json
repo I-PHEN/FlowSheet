@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://deepgram.com/pricing",
+    "name": "Deepgram Pricing | Scalable Speech-to-Text,",
+    "snippet": "Deepgram Text-to-Speech is billed per 1,000 characters of input text . This applies to Flux TTS, Aura-2, and Aura-1. Pricing varies by model and plan,",
+    "host_name": "deepgram.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://deepgram.com/product/text-to-speech",
+    "name": "Text-to-Speech for Enterprise Deployment",
+    "snippet": "Pricing that Scales $0.045 per 1,000 characters , with volume discounts. Standard pricing applies beginning September 13, 2026.",
+    "host_name": "deepgram.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://deepgram.com/learn/best-text-to-speech-apis-2026",
+    "name": "10 Best Text to Speech APIs in 2025: Pricing, Features &",
+    "snippet": "Feb 3, 2026 — Pricing: $0.030 per 1,000 characters ($0.027 at Growth tier). $200 free credit to start. Best For: Conversational AI, voice agents, IVR ... Read more",
+    "host_name": "deepgram.com",
+    "rank": 2,
+    "date": "Feb 3, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://texttolab.com/blog/deepgram-pricing",
+    "name": "Deepgram Pricing 2026: Aura-2 TTS at $30/1M + Voice Agent",
+    "snippet": "May 22, 2026 — Deepgram Aura-2 TTS costs $0.030 per 1,000 characters on pay-as-you-go, dropping to $0.027/1K on the Growth plan. New accounts get $200 in free ...",
+    "host_name": "texttolab.com",
+    "rank": 3,
+    "date": "May 22, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.layer3labs.io/guides/deepgram-flux-tts-pricing",
+    "name": "Deepgram Flux TTS Pricing: What It Costs in 2026",
+    "snippet": "Aug 12, 2026 — Its general TTS model, Aura-2, is listed at $0.030 per 1,000 characters , which works out to roughly $0.02 to $0.03 per spoken minute.",
+    "host_name": "www.layer3labs.io",
+    "rank": 4,
+    "date": "Aug 12, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://aloa.co/ai/comparisons/ai-voice-comparison/deepgram-vs-playht",
+    "name": "Deepgram vs PlayAI 2026: Enterprise Voice AI vs Creator",
+    "snippet": "The Aura-2 TTS model is priced at $0.030 per 1,000 characters — more affordable than ElevenLabs Flash ($0.050) and Cartesia Sonic ($0.038) according to  ...",
+    "host_name": "aloa.co",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://deepgram.com/learn/voice-ai-pricing-models-per-minute-per-character-concurrency",
+    "name": "Voice AI Pricing Models Explained: Per-Minute vs",
+    "snippet": "Jul 24, 2026 — Learn how voice AI pricing really works— per -minute, per - character , and concurrency models explained. Deepgram publishes bundled per -minute ...",
+    "host_name": "deepgram.com",
+    "rank": 6,
+    "date": "Jul 24, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://gradium.ai/content/how-to-compare-tts-pricing-across-providers-2026",
+    "name": "How to Compare TTS Pricing Across Providers in 2026",
+    "snippet": "Aug 18, 2026 — Deepgram Aura-2 uses per-character pricing at $0.030 per 1,000 characters ($30/1M), with a lower rate of $0.027/1,000 characters ($27/1M) at ... Read more",
+    "host_name": "gradium.ai",
+    "rank": 7,
+    "date": "Aug 18, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

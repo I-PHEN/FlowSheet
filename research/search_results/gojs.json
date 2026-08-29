@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.jointjs.com/blog/jointjs-vs-gojs",
+    "name": "JointJS vs. GoJS: Two leading diagramming libraries",
+    "snippet": "Dec 12, 2025 — the standard JointJS commercial license is perpetual with no additional costs . While the license costs are also based on the number of ...",
+    "host_name": "www.jointjs.com",
+    "rank": 0,
+    "date": "Dec 12, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.jointjs.com/blog/javascript-diagramming-libraries",
+    "name": "Top 8 JavaScript diagramming libraries in 2026",
+    "snippet": "Jul 3, 2023 — The library is fully free and open-source. In fact, the React Diagrams library does not have any commercial tier at all. Unfortunately, this ... Read more",
+    "host_name": "www.jointjs.com",
+    "rank": 1,
+    "date": "Jul 3, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://gojs.net/latest/learn/deployment",
+    "name": "Deployment and license keys",
+    "snippet": "Deployment and license keys. The GoJS library is software that is licensed under a commercial license agreement . It is not open-source. Read more",
+    "host_name": "gojs.net",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/javascript/comments/3y7z6q/what_is_your_experience_with_javascript",
+    "name": "What is your experience with JavaScript diagramming",
+    "snippet": "the commercial diagramming javascript libraries are all very, very expensive (1 developer license, royalty free use, unlimited apps)",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://portalzine.de/visualize-this-open-source-diagram-tools-to-replace-gojs",
+    "name": "Visualize This: Open-Source Diagram Tools to Replace GoJS",
+    "snippet": "Apr 25, 2025 — JointJS (Community Edition ) is an open-source SVG-based diagramming library, while GoJS is a commercial Canvas-based library. These open-source ...",
+    "host_name": "portalzine.de",
+    "rank": 4,
+    "date": "Apr 25, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.jointjs.com/license",
+    "name": "Licensing: JointJS & JointJS+",
+    "snippet": "The JointJS library is licensed under the Open Source Mozilla Public License Version 2.0. Everything in the library is available for free download. Read more",
+    "host_name": "www.jointjs.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.synergycodes.com/blog/beyond-gojs-vs-jointjs-choosing-the-right-agency-for-developing-diagramming-tools",
+    "name": "Beyond GoJS vs. JointJS: Choosing the right agency for",
+    "snippet": "Choosing the right agency for diagramming tools requires more than comparing GoJS and JointJS – expertise and thoughtful implementation ensure success.",
+    "host_name": "www.synergycodes.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://neoteric.eu/blog/gojs-vs-jointjs-the-comparison-of-two-leading-diagramming-frameworks",
+    "name": "GoJS vs. JointJS+ | The Comparison of Diagramming",
+    "snippet": "Aug 13, 2023 — Licensing JointJS+ does not restrict the way you use your license , while GoJS charges extra to use the library for more than 1 application.",
+    "host_name": "neoteric.eu",
+    "rank": 7,
+    "date": "Aug 13, 2023",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

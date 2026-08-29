@@ -1,0 +1,68 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.reddit.com/r/webgl/comments/oimjow/unity_with_webgl_vs_threejs",
+    "name": "Unity with webGL vs three.js",
+    "snippet": "While webgl does have a much steeper learning curve , I HIGHLY recommend learning it over three.js if you can manage it and have the time. Three. Read more",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/creation-of-a-human-digital-twin-with-threejs-or-unity/61408",
+    "name": "Creation of a human digital twin with threejs or unity?",
+    "snippet": "Feb 13, 2024 — We are creating a digital twin of a human from analyzing videos and we don't if we should be using threejs or other softwares like unity or ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 1,
+    "date": "Feb 13, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.utsubo.com/blog/threejs-vs-unity-web-comparison",
+    "name": "Three.js vs Unity for Web | Comparison Guide 2026",
+    "snippet": "Feb 24, 2026 — Three.js implementations achieve 3–10x smaller payloads than Unity WebGL exports for the same visual quality. Unity WebGL shows 10–30% higher ...",
+    "host_name": "www.utsubo.com",
+    "rank": 2,
+    "date": "Feb 24, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://mdx.so/blog/webgl-vs-three-js-which-technology-for-your-3d-website",
+    "name": "WebGL vs Three.js: Which Technology for Your 3D Website?",
+    "snippet": "Mar 7, 2026 — WebGL vs Three.js explained: how they differ, when to use each for your 3D website , and what each choice means for performance and build ...",
+    "host_name": "mdx.so",
+    "rank": 3,
+    "date": "Mar 7, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://gibinfrancis.medium.com/basic-3d-representation-for-digital-twin-using-angular-three-js-webgl-e5bd7f0600f1",
+    "name": "Basic 3D representation for Digital Twin using Angular, Three",
+    "snippet": "Three . js is a JavaScript library used to create and display animated 3D computer graphics on a web browser ,",
+    "host_name": "gibinfrancis.medium.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/solbizsolutions/posts/software-engineering-meets-3d-elevating-the-browser-experience-with-webgl-threej/122234228324293710",
+    "name": "Elevating browser experience with WebGL and Three.js for",
+    "snippet": "WebGL provides a low-level JavaScript API to render complex 3D scenes via graphics processing units (GPUs).",
+    "host_name": "www.facebook.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.linkedin.com/posts/nour-tinawi_threejs-webgl-digitaltwin-activity-7495760099639074816-8JEd",
+    "name": "#threejs #webgl #digitaltwin #realtime3d #typescript | Nour",
+    "snippet": "A real-time wind farm Digital Twin — running directly in the browser . No Unity . No Unreal. Built with Three . js + TypeScript.",
+    "host_name": "www.linkedin.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs",
+    "name": "Structured outputs - Claude Platform Docs",
+    "snippet": "JSON outputs control Claude's response format , ensuring Claude returns valid JSON matching your schema. Use JSON outputs when you need to: Control Claude's ... Read more",
+    "host_name": "platform.claude.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://thomas-wiegold.com/blog/claude-api-structured-output",
+    "name": "Claude API Structured Output: Complete Guide to Schema",
+    "snippet": "Nov 15, 2025 — Claude API structured output uses constrained decoding to guarantee JSON schema compliance. Learn implementation, best practices, ...",
+    "host_name": "thomas-wiegold.com",
+    "rank": 1,
+    "date": "Nov 15, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Anthropic/comments/1hje7fq/structured_json_output",
+    "name": "Structured (JSON) output : r/Anthropic",
+    "snippet": "We force use of a tool that only outputs in JSON and retry the request if anything comes back not structured as wanted.",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/partner-models/claude/structured-outputs",
+    "name": "Structured outputs with Anthropic Claude models",
+    "snippet": "Aug 19, 2026 — Structured outputs support standard JSON Schema with some limitations, such as requiring additionalProperties to be set to false for objects ...",
+    "host_name": "docs.cloud.google.com",
+    "rank": 3,
+    "date": "Aug 19, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://crazyrouter.com/en/blog/structured-output-json-mode-ai-api-guide-2026",
+    "name": "Structured Output & JSON Mode: Get Reliable AI",
+    "snippet": "Best Practices# 1. Always Validate Responses # 2. Use Enums for Categorical Data# 3. Handle Streaming JSON# For streaming, collect .",
+    "host_name": "crazyrouter.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://agenta.ai/blog/the-guide-to-structured-outputs-and-function-calling-with-llms",
+    "name": "The guide to structured outputs and function calling with",
+    "snippet": "Sep 10, 2025 — Claude doesn't have a JSON mode . You can't force it to always return JSON. The only way is to prompt it to respond in JSON instead of plain text ... Read more",
+    "host_name": "agenta.ai",
+    "rank": 5,
+    "date": "Sep 10, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://towardsdatascience.com/hands-on-with-anthropics-new-structured-output-capabilities",
+    "name": "A Hands-On Guide to Anthropic's New Structured Output",
+    "snippet": "Nov 24, 2025 — A developer's guide to perfect JSON and typed outputs from Claude Sonnet 4.5 and Opus 4.1.",
+    "host_name": "towardsdatascience.com",
+    "rank": 6,
+    "date": "Nov 24, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://claudecertificationguide.com/learn/4-prompt-engineering/4-3-structured-output",
+    "name": "4.3 — Structured Output with Tool Use",
+    "snippet": "tool_use with JSON schemas eliminates syntax errors but not semantic errors. Make fields optional/nullable when source documents may lack information — this ... Read more",
+    "host_name": "claudecertificationguide.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

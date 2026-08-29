@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://python.useinstructor.com",
+    "name": "Instructor - Multi-Language Library for Structured LLM Outputs",
+    "snippet": "Built on top of Pydantic , Instructor provides type-safe data extraction with automatic validation , retries, and streaming support. Whether you're using OpenAI's ...",
+    "host_name": "python.useinstructor.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/567-labs/instructor",
+    "name": "567-labs/instructor: structured outputs for llms",
+    "snippet": "Instructor: Structured Outputs for LLMs. Get reliable JSON from any LLM . Built on Pydantic for validation, type safety, and IDE support.",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pydantic.dev/articles/llm-intro",
+    "name": "How to Use Pydantic for LLMs: Schema, Validation &",
+    "snippet": "Jan 4, 2024 — In this post, we will discuss validating structured outputs from language models using Pydantic and OpenAI. We'll show you how to write reliable ...",
+    "host_name": "pydantic.dev",
+    "rank": 2,
+    "date": "Jan 4, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://python.useinstructor.com/blog/2024/03/05/zero-cost-abstractions",
+    "name": "Why Instructor is the Best Library for Structured LLM Outputs",
+    "snippet": "Mar 5, 2024 — Instructor library simplifies structured LLM outputs using Python type annotations for seamless data mapping. it allows you to easily map LLM ...",
+    "host_name": "python.useinstructor.com",
+    "rank": 3,
+    "date": "Mar 5, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.f22labs.com/blogs/why-the-instructor-beats-openai-for-structured-json-output",
+    "name": "Why the Instructor Beats OpenAI for Structured JSON Output",
+    "snippet": "Jul 16, 2026 — Instructor wraps LLM providers with Pydantic-based validation and returns validated model objects. - Instructor is particularly useful when  ...",
+    "host_name": "www.f22labs.com",
+    "rank": 4,
+    "date": "Jul 16, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.linkedin.com/pulse/understanding-python-instructor-library-rahul-tomar-quhae",
+    "name": "Understanding of Python Instructor(LLM) library",
+    "snippet": "Its primary benefits include: Structured Output with Pydantic ; Ability of automatic validation and retries. Streaming Partial and Iterable ...",
+    "host_name": "www.linkedin.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@adnanbaig2002/from-chaos-to-structure-how-instructor-transforms-llm-output-into-reliable-data-63b57d7ab05b",
+    "name": "How Instructor Transforms LLM Output into Reliable Data",
+    "snippet": "Structured outputs : define a schema with field types, optional/required fields, nested models, etc. Automatic validation + retry: if the LLM ...",
+    "host_name": "medium.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://python.useinstructor.com/blog/2024/10/17/building-a-pairwise-llm-judge-with-instructor-and-pydantic",
+    "name": "Building a Pairwise LLM Judge with Instructor and Pydantic",
+    "snippet": "Oct 17, 2024 — Here, we're using the instructor library , which integrates seamlessly with OpenAI's API and Pydantic for structured outputs. Defining the ...",
+    "host_name": "python.useinstructor.com",
+    "rank": 7,
+    "date": "Oct 17, 2024",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

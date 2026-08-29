@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://reactflow.dev",
+    "name": "React Flow: Node-Based UIs in React",
+    "snippet": "React Flow is a MIT-licensed open source library. From solo open-source developers, Diagrams for process documentation with interactive",
+    "host_name": "reactflow.dev",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.synergycodes.com/blog/react-flow-everything-you-need-to-know",
+    "name": "React Flow: Everything you need to know",
+    "snippet": "React Flow is a popular, open-source React library used for building interactive graphs, flowcharts, and node-based editors in web applications.",
+    "host_name": "www.synergycodes.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/react-digital-garden/react-flow-examples-2cbb0bab4404",
+    "name": "React Flow Examples",
+    "snippet": "ReactFlow is a highly customizable React component that allows developers to create interactive graphs, flowcharts, and diagrams.",
+    "host_name": "medium.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/xyflow/awesome-node-based-uis",
+    "name": "xyflow/awesome-node-based-uis",
+    "snippet": "Flowy - Flowchart library; flow-builder - React-based renderer for workflows and process diagrams ; Foblex Flow - Angular library for rendering node-based UIs ... Read more",
+    "host_name": "github.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://velt.dev/blog/react-flow-guide-advanced-node-based-ui",
+    "name": "React Flow Guide: Advanced Node-Based UIs (Updated  - Velt",
+    "snippet": "Oct 8, 2025 — React Flow is an open-source library for building node-based user interfaces in React applications. It handles display, interaction logic, and ...",
+    "host_name": "velt.dev",
+    "rank": 4,
+    "date": "Oct 8, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/reactjs/comments/1fne5m9/react_flow_alternatives",
+    "name": "React Flow Alternatives : r/reactjs",
+    "snippet": "React Flow is MIT licensed open source . it's the kind of library you use to make Lucidchart. It's free and can completely be customized...",
+    "host_name": "www.reddit.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.overflow.dev",
+    "name": "Build React Flow UIs Fast – Overflow Component Library",
+    "snippet": "Overflow is a React Flow component library for advanced diagram logic and interactions. Built to save hundreds coding hours. Quickstart. View examples. Read more",
+    "host_name": "www.overflow.dev",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/plazarev/collection-of-diagrams-to-use-in-your-react-app-for-effective-data-visualization-4o7n",
+    "name": "Collection of Diagrams to Use in Your React App for",
+    "snippet": "Oct 13, 2023 — React Flow is a popular (with 17.6K stars on GitHub) library used for creating interactive node-based diagrams, mind maps, flow charts, and ... Read more",
+    "host_name": "dev.to",
+    "rank": 7,
+    "date": "Oct 13, 2023",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!
