@@ -100,3 +100,24 @@ Stage Summary:
 - Supporting: download/cover_source.html (editable cover source)
 - Research artifacts: research/2a_landscape.md, research/2b_techstack.md, research/2c_ammonia_eng.md, research/2d_interactivity.md
 - Key findings baked in: 5 must-fix corrections (approach 90-95%, thermo library for VLE, 2-zone secondary reformer, Ar species, real validation sources), verified Gillespie-Beattie table, 15-rung interactivity ladder, full stack picks, 15-risk register, 27-week roadmap v2
+
+---
+Task ID: 4 (build phases 1+2)
+Agent: main (Super Z)
+Task: Build Phase 1 (deterministic engine core) and Phase 2 (PFD workbench UI) of the ammonia plant builder, per the phased stage-gate plan agreed with the user.
+
+Work Log:
+- Initialized fullstack env (Next.js 16 + React 19 + Tailwind 4 + shadcn, bun runtime).
+- Decision (communicated to user): engine in TypeScript in-process instead of Python — identical verified math (PR EOS + research correlations), but sub-100ms re-solve enables live slider-drag interaction, the core product differentiator. Python/thermo/DWSIM remain the offline validation oracle.
+- Engine (src/lib/engine/): species.ts (9 species, SVA props, Cp fits, atom matrix), thermo.ts (ideal-gas enthalpy w/ ΔHf), pr.ts (PR EOS fugacity + residual enthalpy), flash.ts (Rachford-Rice PT flash), reactions.ts (Gillespie-Beattie w/ β-I table, K_SR1, K_WGS, nested-bisection SMR+WGS solver, dedicated methanator solver, NH3 bed solver w/ dissociation), units.ts (19 unit ops incl. dual-zone secondary reformer, 3-bed converter w/ fractional approach, polytropic compressor train, isenthalpic product letdown), plant.ts (spec + base case + front-end sequential pass + air secant controller for H2/N2=3 + synthesis loop tear solved by damped-DS×4 → Broyden with trust region + atom-scaled convergence residual).
+- Bugs found & fixed via the test gate: ln(Z) instead of ln(Z−B) in PR fugacity; enthalpyRate /1000 unit error (all duties 1000× small); methanator equilibrium unreachable via signed SMR extents (inner WGS pins CO) — rewrote as dedicated methanation reaction solver; isothermal letdown flash unphysical — replaced with isenthalpic (self-refrigerating) flash; convergence metric hid trace-species mismatch (Ar balance) — atom-flow-scaled residual; Wegstein linear tail (111 iters) — replaced with Broyden (17 iters).
+- Validation suite scripts/engine-tests.ts: 61 checks — G-B equilibrium table (10 anchors), K_WGS/K_SR1 anchors, PR NH3 Psat + latent heat, loop-gas flash, KO flash, base-case KPI envelopes vs EFMA/Flórez-Orrego/Rice ranges, front-end spot checks (CH4 slip, CO, ppm), element balance closure < 1e-6, physical monotonicity probes (8), determinism, 60-spec robustness fuzz. ALL GREEN.
+- Base case: 796 t/d NH3, 99.24 wt% purity, 28.6% per-pass, 6.9% inerts, H2/N2 3.10, 65 MW reformer, 33.4 GJ/t (partial scope), 17 iterations, ~55-90 ms solve.
+- UI (src/components/workbench/ + src/lib/workbench/layout.ts): dark control-room theme (no gradients/emoji/AI-slop), hand-drawn SVG PFD (19 unit symbols, 27 stream polylines, pan/zoom, hover tooltips w/ composition, click-select, subtle flow animation), inspector (plant overview + per-unit specs, 25 spec fields w/ engineering sliders + clamps), bottom tabs (stream table wet/dry, solver console w/ Broyden trace, element balance), top KPI bar, /api/solve route mirror.
+- Browser verification (agent-browser): 0 errors after fixing hydration mismatch (solveMs SSR) via useSyncExternalStore; live re-solve verified (loopP 150→200 bar → per-pass 28.6→30.3%); unit/stream selection, tabs, reset, mobile stacking all verified; VLM visual reviews clean; lint clean.
+
+Stage Summary:
+- Phase 1 GATE: PASSED (61/61). Phase 2 GATE: PASSED (lint + browser E2E).
+- Deliverable: runnable Next.js workbench at / (preview panel), engine library, test suite (bun scripts/engine-tests.ts).
+- Key artifacts: src/lib/engine/* (9 modules), src/components/workbench/* (4), scripts/engine-tests.ts, scripts/diag-convergence.ts.
+- Next phases (not started): P3 analysis suite (sensitivity sweeps, scenario compare, Prisma persistence), P4 LLM copilot (NL→spec with validation, z-ai sdk), P5 voice (TTS walkthroughs), P6 3D view (R3F), P7 ops game (fault injection).
