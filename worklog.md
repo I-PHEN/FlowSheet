@@ -121,3 +121,32 @@ Stage Summary:
 - Deliverable: runnable Next.js workbench at / (preview panel), engine library, test suite (bun scripts/engine-tests.ts).
 - Key artifacts: src/lib/engine/* (9 modules), src/components/workbench/* (4), scripts/engine-tests.ts, scripts/diag-convergence.ts.
 - Next phases (not started): P3 analysis suite (sensitivity sweeps, scenario compare, Prisma persistence), P4 LLM copilot (NL→spec with validation, z-ai sdk), P5 voice (TTS walkthroughs), P6 3D view (R3F), P7 ops game (fault injection).
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: Post-build UI critique + product re-plan (user feedback: flowsheet sucks, too much info, strictly educational, Google Flow-style project home, 3D only for 1-2 units). NO BUILD — planning discussion only.
+
+Work Log:
+- VLM-analyzed user's 3 Google Flow reference screenshots (landing w/ hero + single CTA; project card grid w/ thumbnails + titles/dates; workspace = calm canvas + right agent panel w/ suggestion chips).
+- VLM-analyzed current workbench screenshot: diagnosed (1) gray-on-gray flowsheet = near-zero contrast ghost, (2) small ambiguous symbols, (3) NO equipment tags or stream numbers on canvas, (4) spaghetti line routing, (5) everything-at-once layout (KPI bar + legend + dense panel + tabs) overwhelms new users.
+- Product reframe: plants-as-projects library home; 2D flowsheet as the hero (textbook-grade rebuild); 3D demoted to 1-2 hero units; AI repositioned to "+ New plant" builder entry + right-side tutor panel (Flow screen-3 pattern).
+- Engine (Phase 1, 61/61) preserved untouched; old workbench panels re-housed behind Operate mode.
+- Proposed phase sequence: A flowsheet design language → B library+shell (Explore mode) → C wire engine (Operate) → D AI plant builder → E 3D hero units → F educational layer (tours, tutor; voice later).
+- Submitted re-plan + 8 decision questions to user (audience, canvas theme, data-on-canvas default, library size, new-plant UX, mode split, tutor panel placement, 3D unit picks).
+
+Stage Summary:
+- Planning turn only; no code changed. Awaiting user decisions before Phase A starts.
+
+DECISIONS LOCKED (user, via question round):
+1. Audience: BOTH ChE students + self-learners → dual-layer content per unit (plain-language + technical depth)
+2. Canvas: soft warm-gray studio (light, textbook-legible, softer ink — not paper-white, not dark)
+3. Default canvas data: equipment tags + stream numbers only; values on hover/click
+4. Library at first release: ONE reference plant (1,000 t/d SMR), done deep
+5. '+ New plant': hybrid wizard (structured steps + AI chat alongside, form always visible)
+6. Modes: Explore / Operate (+ Analyze later)
+7. AI tutor: persistent right agent panel w/ suggestion chips (Flow screen-3 pattern)
+8. 3D hero units: converter + primary reformer furnace
+- Phase A spec issued (design tokens, 19-symbol SVG set w/ tags, hand-authored textbook layout w/ section bands + lane discipline, hover/click interactions, dual-layer panel content for 19 units, 7-point acceptance gate incl. 30-second test + silhouette ID test + ≥7:1 contrast).
+- Tutor panel shells in Phase B: suggestion chips wired to deterministic authored tours (no LLM needed); free-form AI Q&A + voice deferred to Phase F.
+- Old dark workbench: keep at /legacy for engine debugging through Phase C, then remove.
