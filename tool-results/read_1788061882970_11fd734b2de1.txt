@@ -1,0 +1,949 @@
+     1→import { AIR_COMP, ATOM_MATRIX, ATOMS, LHV_CH4, N_SP, SP, SPECIES } from './species';
+     2→import type { Moles } from './species';
+     3→import { enthalpyRate, massFlow, total } from './thermo';
+     4→import type {
+     5→  ElementBalance,
+     6→  Kpis,
+     7→  PlantResult,
+     8→  SolverTraceRow,
+     9→  Stream,
+    10→  UnitResult,
+    11→} from './types';
+    12→import {
+    13→  adiabaticEqReactor,
+    14→  compressorTrain,
+    15→  converterBed,
+    16→  cooler,
+    17→  co2Removal,
+    18→  flashDrum,
+    19→  isenthalpicFlash,
+    20→  mixStreams,
+    21→  methanator,
+    22→  phaseEnthalpyRate,
+    23→  primaryReformer,
+    24→  secondaryReformer,
+    25→  zeroN,
+    26→} from './units';
+    27→
+    28→/**
+    29→ * Steam-methane-reforming ammonia flowsheet — sequential-modular solution.
+    30→ *
+    31→ * Front end (no recycle): feed mixer → primary reformer → secondary reformer
+    32→ * (dual-zone) → WHB → HTS → LTS → knockout → CO2 removal → methanator →
+    33→ * knockout → syngas compression.
+    34→ *
+    35→ * Synthesis loop (one tear): loop mixer → preheater → 3-bed converter →
+    36→ * condensation train → separator → purge split → circulator → back to mixer.
+    37→ *
+    38→ * Make-up is added AFTER condensation; purge taken BEFORE make-up (EFMA BAT
+    39→ * arrangement — research Q6). Air flow is the design DOF that sets make-up
+    40→ * H2/N2 = 3 (research C3), solved by a secant controller.
+    41→ */
+    42→
+    43→const C = (celsius: number) => celsius + 273.15;
+    44→const BAR = (b: number) => b * 1e5;
+    45→const MW = (kJh: number) => kJh / 3.6e6;
+    46→const d1 = (x: number) => (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
+    47→const d2 = (x: number) => x.toFixed(2);
+    48→
+    49→// ---------------------------------------------------------------------------
+    50→// Plant specification — every field is a UI-editable knob with a physical range
+    51→// ---------------------------------------------------------------------------
+    52→
+    53→export interface PlantSpec {
+    54→  // feed & front end
+    55→  ngFeed: number; // kmol/h CH4            [100 .. 3000]
+    56→  steamCarbon: number; // mol/mol           [2.0 .. 5.0]
+    57→  frontEndP: number; // bar                 [20 .. 45]
+    58→  primaryT: number; // °C outlet            [700 .. 900]
+    59→  primaryATE: number; // K on CH4 eq        [0 .. 40]
+    60→  // secondary reformer
+    61→  airAuto: boolean; // H2/N2 controller on/off
+    62→  airFlow: number; // kmol/h (manual)       [100 .. 6000]
+    63→  h2n2Set: number; // make-up H2/N2 target  [2.5 .. 3.3]
+    64→  secondaryATE: number; // K on CH4 eq      [0 .. 80]
+    65→  // shift section
+    66→  htsInletT: number; // °C                  [300 .. 400]
+    67→  htsATE: number; // K                      [0 .. 50]
+    68→  ltsInletT: number; // °C                  [180 .. 240]
+    69→  ltsATE: number; // K                      [0 .. 60]
+    70→  // purification
+    71→  co2Residual: number; // ppmvd             [20 .. 2000]
+    72→  co2h2Slip: number; // fraction            [0 .. 0.010]
+    73→  methInletT: number; // °C                 [250 .. 360]
+    74→  // synthesis loop
+    75→  loopP: number; // bar                     [80 .. 250]
+    76→  bed1T: number; // °C                      [350 .. 450]
+    77→  bed2T: number; // °C                      [380 .. 470]
+    78→  bed3T: number; // °C                      [380 .. 460]
+    79→  bedApproach: [number, number, number]; // fractional [0.5 .. 0.99] per bed
+    80→  chillT: number; // °C                     [-40 .. 30]
+    81→  purgeFrac: number; // of separator gas    [0.01 .. 0.25]
+    82→  // machinery
+    83→  comprStages: number; // 1..5
+    84→  etaP: number; // polytropic eff.          [0.60 .. 0.85]
+    85→  dpConverter: number; // bar               [1 .. 8]
+    86→  dpCondenser: number; // bar               [1 .. 6]
+    87→}
+    88→
+    89→export function baseCase(): PlantSpec {
+    90→  return {
+    91→    ngFeed: 1000,
+    92→    steamCarbon: 3.0,
+    93→    frontEndP: 30,
+    94→    primaryT: 805,
+    95→    primaryATE: 10,
+    96→    airAuto: true,
+    97→    airFlow: 1560,
+    98→    h2n2Set: 3.0,
+    99→    secondaryATE: 30,
+   100→    htsInletT: 340,
+   101→    htsATE: 20,
+   102→    ltsInletT: 205,
+   103→    ltsATE: 15,
+   104→    co2Residual: 300,
+   105→    co2h2Slip: 0.003,
+   106→    methInletT: 300,
+   107→    loopP: 150,
+   108→    bed1T: 400,
+   109→    bed2T: 430,
+   110→    bed3T: 415,
+   111→    bedApproach: [0.9, 0.9, 0.9],
+   112→    chillT: -20,
+   113→    purgeFrac: 0.028,
+   114→    comprStages: 3,
+   115→    etaP: 0.75,
+   116→    dpConverter: 3,
+   117→    dpCondenser: 2,
+   118→  };
+   119→}
+   120→
+   121→// fixed internal conditions (documented; promoted to specs in later phases)
+   122→const STEAM_T = C(400);
+   123→const AIR_T = C(180);
+   124→const KO_T = C(40);
+   125→const INTERCOOL_T = C(40);
+   126→const WC_T = C(35); // cooling-water temperature (splits condenser duty)
+   127→
+   128→// pressure cascade offsets from frontEndP, bar
+   129→const DP = {
+   130→  mixer: 1,
+   131→  primary: 0,
+   132→  secondary: 1.5,
+   133→  whb: 2,
+   134→  hts: 2.5,
+   135→  ltsIn: 3,
+   136→  lts: 3.5,
+   137→  ko1: 4,
+   138→  co2: 5,
+   139→  meth: 5.5,
+   140→  ko2: 6,
+   141→} as const;
+   142→
+   143→interface FrontEnd {
+   144→  streams: Record<string, Stream>;
+   145→  units: Record<string, UnitResult>;
+   146→  makeup: Moles;
+   147→  warnings: string[];
+   148→}
+   149→
+   150→const st = (id: string, name: string, T: number, P: number, n: Moles, cls: Stream['cls']): Stream => ({
+   151→  id,
+   152→  name,
+   153→  T,
+   154→  P,
+   155→  n,
+   156→  cls,
+   157→});
+   158→
+   159→/** One sequential pass through the front end at a given air flow. */
+   160→export function frontEndPass(spec: PlantSpec, airKmol: number): FrontEnd {
+   161→  const streams: Record<string, Stream> = {};
+   162→  const units: Record<string, UnitResult> = {};
+   163→  const warnings: string[] = [];
+   164→  const P0 = spec.frontEndP;
+   165→
+   166→  // ---- feed section ----
+   167→  const ng: Moles = zeroN();
+   168→  ng[4] = spec.ngFeed;
+   169→  const steam: Moles = zeroN();
+   170→  steam[7] = spec.ngFeed * spec.steamCarbon;
+   171→  const air: Moles = AIR_COMP.map((f) => f * airKmol);
+   172→
+   173→  const ngS = st('S01', 'Natural gas feed', C(40), BAR(P0 + 2), ng, 'feed');
+   174→  const steamS = st('S02', 'Process steam', STEAM_T, BAR(P0 + 2), steam, 'feed');
+   175→  const airS = st('S05', 'Process air', AIR_T, BAR(P0 + 0.5), air, 'feed');
+   176→  streams.S01 = ngS;
+   177→  streams.S02 = steamS;
+   178→  streams.S05 = airS;
+   179→
+   180→  const mixed = mixStreams(
+   181→    [
+   182→      { n: ng, T: C(40), P: BAR(P0 + 2) },
+   183→      { n: steam, T: STEAM_T, P: BAR(P0 + 2) },
+   184→    ],
+   185→    BAR(P0 + DP.mixer),
+   186→  );
+   187→  streams.S03 = st('S03', 'Mixed feed', mixed.T, BAR(P0 + DP.mixer), mixed.n, 'syngas');
+   188→  units.M1 = {
+   189→    id: 'M1',
+   190→    name: 'Feed mixer',
+   191→    model: 'Adiabatic mixing of natural gas and process steam',
+   192→    metrics: [
+   193→      { label: 'Mixed flow', value: `${d1(total(mixed.n))} kmol/h` },
+   194→      { label: 'Steam/carbon', value: d2(spec.steamCarbon) },
+   195→      { label: 'Mixer outlet T', value: `${d1(mixed.T - 273.15)} °C` },
+   196→    ],
+   197→    warnings: [],
+   198→  };
+   199→
+   200→  // ---- primary reformer ----
+   201→  const pP = BAR(P0 + DP.primary);
+   202→  const prim = primaryReformer(mixed.n, mixed.T, C(spec.primaryT), pP, spec.primaryATE, 10);
+   203→  streams.S04 = st('S04', 'Primary effluent', prim.T, pP, prim.n, 'syngas');
+   204→  if (!prim.reached) warnings.push('R1: CH4 equilibrium not reachable within bounds');
+   205→  units.R1 = {
+   206→    id: 'R1',
+   207→    name: 'Primary reformer',
+   208→    model: 'Fired furnace — SMR + WGS equilibrium at outlet T (K_SR1, K_WGS; ATE on CH4)',
+   209→    metrics: [
+   210→      { label: 'Furnace duty', value: `${d1(MW(prim.dutyKJh))} MW`, raw: MW(prim.dutyKJh) },
+   211→      { label: 'Outlet T', value: `${d1(prim.T - 273.15)} °C` },
+   212→      { label: 'CH4 slip (dry)', value: `${(prim.ch4SlipDry * 100).toFixed(2)} %` },
+   213→      { label: 'H2 (dry)', value: `${(prim.h2Dry * 100).toFixed(1)} %` },
+   214→      { label: 'CH4 conversion', value: `${d1((1 - prim.n[4] / Math.max(ng[4], 1e-9)) * 100)} %` },
+   215→    ],
+   216→    warnings: prim.reached ? [] : ['equilibrium not reached'],
+   217→  };
+   218→
+   219→  // ---- secondary reformer (dual zone) ----
+   220→  const secP = BAR(P0 - DP.secondary);
+   221→  const sec = secondaryReformer(prim.n, prim.T, air, AIR_T, secP, spec.secondaryATE, 15);
+   222→  streams.S06 = st('S06', 'Secondary effluent', sec.T, secP, sec.n, 'syngas');
+   223→  units.R2 = {
+   224→    id: 'R2',
+   225→    name: 'Secondary reformer',
+   226→    model: 'Zone 1 adiabatic H2 combustion → Zone 2 catalytic SMR+WGS equilibrium (research C3)',
+   227→    metrics: [
+   228→      { label: 'Combustion-zone T', value: `${d1(sec.tCombust - 273.15)} °C`, raw: sec.tCombust },
+   229→      { label: 'Catalytic exit T', value: `${d1(sec.T - 273.15)} °C`, raw: sec.T },
+   230→      { label: 'CH4 slip (dry)', value: `${(sec.ch4SlipDry * 100).toFixed(2)} %` },
+   231→      { label: 'CO (dry)', value: `${(sec.coDry * 100).toFixed(1)} %` },
+   232→      { label: 'O2 remaining', value: `${d2(sec.o2Remaining)} kmol/h` },
+   233→    ],
+   234→    warnings: sec.o2Remaining > 0.5 ? ['residual O2 after combustion zone'] : [],
+   235→  };
+   236→
+   237→  // ---- WHB + HTS ----
+   238→  const whbP = BAR(P0 - DP.whb);
+   239→  const whb = cooler(sec.n, sec.T, C(spec.htsInletT), whbP);
+   240→  streams.S07 = st('S07', 'HTS feed', whb.T, whbP, whb.n, 'syngas');
+   241→  units.E1 = {
+   242→    id: 'E1',
+   243→    name: 'Waste-heat boiler',
+   244→    model: 'Cools secondary effluent to HTS inlet (HP steam generation implied)',
+   245→    metrics: [{ label: 'Duty', value: `${d1(MW(whb.dutyKJh))} MW`, raw: MW(whb.dutyKJh) }],
+   246→    warnings: [],
+   247→  };
+   248→
+   249→  const htsP = BAR(P0 - DP.hts);
+   250→  const hts = adiabaticEqReactor(whb.n, whb.T, htsP, false, 0, spec.htsATE);
+   251→  streams.S08 = st('S08', 'HTS effluent', hts.TOut, htsP, hts.n, 'syngas');
+   252→  units.R3 = {
+   253→    id: 'R3',
+   254→    name: 'High-temp shift',
+   255→    model: 'Adiabatic WGS equilibrium on Fe-Cr catalyst (methane reactions frozen)',
+   256→    metrics: [
+   257→      { label: 'Outlet T', value: `${d1(hts.TOut - 273.15)} °C` },
+   258→      { label: 'CO (dry)', value: `${(hts.coDry * 100).toFixed(2)} %` },
+   259→      { label: 'ΔT (adiabatic rise)', value: `${d1(hts.TOut - whb.T)} K` },
+   260→    ],
+   261→    warnings: [],
+   262→  };
+   263→
+   264→  // ---- LTS ----
+   265→  const ltsInP = BAR(P0 - DP.ltsIn);
+   266→  const ltsIn = cooler(hts.n, hts.TOut, C(spec.ltsInletT), ltsInP);
+   267→  streams.S09 = st('S09', 'LTS feed', ltsIn.T, ltsInP, ltsIn.n, 'syngas');
+   268→  units.E4 = {
+   269→    id: 'E4',
+   270→    name: 'Shift intercooler',
+   271→    model: 'Cools HTS effluent to LTS inlet',
+   272→    metrics: [{ label: 'Duty', value: `${d1(MW(ltsIn.dutyKJh))} MW`, raw: MW(ltsIn.dutyKJh) }],
+   273→    warnings: [],
+   274→  };
+   275→
+   276→  const ltsP = BAR(P0 - DP.lts);
+   277→  const lts = adiabaticEqReactor(ltsIn.n, ltsIn.T, ltsP, false, 0, spec.ltsATE);
+   278→  streams.S10 = st('S10', 'LTS effluent', lts.TOut, ltsP, lts.n, 'syngas');
+   279→  units.R4 = {
+   280→    id: 'R4',
+   281→    name: 'Low-temp shift',
+   282→    model: 'Adiabatic WGS equilibrium on Cu-Zn catalyst (methane reactions frozen)',
+   283→    metrics: [
+   284→      { label: 'Outlet T', value: `${d1(lts.TOut - 273.15)} °C` },
+   285→      { label: 'CO (dry)', value: `${(lts.coDry * 100).toFixed(3)} %` },
+   286→      { label: 'ΔT (adiabatic rise)', value: `${d1(lts.TOut - ltsIn.T)} K` },
+   287→    ],
+   288→    warnings: [],
+   289→  };
+   290→
+   291→  // ---- knockout 1 ----
+   292→  const ko1P = BAR(P0 - DP.ko1);
+   293→  const ko1 = flashDrum(lts.n, lts.TOut, KO_T, ko1P, 7);
+   294→  streams.S11 = st('S11', 'Treated gas (KO1 vapor)', KO_T, ko1P, ko1.vapor, 'syngas');
+   295→  streams.S12 = st('S12', 'Condensate to BFW', KO_T, ko1P, ko1.liquid, 'water');
+   296→  units.V1 = {
+   297→    id: 'V1',
+   298→    name: 'Knockout drum 1',
+   299→    model: 'PT flash (Peng-Robinson) — condenses shift steam',
+   300→    metrics: [
+   301→      { label: 'Condensate', value: `${d1(massFlow(ko1.liquid))} kg/h` },
+   302→      { label: 'Vapor fraction', value: d2(ko1.beta) },
+   303→    ],
+   304→    warnings: [],
+   305→  };
+   306→
+   307→  // ---- CO2 removal ----
+   308→  const co2P = BAR(P0 - DP.co2);
+   309→  const co2 = co2Removal(ko1.vapor, spec.co2Residual, spec.co2h2Slip);
+   310→  streams.S13 = st('S13', 'CO2-lean gas', C(45), co2P, co2.gas, 'syngas');
+   311→  streams.S14 = st('S14', 'CO2 to storage', C(60), BAR(1.8), co2.offgas, 'co2');
+   312→  units.A1 = {
+   313→    id: 'A1',
+   314→    name: 'CO2 removal',
+   315→    model: 'aMDEA black box — spec residual ppmvd and H2 co-absorption (research Q5)',
+   316→    metrics: [
+   317→      { label: 'CO2 removed', value: `${d1(co2.co2Removed)} kmol/h` },
+   318→      { label: 'Residual CO2', value: `${d1(co2.residualPpm)} ppmvd` },
+   319→      { label: 'H2 slip', value: `${d1(co2.offgas[0])} kmol/h` },
+   320→      { label: 'Regeneration duty', value: `${d1(MW(co2.co2Removed * 45e3))} MW (est. 45 MJ/kmol)` },
+   321→    ],
+   322→    warnings: [],
+   323→  };
+   324→
+   325→  // ---- methanator ----
+   326→  const methP = BAR(P0 - DP.meth);
+   327→  const meth = methanator(co2.gas, C(spec.methInletT), methP);
+   328→  const oxidesPpm = meth.oxidesPpmDry;
+   329→  streams.S15 = st('S15', 'Methanator effluent', meth.TOut, methP, meth.n, 'syngas');
+   330→  units.R5 = {
+   331→    id: 'R5',
+   332→    name: 'Methanator',
+   333→    model: 'Adiabatic CO/CO2 methanation equilibrium — carbon oxides to ppm',
+   334→    metrics: [
+   335→      { label: 'Outlet T', value: `${d1(meth.TOut - 273.15)} °C` },
+   336→      { label: 'CO+CO2 out', value: `${d1(oxidesPpm)} ppmvd` },
+   337→      { label: 'ΔT (rise)', value: `${d1(meth.TOut - C(spec.methInletT))} K` },
+   338→    ],
+   339→    warnings: oxidesPpm > 10 ? ['carbon oxides above 10 ppm — synthesis catalyst at risk'] : [],
+   340→  };
+   341→
+   342→  // ---- knockout 2 ----
+   343→  const ko2P = BAR(P0 - DP.ko2);
+   344→  const ko2 = flashDrum(meth.n, meth.TOut, KO_T, ko2P, 7);
+   345→  streams.S16 = st('S16', 'Make-up syngas', KO_T, ko2P, ko2.vapor, 'syngas');
+   346→  streams.S17 = st('S17', 'Condensate to BFW', KO_T, ko2P, ko2.liquid, 'water');
+   347→  units.V2 = {
+   348→    id: 'V2',
+   349→    name: 'Knockout drum 2',
+   350→    model: 'PT flash (Peng-Robinson) — removes methanation water',
+   351→    metrics: [
+   352→      { label: 'Condensate', value: `${d1(massFlow(ko2.liquid))} kg/h` },
+   353→      { label: 'Vapor fraction', value: d2(ko2.beta) },
+   354→    ],
+   355→    warnings: [],
+   356→  };
+   357→
+   358→  return { streams, units, makeup: ko2.vapor, warnings };
+   359→}
+   360→
+   361→// ---------------------------------------------------------------------------
+   362→// Synthesis loop
+   363→// ---------------------------------------------------------------------------
+   364→
+   365→interface LoopPass {
+   366→  streams: Record<string, Stream>;
+   367→  units: Record<string, UnitResult>;
+   368→  /** g(x): new converter-feed flows implied by tear value x */
+   369→  g: Moles;
+   370→  warnings: string[];
+   371→  product: Moles;
+   372→  purge: Moles;
+   373→  recycle: Moles;
+   374→  nFeed: Moles;
+   375→  nEff: Moles;
+   376→}
+   377→
+   378→export function loopPass(spec: PlantSpec, makeup: Moles, tear: Moles): LoopPass {
+   379→  const streams: Record<string, Stream> = {};
+   380→  const units: Record<string, UnitResult> = {};
+   381→  const warnings: string[] = [];
+   382→  const loopP = BAR(spec.loopP);
+   383→  const feedP = loopP;
+   384→
+   385→  // converter: 3 adiabatic beds with interbed cooling
+   386→  const beds: Array<{ n: Moles; T: number; xi: number; nh3Out: number; nh3In: number }> = [];
+   387→  let cur = { n: tear, T: C(spec.bed1T) };
+   388→  const bedTs = [C(spec.bed1T), C(spec.bed2T), C(spec.bed3T)];
+   389→  let interbedDuty = 0;
+   390→  for (let b = 0; b < 3; b++) {
+   391→    const bed = converterBed(cur.n, cur.T, feedP, spec.bedApproach[b]);
+   392→    beds.push({ n: bed.n, T: bed.TOut, xi: bed.xi, nh3Out: bed.nh3Out, nh3In: bed.nh3In });
+   393→    if (b < 2) {
+   394→      const nextT = Math.min(bed.TOut, bedTs[b + 1]);
+   395→      interbedDuty += enthalpyRate(bed.n, bed.TOut) - enthalpyRate(bed.n, nextT);
+   396→      cur = { n: bed.n, T: nextT };
+   397→    } else {
+   398→      cur = { n: bed.n, T: bed.TOut };
+   399→    }
+   400→  }
+   401→  const nEff = cur.n;
+   402→  const tEff = cur.T;
+   403→  const effP = BAR(spec.loopP - spec.dpConverter);
+   404→  streams.S20 = st('S20', 'Converter feed', C(spec.bed1T), feedP, tear, 'loopgas');
+   405→  streams.S21 = st('S21', 'Converter effluent', tEff, effP, nEff, 'loopgas');
+   406→  const totIn = total(tear);
+   407→  const totOut = total(nEff);
+   408→  const nh3InPct = totIn > 0 ? (tear[6] / totIn) * 100 : 0;
+   409→  const nh3OutPct = totOut > 0 ? (nEff[6] / totOut) * 100 : 0;
+   410→  const perPass = tear[1] > 1e-9 ? (1 - nEff[1] / tear[1]) * 100 : 0;
+   411→  const bedMetrics = beds.flatMap((b, i) => [
+   412→    { label: `Bed ${i + 1} NH3 in→out`, value: `${(b.nh3In * 100).toFixed(1)} → ${(b.nh3Out * 100).toFixed(1)} %` },
+   413→    { label: `Bed ${i + 1} outlet T`, value: `${d1(b.T - 273.15)} °C` },
+   414→  ]);
+   415→  units.R6 = {
+   416→    id: 'R6',
+   417→    name: 'Synthesis converter',
+   418→    model: '3 adiabatic beds, fractional approach to G-B equilibrium per bed (research C1)',
+   419→    metrics: [
+   420→      ...bedMetrics,
+   421→      { label: 'NH3 (converter in→out)', value: `${nh3InPct.toFixed(1)} → ${nh3OutPct.toFixed(1)} %` },
+   422→      { label: 'Per-pass N2 conversion', value: `${d1(perPass)} %`, raw: perPass },
+   423→      { label: 'Interbed duty', value: `${d1(MW(interbedDuty))} MW` },
+   424→    ],
+   425→    warnings: [],
+   426→  };
+   427→
+   428→  // condensation train: water cooler → refrigerated chiller (phase-aware duty:
+   429→  // PR residual enthalpy captures the NH3 latent heat)
+   430→  const condP = BAR(spec.loopP - spec.dpConverter - spec.dpCondenser);
+   431→  const wc = cooler(nEff, tEff, WC_T, condP);
+   432→  const ch = cooler(wc.n, wc.T, C(spec.chillT), condP);
+   433→  const chillDuty =
+   434→    phaseEnthalpyRate(wc.n, WC_T, condP, 'vapor') -
+   435→    (phaseEnthalpyRate(ch.n, C(spec.chillT), condP, 'vapor') +
+   436→      0); // gas-side only here; latent part added at the separator below
+   437→  streams.S22 = st('S22', 'Chilled loop gas', ch.T, condP, ch.n, 'loopgas');
+   438→
+   439→  // separator
+   440→  const sep = flashDrum(ch.n, ch.T, ch.T, condP, 6);
+   441→  // true condensation duty (feed vapor → two-phase product) with PR departure
+   442→  const condDuty =
+   443→    phaseEnthalpyRate(nEff, tEff, BAR(spec.loopP - spec.dpConverter), 'vapor') -
+   444→    (phaseEnthalpyRate(sep.vapor, ch.T, condP, 'vapor') +
+   445→      phaseEnthalpyRate(sep.liquid, ch.T, condP, 'liquid'));
+   446→  // refrigeration portion: everything below cooling-water temperature
+   447→  const refrDuty =
+   448→    phaseEnthalpyRate(nEff, WC_T, BAR(spec.loopP - spec.dpConverter), 'vapor') -
+   449→    (phaseEnthalpyRate(sep.vapor, ch.T, condP, 'vapor') +
+   450→      phaseEnthalpyRate(sep.liquid, ch.T, condP, 'liquid'));
+   451→  void chillDuty;
+   452→
+   453→  streams.S24S = st('S24S', 'Separator liquid', sep.T, condP, sep.liquid, 'product');
+   454→  streams.S25 = st('S25', 'Separator gas', sep.T, condP, sep.vapor, 'loopgas');
+   455→
+   456→  // product letdown drum: isenthalpic flash to 2 bar — self-refrigerating
+   457→  // degassing of dissolved H2/N2/CH4/Ar (vapor to purge, liquid to storage)
+   458→  const LETDOWN_P = BAR(2);
+   459→  const letdown = isenthalpicFlash(sep.liquid, sep.T, condP, LETDOWN_P);
+   460→  streams.S24 = st('S24', 'Liquid ammonia product', letdown.T, LETDOWN_P, letdown.liquid, 'product');
+   461→  const prodTpd = (massFlow(letdown.liquid) * 24) / 1000;
+   462→  const prodKg = massFlow(letdown.liquid);
+   463→  const prodNH3kg = letdown.liquid[6] * SP.NH3.mw;
+   464→  const recovered = nEff[6] > 1e-9 ? letdown.liquid[6] / nEff[6] : 0;
+   465→  const sepMolPurity = total(letdown.liquid) > 0 ? letdown.liquid[6] / total(letdown.liquid) : 0;
+   466→  units.E2 = {
+   467→    id: 'E2',
+   468→    name: 'Condensation train',
+   469→    model: 'Water cooler (35 °C) + refrigerated chiller — PR residual enthalpy for latent heat',
+   470→    metrics: [
+   471→      { label: 'Condensation duty', value: `${d1(MW(condDuty))} MW`, raw: MW(condDuty) },
+   472→      { label: 'Refrigeration duty', value: `${d1(MW(refrDuty))} MW`, raw: MW(refrDuty) },
+   473→      { label: 'Refrig. shaft power', value: `${d1(MW(refrDuty) / 2.4)} MW (COP 2.4)` },
+   474→    ],
+   475→    warnings: [],
+   476→  };
+   477→  units.V3 = {
+   478→    id: 'V3',
+   479→    name: 'Ammonia separator + letdown',
+   480→    model: 'PT flash at loop P, then product letdown to 2 bar (degassing)',
+   481→    metrics: [
+   482→      { label: 'Product', value: `${d1(prodTpd)} t/d`, raw: prodTpd },
+   483→      {
+   484→        label: 'Purity',
+   485→        value: `${(sepMolPurity * 100).toFixed(2)} mol % / ${((prodNH3kg / Math.max(prodKg, 1e-9)) * 100).toFixed(2)} wt %`,
+   486→      },
+   487→      { label: 'NH3 recovered', value: `${(recovered * 100).toFixed(1)} %` },
+   488→      { label: 'Separator T', value: `${d1(sep.T - 273.15)} °C` },
+   489→      { label: 'Letdown T', value: `${d1(letdown.T - 273.15)} °C / 2 bar` },
+   490→      { label: 'Flashed vapor', value: `${(letdown.flashedFrac * 100).toFixed(1)} % of liquid` },
+   491→    ],
+   492→    warnings: letdown.liquid[6] <= 0 ? ['no ammonia condensation — check separator T'] : [],
+   493→  };
+   494→
+   495→  // purge split (letdown vapor joins the purge stream — fuel gas)
+   496→  const purgeN = sep.vapor.map((v, i) => v * spec.purgeFrac + letdown.vapor[i]);
+   497→  const recycleN = sep.vapor.map((v) => v * (1 - spec.purgeFrac));
+   498→  streams.S26 = st('S26', 'Purge to fuel', sep.T, condP, purgeN, 'purge');
+   499→  streams.S27 = st('S27', 'Recycle gas', sep.T, condP, recycleN, 'loopgas');
+   500→  units.SP1 = {
+   501→    id: 'SP1',
+   502→    name: 'Purge split',
+   503→    model: 'Controls loop inert inventory (CH4 + Ar from make-up and air)',
+   504→    metrics: [
+   505→      { label: 'Purge flow', value: `${d1(total(purgeN))} kmol/h` },
+   506→      { label: 'Purge fraction', value: `${(spec.purgeFrac * 100).toFixed(1)} %` },
+   507→      { label: 'Purge NH3 loss', value: `${d1((purgeN[6] * SP.NH3.mw * 24) / 1000)} t/d` },
+   508→    ],
+   509→    warnings: [],
+   510→  };
+   511→
+   512→  // circulator
+   513→  const circ = compressorTrain(recycleN, sep.T, condP, loopP, 1, spec.etaP, C(40));
+   514→  streams.S23 = st('S23', 'Circulator discharge', circ.T, loopP, circ.n, 'loopgas');
+   515→  units.C2 = {
+   516→    id: 'C2',
+   517→    name: 'Loop circulator',
+   518→    model: 'Single-stage centrifugal booster, polytropic',
+   519→    metrics: [
+   520→      { label: 'Shaft power', value: `${d1(circ.powerKW)} kW`, raw: circ.powerKW },
+   521→      { label: 'Boost', value: `${(condP / 1e5).toFixed(1)} → ${spec.loopP.toFixed(1)} bar` },
+   522→      { label: 'Discharge T', value: `${d1(circ.T - 273.15)} °C` },
+   523→    ],
+   524→    warnings: [],
+   525→  };
+   526→
+   527→  // loop mixer (make-up after condensation, after purge — EFMA BAT)
+   528→  const mix = mixStreams(
+   529→    [
+   530→      { n: makeup, T: KO_T, P: loopP },
+   531→      { n: circ.n, T: circ.T, P: loopP },
+   532→    ],
+   533→    loopP,
+   534→  );
+   535→  streams.S18 = st('S18', 'HP make-up syngas', KO_T, loopP, makeup, 'syngas');
+   536→  streams.S19 = st('S19', 'Loop mix', mix.T, loopP, mix.n, 'loopgas');
+   537→  units.M2 = {
+   538→    id: 'M2',
+   539→    name: 'Loop mixer',
+   540→    model: 'Make-up added after condensation, after purge (EFMA BAT arrangement)',
+   541→    metrics: [
+   542→      { label: 'Converter feed', value: `${d1(total(mix.n))} kmol/h` },
+   543→      { label: 'Recycle multiple', value: d2(total(recycleN) / Math.max(total(makeup), 1e-9)) },
+   544→      { label: 'Mixed T', value: `${d1(mix.T - 273.15)} °C` },
+   545→    ],
+   546→    warnings: [],
+   547→  };
+   548→  units.E3 = {
+   549→    id: 'E3',
+   550→    name: 'Feed preheater',
+   551→    model: `Implied feed/effluent exchange to bed-1 inlet (${spec.bed1T.toFixed(0)} °C)`,
+   552→    metrics: [
+   553→      {
+   554→        label: 'Preheat duty',
+   555→        value: `${d1(MW(enthalpyRate(mix.n, C(spec.bed1T)) - enthalpyRate(mix.n, mix.T)))} MW`,
+   556→      },
+   557→    ],
+   558→    warnings: [],
+   559→  };
+   560→
+   561→  return {
+   562→    streams,
+   563→    units,
+   564→    g: mix.n,
+   565→    warnings,
+   566→    product: letdown.liquid,
+   567→    purge: purgeN,
+   568→    recycle: recycleN,
+   569→    nFeed: tear,
+   570→    nEff,
+   571→  };
+   572→}
+   573→
+   574→/** Solve a 9×9 (N_SP×N_SP) dense linear system by Gaussian elimination
+   575→ *  with partial pivoting. Returns null if singular. */
+   576→function solveLinear9(AIn: number[][], b: number[]): number[] | null {
+   577→  const n = AIn.length;
+   578→  const A = AIn.map((row) => row.slice());
+   579→  const x = b.slice();
+   580→  for (let col = 0; col < n; col++) {
+   581→    let piv = col;
+   582→    for (let r = col + 1; r < n; r++) {
+   583→      if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+   584→    }
+   585→    if (Math.abs(A[piv][col]) < 1e-14) return null;
+   586→    if (piv !== col) {
+   587→      const tmpRow = A[piv];
+   588→      A[piv] = A[col];
+   589→      A[col] = tmpRow;
+   590→      const tmpX = x[piv];
+   591→      x[piv] = x[col];
+   592→      x[col] = tmpX;
+   593→    }
+   594→    const d = A[col][col];
+   595→    for (let r = col + 1; r < n; r++) {
+   596→      const f = A[r][col] / d;
+   597→      if (f === 0) continue;
+   598→      for (let c = col; c < n; c++) A[r][c] -= f * A[col][c];
+   599→      x[r] -= f * x[col];
+   600→    }
+   601→  }
+   602→  for (let r = n - 1; r >= 0; r--) {
+   603→    let s = x[r];
+   604→    for (let c = r + 1; c < n; c++) s -= A[r][c] * x[c];
+   605→    x[r] = s / A[r][r];
+   606→    if (!Number.isFinite(x[r])) return null;
+   607→  }
+   608→  return x;
+   609→}
+   610→
+   611→// ---------------------------------------------------------------------------
+   612→// Air controller — secant on air flow to hit make-up H2/N2 (research C3)
+   613→// ---------------------------------------------------------------------------
+   614→
+   615→function solveAir(spec: PlantSpec): { air: number; fe: FrontEnd; err: number | null } {
+   616→  if (!spec.airAuto) {
+   617→    const fe = frontEndPass(spec, spec.airFlow);
+   618→    return { air: spec.airFlow, fe, err: null };
+   619→  }
+   620→  let x0 = Math.max(200, 1.3 * spec.ngFeed);
+   621→  let x1 = Math.max(300, 1.6 * spec.ngFeed);
+   622→  const f = (air: number) => {
+   623→    const fe = frontEndPass(spec, air);
+   624→    const n2 = fe.makeup[1];
+   625→    const h2 = fe.makeup[0];
+   626→    return { val: n2 > 1e-9 ? h2 / n2 - spec.h2n2Set : 0, fe };
+   627→  };
+   628→  let r0 = f(x0);
+   629→  let r1 = f(x1);
+   630→  // maintain bracket [xLo, xHi] with f(xLo) > 0 > f(xHi) (f decreasing in air)
+   631→  let xLo = r0.val > r1.val ? x0 : x1;
+   632→  let xHi = r0.val > r1.val ? x1 : x0;
+   633→  let fLo = Math.max(r0.val, r1.val);
+   634→  let fHi = Math.min(r0.val, r1.val);
+   635→  let best = Math.abs(r1.val) < Math.abs(r0.val) ? { air: x1, fe: r1.fe, err: r1.val } : { air: x0, fe: r0.fe, err: r0.val };
+   636→
+   637→  for (let k = 0; k < 30; k++) {
+   638→    if (Math.abs(best.err ?? 1) < 0.003) break;
+   639→    // secant step
+   640→    let x2: number;
+   641→    if (Math.abs(r1.val - r0.val) < 1e-12) {
+   642→      x2 = 0.5 * (xLo + xHi);
+   643→    } else {
+   644→      x2 = x1 - (r1.val * (x1 - x0)) / (r1.val - r0.val);
+   645→    }
+   646→    if (x2 < 50 || x2 > 20000 || x2 < xLo || x2 > xHi) x2 = 0.5 * (xLo + xHi);
+   647→    const r2 = f(x2);
+   648→    if (Math.abs(r2.val) < Math.abs(best.err ?? 1)) best = { air: x2, fe: r2.fe, err: r2.val };
+   649→    if (r2.val > 0) {
+   650→      xLo = x2;
+   651→      fLo = r2.val;
+   652→    } else {
+   653→      xHi = x2;
+   654→      fHi = r2.val;
+   655→    }
+   656→    x0 = x1;
+   657→    r0 = r1;
+   658→    x1 = x2;
+   659→    r1 = r2;
+   660→  }
+   661→  return { air: best.air, fe: best.fe, err: best.err };
+   662→}
+   663→
+   664→// ---------------------------------------------------------------------------
+   665→// Public solve entry point
+   666→// ---------------------------------------------------------------------------
+   667→
+   668→export function run(spec: PlantSpec): PlantResult {
+   669→  const t0 = performance.now();
+   670→  const warnings: string[] = [];
+   671→
+   672→  // 1) front end with air controller
+   673→  const { air, fe, err: h2n2Resid } = solveAir(spec);
+   674→  const streams: Record<string, Stream> = { ...fe.streams };
+   675→  const units: Record<string, UnitResult> = { ...fe.units };
+   676→  if (h2n2Resid !== null && Math.abs(h2n2Resid) > 0.01) {
+   677→    warnings.push(`H2/N2 controller did not fully converge (residual ${h2n2Resid.toFixed(3)})`);
+   678→  }
+   679→
+   680→  // syngas compressor
+   681→  const c1InP = BAR(spec.frontEndP - DP.ko2);
+   682→  const c1 = compressorTrain(fe.makeup, KO_T, c1InP, BAR(spec.loopP), spec.comprStages, spec.etaP, INTERCOOL_T);
+   683→  units.C1 = {
+   684→    id: 'C1',
+   685→    name: 'Syngas compressor',
+   686→    model: `${spec.comprStages}-stage polytropic train with intercooling (research Q7)`,
+   687→    metrics: [
+   688→      { label: 'Shaft power', value: `${d1(c1.powerKW / 1000)} MW`, raw: c1.powerKW / 1000 },
+   689→      { label: 'Stage ratio', value: d2(c1.stageRatios[0]) },
+   690→      { label: 'Discharge', value: `${d1(c1.T - 273.15)} °C / ${spec.loopP} bar` },
+   691→      { label: 'Intercooling duty', value: `${d1(MW(c1.intercoolDutyKJh))} MW` },
+   692→    ],
+   693→    warnings: [],
+   694→  };
+   695→
+   696→  // 2) synthesis loop — tear on converter-feed flows
+   697→  const makeup = fe.makeup;
+   698→  const makeupTot = total(makeup);
+   699→  // initial tear: close to expected answer (research Q9 tip)
+   700→  const tear0: Moles = zeroN();
+   701→  const f0 = makeupTot * 5;
+   702→  const y0 = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0]; // H2 N2 CO CO2 CH4 AR NH3 H2O O2
+   703→  for (let i = 0; i < N_SP; i++) tear0[i] = f0 * y0[i];
+   704→
+   705→  const trace: SolverTraceRow[] = [];
+   706→  let converged = false;
+   707→  let iterations = 0;
+   708→  const TOL = 1e-7;
+   709→  const MAXIT = 60;
+   710→
+   711→  // convergence residual: flow mismatch AND atom-balance mismatch scaled by
+   712→  // each element's own make-up atom flow (Ar is tiny vs total — a /total scale
+   713→  // would hide inert mismatches that still break the element balance)
+   714→  const makeupAtoms: number[] = ATOMS.map((_, e) => {
+   715→    let s = 0;
+   716→    for (let i = 0; i < N_SP; i++) s += ATOM_MATRIX[e][i] * makeup[i];
+   717→    return Math.max(s, 1);
+   718→  });
+   719→  const resid = (a: Moles, b: Moles): number => {
+   720→    const scale = Math.max(total(b), 1e-9);
+   721→    let worst = 0;
+   722→    for (let i = 0; i < N_SP; i++) {
+   723→      worst = Math.max(worst, Math.abs(a[i] - b[i]) / scale);
+   724→    }
+   725→    for (let e = 0; e < ATOMS.length; e++) {
+   726→      let s = 0;
+   727→      for (let i = 0; i < N_SP; i++) s += ATOM_MATRIX[e][i] * (a[i] - b[i]);
+   728→      worst = Math.max(worst, Math.abs(s) / makeupAtoms[e]);
+   729→    }
+   730→    return worst;
+   731→  };
+   732→
+   733→  // --- stage 1: damped direct substitution to enter the basin ---
+   734→  let x = tear0.slice();
+   735→  let pass = loopPass(spec, makeup, x);
+   736→  let g = pass.g;
+   737→  let lastPass: LoopPass = pass;
+   738→  let err = resid(g, x);
+   739→  trace.push({ iter: 1, err, method: 'damped-DS' });
+   740→  let gPrev: Moles = g.slice();
+   741→  let xPrevDS: Moles = x.slice();
+   742→  for (let k = 1; k < 4; k++) {
+   743→    const xOld = x;
+   744→    x = x.map((v, i) => v + 0.5 * (g[i] - v));
+   745→    pass = loopPass(spec, makeup, x);
+   746→    lastPass = pass;
+   747→    gPrev = g;
+   748→    xPrevDS = xOld;
+   749→    g = pass.g;
+   750→    err = resid(g, x);
+   751→    trace.push({ iter: k + 1, err, method: 'damped-DS' });
+   752→  }
+   753→
+   754→  // --- stage 2: Broyden quasi-Newton on F(x) = g(x) − x ---
+   755→  // initial diagonal Jacobian from the last DS secant
+   756→  const J: number[][] = Array.from({ length: N_SP }, () => new Array(N_SP).fill(0));
+   757→  for (let i = 0; i < N_SP; i++) {
+   758→    const dxi = x[i] - xPrevDS[i];
+   759→    const dgi = g[i] - gPrev[i];
+   760→    J[i][i] = Math.abs(dxi) > 1e-12 ? Math.max(-0.99, Math.min(0.99, dgi / dxi - 1)) : -0.5;
+   761→  }
+   762→
+   763→  let lastImprovementIter = 4;
+   764→  let iter = 4;
+   765→  for (; iter < MAXIT; iter++) {
+   766→    err = resid(g, x);
+   767→    if (err < TOL) {
+   768→      converged = true;
+   769→      break;
+   770→    }
+   771→    // F = g − x ; solve J·dx = x − g
+   772→    const F: Moles = g.map((v, i) => v - x[i]);
+   773→    const rhs = F.map((v) => -v);
+   774→    const dx = solveLinear9(J, rhs);
+   775→    if (!dx) {
+   776→      // singular → damped DS fallback
+   777→      x = x.map((v, i) => v + 0.5 * (g[i] - v));
+   778→      pass = loopPass(spec, makeup, x);
+   779→      g = pass.g;
+   780→      trace.push({ iter: iter + 1, err: resid(g, x), method: 'damped-DS' });
+   781→      continue;
+   782→    }
+   783→    // trust region: cap the step
+   784→    let xMax = 0;
+   785→    for (let i = 0; i < N_SP; i++) xMax = Math.max(xMax, x[i]);
+   786→    let stepMax = 0;
+   787→    for (let i = 0; i < N_SP; i++) stepMax = Math.max(stepMax, Math.abs(dx[i]));
+   788→    const cap = 0.6 * Math.max(xMax, 1);
+   789→    if (stepMax > cap) for (let i = 0; i < N_SP; i++) dx[i] *= cap / stepMax;
+   790→
+   791→    let xn: Moles = x.map((v, i) => Math.max(0, v + dx[i]));
+   792→    let passN = loopPass(spec, makeup, xn);
+   793→    let gn = passN.g;
+   794→    let errN = resid(gn, xn);
+   795→    // step-limiting: halve while clearly worse
+   796→    let tries = 0;
+   797→    while (errN > 3 * err && tries < 3) {
+   798→      for (let i = 0; i < N_SP; i++) dx[i] *= 0.5;
+   799→      xn = x.map((v, i) => Math.max(0, v + dx[i]));
+   800→      passN = loopPass(spec, makeup, xn);
+   801→      gn = passN.g;
+   802→      errN = resid(gn, xn);
+   803→      tries++;
+   804→    }
+   805→
+   806→    // good Broyden rank-1 update: J += (dF − J·dx)·dxᵀ / (dxᵀdx)
+   807→    let dxdx = 0;
+   808→    for (let i = 0; i < N_SP; i++) dxdx += dx[i] * dx[i];
+   809→    if (dxdx > 1e-20) {
+   810→      const Jdx = new Array(N_SP).fill(0);
+   811→      for (let i = 0; i < N_SP; i++) {
+   812→        let s = 0;
+   813→        for (let j = 0; j < N_SP; j++) s += J[i][j] * dx[j];
+   814→        Jdx[i] = s;
+   815→      }
+   816→      const dF = new Array(N_SP).fill(0);
+   817→      for (let i = 0; i < N_SP; i++) dF[i] = gn[i] - xn[i] - F[i];
+   818→      for (let i = 0; i < N_SP; i++) {
+   819→        const coef = (dF[i] - Jdx[i]) / dxdx;
+   820→        for (let j = 0; j < N_SP; j++) J[i][j] += coef * dx[j];
+   821→      }
+   822→    }
+   823→
+   824→    if (errN < err) lastImprovementIter = iter;
+   825→    x = xn;
+   826→    g = gn;
+   827→    pass = passN;
+   828→    lastPass = passN;
+   829→    trace.push({ iter: iter + 1, err: errN, method: 'broyden' });
+   830→    // stalled Broyden → reset the Jacobian to a fresh diagonal secant
+   831→    if (iter - lastImprovementIter > 6) {
+   832→      for (let i = 0; i < N_SP; i++) {
+   833→        for (let j = 0; j < N_SP; j++) J[i][j] = 0;
+   834→        J[i][i] = -0.5;
+   835→      }
+   836→      lastImprovementIter = iter;
+   837→    }
+   838→  }
+   839→  iterations = Math.min(iter + 1, MAXIT);
+   840→  if (resid(g, x) < TOL) converged = true;
+   841→  if (converged) {
+   842→    // final pass at the converged point for exact stream consistency
+   843→    lastPass = loopPass(spec, makeup, x);
+   844→  }
+   845→  if (!converged) warnings.push('Synthesis loop did not converge — results are the last iteration');
+   846→
+   847→  const lp: LoopPass = lastPass;
+   848→  Object.assign(streams, lp.streams);
+   849→  Object.assign(units, lp.units);
+   850→  warnings.push(...fe.warnings, ...lp.warnings);
+   851→
+   852→  // 3) element balance (feed + air vs products + purge + drains + offgas)
+   853→  const inlets: Moles = zeroN();
+   854→  for (let i = 0; i < N_SP; i++) inlets[i] = streams.S01.n[i] + streams.S02.n[i] + streams.S05.n[i];
+   855→  const outlets: Moles = zeroN();
+   856→  for (const sid of ['S12', 'S14', 'S17', 'S24', 'S26']) {
+   857→    for (let i = 0; i < N_SP; i++) outlets[i] += streams[sid].n[i];
+   858→  }
+   859→  const balance: ElementBalance[] = ATOMS.map((el, e) => {
+   860→    let vIn = 0;
+   861→    let vOut = 0;
+   862→    for (let i = 0; i < N_SP; i++) {
+   863→      vIn += inlets[i] * ATOM_MATRIX[e][i];
+   864→      vOut += outlets[i] * ATOM_MATRIX[e][i];
+   865→    }
+   866→    return {
+   867→      element: el as string,
+   868→      in: vIn,
+   869→      out: vOut,
+   870→      relErr: vIn > 1e-9 ? Math.abs(vOut - vIn) / vIn : 0,
+   871→    };
+   872→  });
+   873→
+   874→  // 4) KPIs
+   875→  const nFeed = lp.nFeed;
+   876→  const feedTot = total(nFeed);
+   877→  const inerts = feedTot > 0 ? (nFeed[4] + nFeed[5]) / feedTot : 0;
+   878→  const h2n2 = nFeed[1] > 1e-9 ? nFeed[0] / nFeed[1] : 0;
+   879→  const perPass = nFeed[1] > 1e-9 ? (1 - lp.nEff[1] / nFeed[1]) : 0;
+   880→  const overall = makeup[1] > 1e-9 ? 1 - lp.purge[1] / makeup[1] : 0;
+   881→  const prodKg = massFlow(lp.product);
+   882→  const prodTpd = (prodKg * 24) / 1000;
+   883→  const prodNH3kg = lp.product[6] * SP.NH3.mw;
+   884→  const reformerDuty = units.R1.metrics[0].raw ?? 0;
+   885→  const wcDuty = units.E2.metrics[0].raw ?? 0;
+   886→  const chDuty = units.E2.metrics[1].raw ?? 0;
+   887→  const powerKW =
+   888→    (units.C1.metrics[0].raw ?? 0) * 1000 + (units.C2.metrics[0].raw ?? 0) + (chDuty / 2.4) * 1000;
+   889→  const feedGJd = (spec.ngFeed * LHV_CH4 * 24) / 1e6;
+   890→  const fuelGJd = (reformerDuty * 3.6e6 * 24) / 1e6 / 0.92;
+   891→  const powerGJd = (powerKW * 24 * 3.6) / 1000;
+   892→  const specEnergy = prodTpd > 1e-9 ? (feedGJd + fuelGJd + powerGJd) / prodTpd : 0;
+   893→  const oxidesPpm = (() => {
+   894→    const s = streams.S15;
+   895→    const dry = total(s.n) - s.n[7];
+   896→    return dry > 0 ? ((s.n[2] + s.n[3]) / dry) * 1e6 : 0;
+   897→  })();
+   898→
+   899→  const kpis: Kpis = {
+   900→    productionTpd: prodTpd,
+   901→    productPurityMol: prodKg > 0 ? lp.product[6] / total(lp.product) : 0,
+   902→    productPurityWt: prodKg > 0 ? prodNH3kg / prodKg : 0,
+   903→    perPassConv: perPass,
+   904→    overallConv: overall,
+   905→    loopInerts: inerts,
+   906→    h2n2Ratio: h2n2,
+   907→    makeupFlow: makeupTot,
+   908→    recycleMultiple: makeupTot > 1e-9 ? total(lp.recycle) / makeupTot : 0,
+   909→    purgeFrac: spec.purgeFrac,
+   910→    reformerDutyMW: reformerDuty,
+   911→    refrigerationDutyMW: chDuty,
+   912→    syngasComprPowerMW: units.C1.metrics[0].raw ?? 0,
+   913→    circulatorPowerKW: units.C2.metrics[0].raw ?? 0,
+   914→    specificEnergyGJt: specEnergy,
+   915→    airFlow: air,
+   916→    secondaryExitC: (units.R2.metrics[1].raw ?? 0) - 273.15,
+   917→    coSlipLTS: (() => {
+   918→      const s = streams.S10;
+   919→      const dry = total(s.n) - s.n[7];
+   920→      return dry > 0 ? s.n[2] / dry : 0;
+   921→    })(),
+   922→    oxidesAfterMeth: oxidesPpm,
+   923→  };
+   924→
+   925→  // sanity warnings for the operator
+   926→  if (prodTpd > 1 && kpis.productPurityWt < 0.985) {
+   927→    warnings.push('Product purity below 98.5 wt % — dissolved gases high (check separator T/P)');
+   928→  }
+   929→  if (chDuty > 0 && C(spec.chillT) > C(-5)) {
+   930→    warnings.push('Separator above −5 °C — substantial NH3 recycling through the loop');
+   931→  }
+   932→
+   933→  const solveMs = performance.now() - t0;
+   934→
+   935→  return {
+   936→    ok: true,
+   937→    converged,
+   938→    iterations,
+   939→    solveMs,
+   940→    streams,
+   941→    units,
+   942→    kpis,
+   943→    solverTrace: trace,
+   944→    balance,
+   945→    warnings: [...new Set(warnings)],
+   946→    h2n2Err: h2n2Resid,
+   947→  };
+   948→}
+   949→

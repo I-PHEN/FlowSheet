@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ammonia Plant Builder — Flowsheet Workbench",
+  title: "Ammonia Plant Lab",
   description:
-    "Deterministic steam-methane-reforming ammonia plant simulator: 19 unit operations, Peng-Robinson flash, Gillespie-Beattie equilibrium, live re-solve.",
-  keywords: ["ammonia", "Haber-Bosch", "process simulation", "flowsheet", "chemical engineering"],
-  authors: [{ name: "Ammonia Plant Builder" }],
+    "Open, inspect and operate a live ammonia plant flowsheet — 19 unit operations, real thermodynamics, guided tours. Built for chemical engineering students and the curious.",
+  keywords: ["ammonia", "Haber-Bosch", "process simulation", "flowsheet", "chemical engineering", "education"],
+  authors: [{ name: "Ammonia Plant Lab" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

@@ -150,3 +150,24 @@ DECISIONS LOCKED (user, via question round):
 - Phase A spec issued (design tokens, 19-symbol SVG set w/ tags, hand-authored textbook layout w/ section bands + lane discipline, hover/click interactions, dual-layer panel content for 19 units, 7-point acceptance gate incl. 30-second test + silhouette ID test + ≥7:1 contrast).
 - Tutor panel shells in Phase B: suggestion chips wired to deterministic authored tours (no LLM needed); free-form AI Q&A + voice deferred to Phase F.
 - Old dark workbench: keep at /legacy for engine debugging through Phase C, then remove.
+
+---
+Task ID: 6 (build phases A+B)
+Agent: main (Super Z)
+Task: Build Phase A (flowsheet craft) + Phase B (library home + workspace shell) — the clean, project-structured, educational interface. Engine untouched.
+
+Work Log:
+- Design tokens (src/lib/design/tokens.ts): soft warm-gray studio (#F1F0ED canvas, #26282B ink ≈12.9:1, paper equipment fill, 4 muted service hues: feed ochre / process-gas steel blue / NH3 green / dashed utilities gray).
+- New hand-authored layout (src/lib/flowsheet/layout.ts): 1800×880 world, 3 narrative section bands (FEED & REFORMING → SHIFT & PURIFICATION → SYNTHESIS LOOP & COMPRESSION), 19 units with real equipment tags (M-101…K-102), 27 streams re-routed with lane discipline (synthesis loop drawn as literal closed circuit w/ long return line S23), margin annotations. Topology mirrors engine ids exactly.
+- Symbol library (src/components/flowsheet/Symbols.tsx): 11 distinct silhouettes (furnace w/ tubes+flames+stack, dual-zone secondary w/ cone+air nozzle, 3-bed converter w/ quench stubs, hatched reactors/columns, drums w/ boots, compressor cone, mixer/splitter wedges) on paper fill.
+- Diagram (pure SVG, server-safe) + interactive Canvas: pan/drag, wheel zoom (letterbox-correct cursor→world), pinch, keyboard (+/-/arrows/f), animated panTo (used by tours), hover tooltips fed by live base-case solve, stream dimming on selection, legend + zoom overlays, first-visit hint.
+- Educational content (src/lib/content/units.ts): 19 units × dual-layer (What it does / How it works / Why it matters, ~150-200 words each, ranges from EFMA/Flórez-Orrego), 3 deterministic tours (13-step walkthrough, 9-step hydrogen-atom journey, 6-step why-a-loop) + colors answer card.
+- Workspace (src/app/plant/reference): top bar (back, title, Explore|Operate switch — Operate disabled honestly until Phase C, Learn toggle, Console link), right panel swapping detail ↔ tour ↔ tutor, mobile bottom sheet.
+- Library home (src/app/page.tsx): minimal project grid — reference plant card with REAL mini-flowsheet thumbnail (static Diagram render) + honest "+ New plant" coming-soon card + validation footnote.
+- Legacy: old dark workbench recovered from git → /legacy (unmodified).
+- Bugs found & fixed: (1) container empty-click handler matched unit hit-rects by tagName → wiped selections immediately; replaced with dedicated click-catcher background rect. (2) boxToAspect shorthand property TS error. (3) react-hooks/refs violations (ref mirror during render, ref read in render for tooltip clamp) → effect-synced mirror + handler-side clamp. (4) 'PROCESS STEAM' annotation collided with M-101 name label → shortened to 'STEAM'. (5) Engine type lie: 'broyden' missing from SolverTraceRow method union. (6) Stale page metadata retitled 'Ammonia Plant Lab'.
+
+Stage Summary:
+- GATE A+B: PASSED. VLM visual reviews: home 9/10 (clean, uncluttered, thumbnail legible), workspace 9.5/10 (dark-on-light contrast "excellent", tags + pills legible, bands readable, loop reads as closed circuit). Interactions verified in browser: stream hover tooltip w/ real engine numbers (S04: 805°C/30bar/5361 kmol/h + composition), unit click → dual-layer panel (reformer duty 64.9 MW matches base case), stream click → composition bars (S24 NH3 99.3%), 13-step tour with animated camera + halos, FIT, mobile 390px clean (top bar fits, bottom sheet works), legacy intact & converged. Lint clean, tsc clean, production build green (all routes static), engine gate still 61/61.
+- Key artifacts: src/lib/design/tokens.ts, src/lib/flowsheet/{layout,geom}.ts, src/lib/content/units.ts, src/components/flowsheet/{Symbols,Diagram,Canvas}.tsx, src/components/workspace/{Workspace,DetailPanel,TutorPanel}.tsx, src/app/page.tsx, src/app/plant/reference/page.tsx, src/app/legacy/page.tsx.
+- Next: Phase C — wire live solving into the new skin (Operate mode: spec sliders + live re-solve + stream table in the clean theme), then D (AI builder wizard), E (3D converter+reformer), F (tutor Q&A/voice).

@@ -45,7 +45,7 @@ export interface SolverTraceRow {
   iter: number;
   /** max relative tear-stream change */
   err: number;
-  method: 'damped-DS' | 'wegstein';
+  method: 'damped-DS' | 'wegstein' | 'broyden';
   qMin?: number;
   qMax?: number;
 }
