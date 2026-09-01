@@ -4,6 +4,10 @@
  * No hooks, no browser APIs: renders on the server (library thumbnail)
  * and inside the interactive canvas alike. Handlers are optional props;
  * the interactive wrapper supplies them, the static thumbnail does not.
+ *
+ * All colors are CSS variable references — they must be applied through
+ * inline `style` (SVG presentation attributes cannot resolve var()), which
+ * also makes the whole diagram switch with the light/dark theme.
  */
 
 import { C, FONT, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
@@ -46,8 +50,8 @@ function Arrow({ x, y, angle, color }: { x: number; y: number; angle: number; co
   return (
     <polygon
       points={`${x},${y} ${x - L * Math.cos(angle) + W * Math.sin(angle)},${y - L * Math.sin(angle) - W * Math.cos(angle)} ${x - L * Math.cos(angle) - W * Math.sin(angle)},${y - L * Math.sin(angle) + W * Math.cos(angle)}`}
-      fill={color}
       stroke="none"
+      style={{ fill: color }}
     />
   );
 }
@@ -94,12 +98,11 @@ function StreamPath({
       <path
         d={d}
         fill="none"
-        stroke={st.color}
         strokeWidth={emphasized ? STREAM_W_HI : STREAM_W}
         strokeDasharray={st.dash}
         strokeLinejoin="round"
         strokeLinecap="round"
-        style={{ pointerEvents: 'none' }}
+        style={{ stroke: st.color, pointerEvents: 'none' }}
       />
       <Arrow x={end.x} y={end.y} angle={end.angle} color={st.color} />
       {mid && <Arrow x={mid.x} y={mid.y} angle={mid.angle} color={st.color} />}
@@ -111,9 +114,8 @@ function StreamPath({
           width={pillW}
           height={18}
           rx={9}
-          fill={C.paper}
-          stroke={emphasized ? C.ink : st.color}
           strokeWidth={emphasized ? 1.8 : 1.3}
+          style={{ fill: C.paper, stroke: emphasized ? C.ink : st.color }}
         />
         <text
           x={pill.x}
@@ -121,8 +123,7 @@ function StreamPath({
           textAnchor="middle"
           fontSize={FONT.pill}
           fontWeight={700}
-          fill={C.ink}
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+          style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
         >
           {num}
         </text>
@@ -171,7 +172,7 @@ export function Diagram({
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <line x1="0" y1="0" x2="0" y2="7" stroke={C.inkSoft} strokeWidth="1.3" />
+          <line x1="0" y1="0" x2="0" y2="7" strokeWidth="1.3" style={{ stroke: C.inkSoft }} />
         </pattern>
       </defs>
 
@@ -182,7 +183,7 @@ export function Diagram({
           y={0}
           width={CANVAS.w}
           height={CANVAS.h}
-          fill={C.canvas}
+          style={{ fill: C.canvas }}
           onClick={() => onBackgroundClick?.()}
         />
       )}
@@ -196,9 +197,8 @@ export function Diagram({
             width={b.w}
             height={b.h}
             rx={16}
-            fill={C.band}
-            stroke={C.bandLine}
             strokeWidth={1.4}
+            style={{ fill: C.band, stroke: C.bandLine }}
           />
           <text
             x={b.x + 20}
@@ -206,7 +206,7 @@ export function Diagram({
             fontSize={FONT.bandLabel}
             fontWeight={700}
             letterSpacing={2.6}
-            fill={C.inkSoft}
+            style={{ fill: C.inkSoft }}
           >
             {b.label}
           </text>
@@ -222,9 +222,8 @@ export function Diagram({
           fontSize={FONT.annotation}
           fontWeight={600}
           letterSpacing={1.6}
-          fill={C.inkSoft}
           textAnchor={a.anchor ?? 'start'}
-          style={{ pointerEvents: 'none' }}
+          style={{ fill: C.inkSoft, pointerEvents: 'none' }}
         >
           {a.text}
         </text>
@@ -252,8 +251,7 @@ export function Diagram({
             width={u.w + 28}
             height={u.h + 56}
             rx={12}
-            fill={C.halo}
-            style={{ pointerEvents: 'none' }}
+            style={{ fill: C.halo, pointerEvents: 'none' }}
           />
         ) : null,
       )}
@@ -291,8 +289,7 @@ export function Diagram({
               textAnchor="middle"
               fontSize={FONT.tag}
               fontWeight={700}
-              fill={C.ink}
-              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
             >
               {u.tag}
             </text>
@@ -303,7 +300,7 @@ export function Diagram({
               fontSize={FONT.name}
               fontWeight={600}
               letterSpacing={1.2}
-              fill={C.inkSoft}
+              style={{ fill: C.inkSoft }}
             >
               {u.label}
             </text>

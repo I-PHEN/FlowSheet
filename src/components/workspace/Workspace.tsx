@@ -15,6 +15,7 @@ import { bboxOf } from '@/lib/flowsheet/geom';
 import type { Tour } from '@/lib/content/units';
 import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canvas';
 import type { Focus } from '@/components/flowsheet/Diagram';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { DetailPanel } from './DetailPanel';
 import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
 
@@ -92,7 +93,7 @@ export function Workspace() {
         <Link
           href="/"
           aria-label="Back to library"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border text-[14px] font-bold transition-colors hover:bg-[#E9E7E1]"
+          className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border text-[14px] font-bold"
           style={{ borderColor: C.bandLine, color: C.ink }}
         >
           ←
@@ -126,7 +127,7 @@ export function Workspace() {
               role="tab"
               aria-selected="false"
               disabled
-              title="Live operating controls arrive in the next phase — the legacy console is at /legacy"
+              title="Live operating controls arrive in the next phase"
               className="cursor-not-allowed rounded-full px-3.5 py-1 text-[12px] font-bold"
               style={{ color: C.inkFaint }}
             >
@@ -136,7 +137,7 @@ export function Workspace() {
 
           <button
             onClick={() => setPanelOpen((v) => !v)}
-            className="rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors hover:bg-[#E9E7E1]"
+            className="hover-band rounded-full border px-3 py-1.5 text-[12px] font-bold"
             style={{
               borderColor: C.bandLine,
               color: C.ink,
@@ -146,13 +147,7 @@ export function Workspace() {
             Learn
           </button>
 
-          <a
-            href="/legacy"
-            className="hidden rounded-full px-2 py-1 text-[11px] font-semibold underline-offset-2 hover:underline md:block"
-            style={{ color: C.inkFaint }}
-          >
-            Console
-          </a>
+          <ThemeToggle />
         </div>
       </header>
 

@@ -79,7 +79,7 @@ function PanelHeader({
       <button
         onClick={onClose}
         aria-label="Close panel"
-        className="mt-0.5 rounded-md border px-2 py-0.5 text-[12px] font-bold transition-colors hover:bg-[#E9E7E1]"
+        className="mt-0.5 rounded-md border px-2 py-0.5 text-[12px] font-bold hover-band"
         style={{ borderColor: C.bandLine, color: C.inkSoft }}
       >
         ✕
@@ -93,7 +93,7 @@ function StreamChip({ id, result, onSelect }: { id: string; result: PlantResult;
   return (
     <button
       onClick={() => onSelect({ type: 'stream', id })}
-      className="rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-bold transition-colors hover:bg-[#E9E7E1]"
+      className="rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-bold hover-band"
       style={{ borderColor: C.bandLine, color: C.ink }}
     >
       {num} · {result.streams[id]?.name ?? id}
@@ -160,7 +160,7 @@ function UnitDetail({
       {unit.warnings.length > 0 && (
         <Section title="Notes">
           {unit.warnings.map((w) => (
-            <p key={w} className="text-[12px] leading-relaxed" style={{ color: '#8A5A2B' }}>
+            <p key={w} className="text-[12px] leading-relaxed" style={{ color: C.warn }}>
               ⚠ {w}
             </p>
           ))}

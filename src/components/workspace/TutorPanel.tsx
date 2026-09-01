@@ -29,7 +29,7 @@ export function TutorHome({
           <button
             key={t.id}
             onClick={() => onTour(t)}
-            className="group flex w-full items-center justify-between rounded-lg border px-3.5 py-3 text-left transition-colors hover:bg-[#E9E7E1]"
+            className="group flex w-full items-center justify-between rounded-lg border px-3.5 py-3 text-left hover-band"
             style={{ borderColor: C.bandLine, background: C.paper }}
           >
             <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
@@ -42,7 +42,7 @@ export function TutorHome({
         ))}
         <button
           onClick={onColors}
-          className="group flex w-full items-center justify-between rounded-lg border px-3.5 py-3 text-left transition-colors hover:bg-[#E9E7E1]"
+          className="group flex w-full items-center justify-between rounded-lg border px-3.5 py-3 text-left hover-band"
           style={{ borderColor: C.bandLine, background: C.paper }}
         >
           <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
@@ -74,7 +74,7 @@ export function ColorAnswer({ onBack }: { onBack: () => void }) {
       ))}
       <button
         onClick={onBack}
-        className="mt-5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors hover:bg-[#E9E7E1]"
+        className="mt-5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold hover-band"
         style={{ borderColor: C.bandLine, color: C.ink }}
       >
         ← Back
@@ -117,7 +117,7 @@ export function TourRunner({
         <button
           onClick={onExit}
           aria-label="Exit tour"
-          className="mt-0.5 rounded-md border px-2 py-0.5 text-[12px] font-bold transition-colors hover:bg-[#E9E7E1]"
+          className="mt-0.5 rounded-md border px-2 py-0.5 text-[12px] font-bold hover-band"
           style={{ borderColor: C.bandLine, color: C.inkSoft }}
         >
           ✕
@@ -135,7 +135,7 @@ export function TourRunner({
         <button
           onClick={() => onStep(idx - 1)}
           disabled={idx === 0}
-          className="rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold transition-colors hover:bg-[#E9E7E1] disabled:opacity-35"
+          className="rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold hover-band disabled:opacity-35"
           style={{ borderColor: C.bandLine, color: C.ink }}
         >
           ← Back

@@ -312,7 +312,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
             background: C.paper,
             borderColor: C.bandLine,
             color: C.ink,
-            boxShadow: '0 2px 10px rgba(38,40,43,0.10)',
+            boxShadow: C.tipShadow,
             left: tipPos.x,
             top: tipPos.y,
           }}
@@ -345,7 +345,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
       {/* legend */}
       <div
         className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-[10.5px] font-semibold tracking-wide"
-        style={{ background: C.paper + 'F2', borderColor: C.bandLine, color: C.inkSoft }}
+        style={{ background: C.paperA95, borderColor: C.bandLine, color: C.inkSoft }}
       >
         <span className="flex items-center gap-1.5">
           <span className="h-[3px] w-5 rounded-full" style={{ background: C.feed }} /> FEED
@@ -372,7 +372,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
       >
         <button
           aria-label="Zoom out"
-          className="h-8 w-8 text-sm font-bold transition-colors hover:bg-[#E9E7E1]"
+          className="hover-band h-8 w-8 text-sm font-bold"
           style={{ color: C.ink }}
           onClick={() => {
             const v = viewRef.current;
@@ -383,7 +383,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
         </button>
         <button
           aria-label="Zoom in"
-          className="h-8 w-8 border-l text-sm font-bold transition-colors hover:bg-[#E9E7E1]"
+          className="hover-band h-8 w-8 border-l text-sm font-bold"
           style={{ color: C.ink, borderColor: C.bandLine }}
           onClick={() => {
             const v = viewRef.current;
@@ -394,7 +394,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
         </button>
         <button
           aria-label="Fit to screen"
-          className="h-8 w-10 border-l text-[11px] font-bold tracking-wider transition-colors hover:bg-[#E9E7E1]"
+          className="hover-band h-8 w-10 border-l text-[11px] font-bold tracking-wider"
           style={{ color: C.ink, borderColor: C.bandLine }}
           onClick={fit}
         >

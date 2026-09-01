@@ -44,6 +44,24 @@
 }
 
 :root {
+  /* ── flowsheet tokens · light — "soft gray studio" ──────────────────── */
+  --fs-canvas: #F1F0ED;
+  --fs-band: #E9E7E1;
+  --fs-band-line: #DBD8D0;
+  --fs-paper: #FCFBF9;
+  --fs-paper-a95: rgba(252, 251, 249, 0.95);
+  --fs-ink: #26282B;
+  --fs-ink-soft: #5A5D62;
+  --fs-ink-faint: #8B8E93;
+  --fs-halo: #D9D5CB;
+  --fs-tip-shadow: 0 2px 10px rgba(38, 40, 43, 0.10);
+  --fs-card-shadow: 0 6px 28px rgba(38, 40, 43, 0.12);
+  --fs-feed: #7A5E33;
+  --fs-gas: #3A5268;
+  --fs-nh3: #3F6B4F;
+  --fs-utility: #8B8E93;
+  --fs-warn: #8A5A2B;
+
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -79,6 +97,28 @@
 }
 
 .dark {
+  /* ── flowsheet tokens · dark — "dark studio textbook" ────────────────── */
+  /* Same grammar as light: warm-neutral canvas, ink is the brightest thing
+     on screen (~14:1), equipment paper lifts off the canvas, four muted
+     service hues brightened just enough to read on dark. High contrast,
+     not moody — no gray-on-gray. */
+  --fs-canvas: #1F1E1C;
+  --fs-band: #262523;
+  --fs-band-line: #3B3A36;
+  --fs-paper: #2A2926;
+  --fs-paper-a95: rgba(42, 41, 38, 0.95);
+  --fs-ink: #EDEBE6;
+  --fs-ink-soft: #A9A79F;
+  --fs-ink-faint: #807E77;
+  --fs-halo: #37352E;
+  --fs-tip-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --fs-card-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+  --fs-feed: #C9A66B;
+  --fs-gas: #8FB2CF;
+  --fs-nh3: #85BD9A;
+  --fs-utility: #96999E;
+  --fs-warn: #E0AC5E;
+
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -122,151 +162,30 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   WORKBENCH — control-room theme for the ammonia plant builder.
-   Dark, dense, 1px borders, monospace data. No gradients, no emoji.
+   FLOWSHEET UI — theme-aware interaction utilities (light + dark).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.wb {
-  background: #0b0f13;
-  color: #dce5ec;
-  --wb-panel: #10161c;
-  --wb-panel2: #151d25;
-  --wb-border: #1f2a34;
-  --wb-border-hi: #2c3d4b;
-  --wb-text-2: #8ca0ae;
-  --wb-text-3: #5c7080;
-  --wb-accent: #f2a93b;
-  --wb-ok: #34d399;
-  --wb-bad: #f87171;
+/* small buttons & chips: fill one step off paper on hover */
+.hover-band {
+  transition: background-color 120ms ease;
+}
+.hover-band:hover {
+  background-color: var(--fs-band);
 }
 
-.wb-panel {
-  background: var(--wb-panel);
-  border: 1px solid var(--wb-border);
+/* plant cards on the library home: lift with a theme-tinted shadow */
+.card-lift {
+  transition: box-shadow 200ms ease;
 }
-
-.wb-label {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--wb-text-3);
-  font-weight: 500;
-}
-
-.wb-mono {
-  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.wb-th {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--wb-text-3);
-  font-weight: 500;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--wb-border);
-  position: sticky;
-  top: 0;
-  background: var(--wb-panel);
-  white-space: nowrap;
-}
-
-.wb-td {
-  font-size: 11.5px;
-  padding: 4px 10px;
-  border-bottom: 1px solid #151d25;
-  white-space: nowrap;
-  color: #c2ced8;
-}
-
-.wb-td-num {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.wb-row-hover:hover {
-  background: #16202a;
-}
-
-/* stream colors on the PFD */
-.st-feed { stroke: #8fa3b2; }
-.st-syngas { stroke: #c3ccd4; }
-.st-loopgas { stroke: #6fb6d9; }
-.st-product { stroke: #f2a93b; }
-.st-water { stroke: #6c93b5; }
-.st-co2 { stroke: #86b892; }
-.st-purge { stroke: #d98c8c; }
-
-.wb-flow {
-  stroke-dasharray: 5 8;
-  animation: wb-flowmove 1.8s linear infinite;
-}
-
-@keyframes wb-flowmove {
-  to {
-    stroke-dashoffset: -26;
-  }
+.card-lift:hover {
+  box-shadow: var(--fs-card-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wb-flow {
-    animation: none;
+  .hover-band,
+  .card-lift {
+    transition: none;
   }
 }
 
-/* thin scrollbars for the workbench */
-.wb-scroll::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
-}
-.wb-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.wb-scroll::-webkit-scrollbar-thumb {
-  background: #26333f;
-  border-radius: 4px;
-}
-.wb-scroll::-webkit-scrollbar-thumb:hover {
-  background: #33465a;
-}
-
-/* range input — engineering slider */
-.wb-range {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 14px;
-  background: transparent;
-  cursor: ew-resize;
-}
-.wb-range::-webkit-slider-runnable-track {
-  height: 3px;
-  background: #26333f;
-  border-radius: 0;
-}
-.wb-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 14px;
-  background: #c2ced8;
-  border: 1px solid #0b0f13;
-  margin-top: -6px;
-  border-radius: 1px;
-}
-.wb-range:hover::-webkit-slider-thumb {
-  background: var(--wb-accent);
-}
-.wb-range::-moz-range-track {
-  height: 3px;
-  background: #26333f;
-}
-.wb-range::-moz-range-thumb {
-  width: 10px;
-  height: 14px;
-  background: #c2ced8;
-  border: 1px solid #0b0f13;
-  border-radius: 1px;
-}
+/* watcher poke */

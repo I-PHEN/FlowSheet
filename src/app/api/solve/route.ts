@@ -5,8 +5,8 @@ import type { PlantSpec } from '@/lib/engine/plant';
 /**
  * POST /api/solve — server-side mirror of the client solver.
  * Accepts a partial PlantSpec (merged over the base case) and returns the
- * full PlantResult. Used by future LLM/scenario tooling; the workbench UI
- * solves in-process for zero-latency interaction.
+ * full PlantResult. Reserved for future LLM/scenario tooling; the plant
+ * workspace solves in-process for zero-latency interaction.
  */
 export async function POST(req: NextRequest) {
   try {

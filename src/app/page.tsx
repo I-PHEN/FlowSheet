@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { C } from '@/lib/design/tokens';
 import { Diagram } from '@/components/flowsheet/Diagram';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function Home() {
   return (
@@ -23,13 +24,7 @@ export default function Home() {
             EDUCATIONAL PROCESS SIMULATOR
           </span>
         </div>
-        <a
-          href="/legacy"
-          className="rounded-full px-2 py-1 text-[11px] font-semibold underline-offset-2 hover:underline"
-          style={{ color: C.inkFaint }}
-        >
-          Console
-        </a>
+        <ThemeToggle />
       </header>
 
       <main className="mx-auto w-full max-w-[1060px] flex-1 px-5 py-10 sm:py-14">
@@ -52,7 +47,7 @@ export default function Home() {
           {/* reference plant card */}
           <Link
             href="/plant/reference"
-            className="group overflow-hidden rounded-2xl border transition-shadow hover:shadow-[0_6px_28px_rgba(38,40,43,0.12)]"
+            className="card-lift group overflow-hidden rounded-2xl border"
             style={{ borderColor: C.bandLine, background: C.paper }}
           >
             <div className="aspect-[16/9] overflow-hidden" style={{ background: C.canvas }}>
