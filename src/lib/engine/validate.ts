@@ -114,8 +114,14 @@ export function validateGraph(graph: FlowGraph): GraphIssue[] {
       }
     }
     for (const p of def.ports.out) {
-      const out = graph.streams.find((s) => s.from.unit === u.id && s.from.port === p.key);
-      if (!out) {
+      const outStreams = graph.streams.filter((s) => s.from.unit === u.id && s.from.port === p.key);
+      if (outStreams.length > 1) {
+        push(
+          'duplicate-outlet-stream',
+          `outlet "${u.id}.${p.key}" feeds ${outStreams.length} streams (${outStreams.map((s) => s.id).join(', ')}) — exactly one is allowed; use a splitter unit for branches`,
+          u.id,
+        );
+      } else if (outStreams.length === 0) {
         push('dangling-outlet', `outlet "${u.id}.${p.key}" is not connected — its material has nowhere to go`, u.id);
       }
     }

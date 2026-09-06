@@ -1,13 +1,14 @@
 /**
- * Library home — projects are plants. Minimal chrome, one reference card
- * with a real thumbnail of the actual flowsheet, one honest "+ New plant"
- * card. Nothing else.
+ * Library home — projects are plants. Minimal chrome: one reference card
+ * with a real flowsheet thumbnail, the AI builder card (describe a plant,
+ * agents build it), and the local library of saved agent builds.
  */
 
 import Link from 'next/link';
 import { C } from '@/lib/design/tokens';
 import { Diagram } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { SavedPlants } from '@/components/builder/SavedPlants';
 
 export default function Home() {
   return (
@@ -73,26 +74,43 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* new plant card — honest placeholder until the AI builder ships */}
-          <div
-            className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center"
-            style={{ borderColor: C.bandLine, background: 'transparent' }}
+          {/* AI builder card — describe a plant, agents build it live */}
+          <Link
+            href="/plant/builder"
+            className="card-lift group overflow-hidden rounded-2xl border"
+            style={{ borderColor: C.bandLine, background: C.paper }}
           >
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-full border text-[20px] font-light"
-              style={{ borderColor: C.inkSoft, color: C.ink }}
+              className="flex aspect-[16/9] flex-col items-center justify-center gap-3 px-6 text-center"
+              style={{ background: C.canvas }}
             >
-              +
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-full border font-mono text-[15px] font-bold"
+                style={{ borderColor: C.inkSoft, color: C.ink }}
+              >
+                AI
+              </div>
+              <div className="text-[14.5px] font-bold" style={{ color: C.ink }}>
+                Build a plant with the AI agent
+              </div>
+              <div className="max-w-[320px] text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
+                Describe the plant — route, capacity, features — and watch the
+                architect, engineer, and critic assemble and verify a live
+                flowsheet, unit by unit.
+              </div>
+              <div
+                className="mt-1 inline-flex items-center gap-1 text-[12px] font-bold"
+                style={{ color: C.gas }}
+              >
+                Open builder
+                <span className="transition-transform group-hover:translate-x-0.5">→</span>
+              </div>
             </div>
-            <div className="mt-3 text-[14.5px] font-bold" style={{ color: C.ink }}>
-              New plant
-            </div>
-            <div className="mt-1 max-w-[300px] text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
-              Describe the plant you want — capacity, feed, route — and the builder drafts it for
-              you. Arriving in a coming update.
-            </div>
-          </div>
+          </Link>
         </div>
+
+        {/* local library of agent-built plants (client-only, localStorage) */}
+        <SavedPlants />
 
         <p className="mt-12 text-[11.5px] leading-relaxed" style={{ color: C.inkFaint }}>
           Simulation engine validated against published plant data (EFMA Booklet No. 1;

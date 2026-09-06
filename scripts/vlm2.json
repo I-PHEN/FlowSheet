@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Score: 8/10**\n\n*   **Unit Cards & IDs:** **Excellent.** The cards are clean, well-spaced, and the IDs (e.g., `R1`, `HTS`, `C1`) are clearly legible in the headers. Descriptions are readable.\n*   **Stream Lines & Pills:** **Good.** Lines are smooth, and the ID pills (e.g., `S01`, `S11`) are distinct. However, the long return lines (like `S44` and `S45`) cross the middle row at shallow angles, which slightly reduces clarity compared to the dense local connections.\n*   **Multi-Band Layout:** **Very Readable.** The three-row structure (Reforming/Synthesis/Split) is logical. The horizontal flow within rows is easy to follow.\n*   **Overlap/Breakage:** **Minimal.** There is a slight visual cluster where the recycle line (`S23`) enters the `LM` mixer, but it does not obscure the unit itself. No text breakage observed.\n\n**Verdict:** A professional, high-quality PFD visualization that successfully handles a complex topology (22 units).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788675189,
+  "id": "2026090614130611319e039d404024",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026090614130611319e039d404024",
+  "usage": {
+    "completion_tokens": 242,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1882,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2124
+  }
+}

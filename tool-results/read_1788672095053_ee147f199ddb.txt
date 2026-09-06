@@ -1,0 +1,241 @@
+     1→# Worklog — Ammonia Plant Builder Agent: Research & Enhancement Plan
+     2→
+     3→---
+     4→Task ID: 0
+     5→Agent: main (Super Z)
+     6→Task: Read uploaded plan PDF, clarify requirements with user
+     7→
+     8→Work Log:
+     9→- Extracted /home/z/my-project/upload/ammonia_plant_agent_plan.pdf (4 pages)
+    10→- Plan: ammonia plant builder agent — deterministic Python unit-op engine (9 unit ops, sequential-modular solver, Wegstein recycle convergence) + LLM for intake/narration/what-if loop + TTS voice + 3D render. Staged MVP→v5 roadmap.
+    11→- User requirements: comprehensive pre-build research, PDF report ~25pg, builder-focused, live web research with citations, all four focus areas (plan critique, interactivity edges, landscape scan, tech stack picks), correlation table + risk register + roadmap v2 with effort estimates. No code deliverable.
+    12→
+    13→Stage Summary:
+    14→- Research phase begins: 4 parallel agents (landscape, tech stack, ammonia engineering, interactivity frontier)
+    15→
+    16→---
+    17→Task ID: 2-d
+    18→Agent: general-purpose (interactivity research)
+    19→Task: Interactivity frontier — voice AI, 3D web, gamified training
+    20→
+    21→Work Log:
+    22→- Ran 27 web searches across 5 areas (voice AI stacks/pricing, 3D web perf & flow animation, P&ID libraries, OTS/serious games, PhET/explorables, latency perception). Hit web_search rate limits mid-run; paced remaining queries with 45–150s cooldowns.
+    23→- Voice: OpenAI Realtime TTFB ~500ms, e2e 500–800ms; pricing fell $0.06/$0.24 per min (in/out, Oct-2024) → ~$0.04/min effective (2025, caching); barge-in over-aggressive on filler words (documented). Alternatives benchmarked: LiveKit Agents (OSS self-host), Pipecat (OSS; 24-token first-segment chunking), Vapi ($0.05/min platform fee), Retell (~$0.07–0.25/min), Nova Sonic (~$0.015/min, lowest cost). STT→LLM→TTS: naive 1.3–2s; optimized 400–520ms with sentence-chunked streaming TTS. Web Speech API = free tier, browser-support quirks (Brave/iOS-PWA/Chrome 139 on-device shift).
+    24→- Latency perception: 0.1s/1s/10s Nielsen thresholds; voice natural <600ms TTFB, human turn gap 200–300ms; median production voice AI 1.4–1.7s.
+    25→- 3D: draw-call budget rule (<100 = 60fps, >500 struggles); Three.js 2–6s load vs Unity WebGL 8–30s; WebGPU in all major browsers since Nov 2025. Flow animation: UV-scroll shader on TubeGeometry (best), SVG stroke-dashoffset for PFD, particles for hero streams. React Flow (free) = live stream labels; JointJS+ $3,490/dev has official P&ID demo; GoJS $3.5–12k/team. P&ID↔3D sync: enterprise-only (AVEVA P&ID 3D Integrator) — no web precedent found → white space.
+    26→- Gamification: OTS market $2.4–12.4B (2024, scope-dependent), refinery OTS ≈ $3M example; GSE Jade instructor station (initial conditions, malfunctions, component failures, self-paced startup); GSE+Nuclearn (2026) AI-authored scenarios from natural language — validates student's LLM+sim pattern. Serious-game evidence: Díaz 2024 (ChemE, active learning), SERGE risk-management gains, Tene 2025 STEM review. Steady-state fault injection: fouling/deactivation/efficiency/feed-drift/dP = legitimate parameter re-solve; trips/startup/surge/scoring-on-response-time need dynamics; bridge = quasi-steady game-tick stepping + inventory integrators. Precedent: Annenberg "Control a Haber-Bosch Plant" interactive (Flash-era, no 3D/voice/LLM) → student's app novel.
+    27→- Adjacent: PhET principles (immediate feedback, visible abstractions, inquiry); Victor/Nicky Case explorables (play-first, one-step interactions, keep old state visible); AI-copilot-for-CAD pattern (Siemens NX, MIT CAD agent) = LLM tool-calls into deterministic engine.
+    28→- Compiled findings + 15-rung INTERACTIVITY LADDER (wow÷effort) into research/2d_interactivity.md.
+    29→
+    30→Stage Summary:
+    31→- Artifact: /home/z/my-project/research/2d_interactivity.md — 5 research areas with sources/numbers + ranked interactivity ladder with effort/risk per rung.
+    32→- Key recommendations: stage voice as sentence-chunked TTS narration → push-to-talk what-if → Realtime full-duplex; build tag-registry (engine↔PFD↔3D) early since P&ID↔3D sync is an uncontested differentiator; fault mode = steady-state parameter faults + quasi-steady ticker, labeled honestly; instructor station + AI-authored briefs = the $100k-OTS-feel tier.
+    33→
+    34→---
+    35→Task ID: 2-c
+    36→Agent: general-purpose (ammonia engineering research)
+    37→Task: Ammonia plant engineering — correlations, operating data, validation sources
+    38→
+    39→Work Log:
+    40→- Ran ~40 web searches via z-ai CLI covering: Gillespie-Beattie Kp (+coefficient table), Temkin-Pyzhev/Dyson-Simon kinetics, SMR/WGS equilibrium constants & conditions, HTS/LTS, CO2 removal (aMDEA/Benfield), methanation, synthesis-loop design data, compressor polytropic equations, published mass balances, Wegstein/Broyden convergence, energy consumption (SMR vs green).
+    41→- Downloaded and fully read primary sources: Flórez-Orrego ECOS 2016 (1000 MTPD SMR unit, full loop tables), EFMA "Booklet No.1 Production of Ammonia" (BAT ranges for all sections), Zečević Processes 2020 (reformer Kp correlations + ATE benchmarks), Cheema & Krewer RSC Adv 2018 (Dyson-Simon activity model), Solmaz/Nadiri 2024 (refitted Temkin constants), IFA/Frisse 2004 (Uhde plant), Sánchez et al. green ammonia, Rice CENG403 design pages.
+    42→- NUMERICALLY VERIFIED in Python: (a) Gillespie-Beattie formula+β/I table reproduces classic equilibrium NH3% (450°C/100atm→16.3%, 400°C/200atm→38.2%, 500°C/300atm→26.4%); (b) K_WGS=0.01767·exp(4400/T) matches standard tables (12.2 @400°C, 133 @220°C); (c) K_SR1=1.198e13·exp(−26830/T) reproduces industrial primary-reformer CH4 slip (8.1% dry at 800°C/30bar/S-C 3) — MDPI typo "10^17" disproven.
+    43→- Key corrections found: "Temperley" correlation doesn't exist (drop); "Maxwell thesis" unverifiable; 60-70% fractional approach too low (industry 90-95% per bed); Turton/Felder lack ammonia case studies.
+    44→- Identified validation stream-table sources: EFMA booklet, Flórez-Orrego (Energy 137:234-250), TAMU Mahmoud 2024 thesis (Table 24 full mass balance), Rice CENG403, Cheema 2018.
+    45→
+    46→Stage Summary:
+    47→- Produced research/2c_ammonia_eng.md: per-unit-op modeling approach with concrete equations (G-B Kp w/ β/I table, K_SR1/K_WGS, Dyson-Simon rate + 3 constant sets, polytropic head), operating envelopes (T/P/composition per section), loop numbers (150-200 bar, 14-18% outlet NH3, purge 5-8%, inerts 10-15%, −20°C condensation), convergence strategy (damped DS → bounded Wegstein → Broyden), energy benchmarks (28-29 GJ/t BAT vs ~41 GJ/t global avg vs 10-12 MWh/t green), stream-schema recommendation, ranked VALIDATION SOURCES list, and 7 explicit plan corrections. All numbers source-tagged ([S]/[V]/[D]).
+    48→
+    49→---
+    50→Task ID: 2-a
+    51→Agent: general-purpose (landscape research)
+    52→Task: Landscape scan of process simulators, educational sims, AI engineering tutors
+    53→
+    54→Work Log:
+    55→- Ran 24 web searches via z-ai CLI (rate-limited twice; backed off with sleeps): commercial sim pricing (Aspen/AVEVA/UniSim/ChemCAD), open-source (DWSIM, COCO, ASCEND, IDAES, OMChemSim, NeqSim, ThermoPack, OpSim), educational sims & OTS (LearnChemE, learner.org Haber game, GSE/Honeywell/AVEVA/Yokogawa OTS, OTS market reports), AI x engineering education (Khanmigo, ChatGPT-in-ChemE studies, Alkali ProcessMate YC S25, MaximaLabs, ChemCopilot, DWSIM 10 AI Assistant, Text-to-flowsheet RSC 2026, Sketch2Simulation AIChE 2026, IChemE Aspen-copilot webinar Aug 2026), ammonia-specific (IEA Hydrogen Review 2025, green ammonia market, AEA LEAD/certification, workforce-skills reports), digital twins/VR education (Kumar 2021 review cited 218, Galeazzi 2024, Queen's VR plant).
+    56→- Key pricing facts: Aspen commercial $30K–$100K+/yr (chemicalengineeringguy.com; Alkali blog "$10k–$100k/yr"); Aspen student promo $100 (worth $2,700, Sep 2023); MaximaLabs free tier + $299/mo team; ProcessModel $1,656/yr/user; refinery OTS $800K–$1.5M/project; OTS market ~$12.4B 2024.
+    57→- Critical comparables identified: DWSIM 10 AI Assistant (NL flowsheet building, patron preview); MaximaLabs (browser sim, 60+ unit ops, AI copilot, free tier); Alkali ProcessMate (YC, AI copilot for process design); LearnChemE (320+ free browser sims, same audience); AspenTech V15 AI + IChemE education copilot webinar.
+    58→- Verified absences (white space): no voice-native engineering simulator; no free full-flowsheet ammonia teaching sim (learner.org is equilibrium-only); no LLM what-if loop on deterministic engine free for students; no 3D tied to live solve; no student-accessible fault-injection OTS. Simsu & pyCalSSS could not be verified (noted as unverified).
+    59→- Wrote structured findings with per-fact citations, WHITE SPACE ANALYSIS (10 bullets) and THREATS & COMPARABLES (6 ranked) to research/2a_landscape.md.
+    60→
+    61→Stage Summary:
+    62→- Artifact: /home/z/my-project/research/2a_landscape.md (6 research-question sections + white space + threats, all facts source-tagged with URL/site, inference flagged).
+    63→- Bottom line: the engine layer is commoditized (DWSIM/IDAES free; MaximaLabs already ships web+AI for pros), but NOBODY offers a free, voice-narrated, LLM-what-if, ammonia-specific, 3D plant-building teaching tool for students; nearest threats are DWSIM 10 AI Assistant and MaximaLabs (high overlap on mechanics, zero on pedagogy/voice/ammonia story); Aspen is adding AI but remains cost/install-gated. Recommend positioning as "the free OTS-style ammonia trainer with a voice" and partnering with (not competing against) LearnChemE's distribution.
+    64→
+    65→---
+    66→Task ID: 2-b
+    67→Agent: general-purpose (tech stack research, retry with narrowed scope)
+    68→Task: Thermo libraries, TTS engines, LLM structured output — comparison
+    69→
+    70→Work Log:
+    71→- Ran 18 web searches via z-ai CLI across 3 domains (thermo libs, TTS engines/pricing, LLM structured output); skipped voice-orchestration and 3D topics (covered by agent 2-d).
+    72→- Domain 1 (thermo): Cantera (BSD-3, Gibbs-min equilibrium incl. NH3 packed-bed example w/ Ru mechanism; no real-fluid VLE), CoolProp (MIT; v8.0.0 released ~Dec 2025; pure NH3 EOS to 725K/1000MPa; mixture flashes severely limited — GH #2534, NH3-water unavailable #341; PMC3944605 "cannot handle mixtures"), thermo/Caleb Bell (MIT, PR/SRK+UNIFAC flash, 2016-2025 active), DWSIM (GPL v3, .NET+pythonnet, slow interactive re-solves), iapws/SEUIF97 (IF97 steam), ThermoPack (SINTEF; GitHub edition feature-limited), NeqSim (Java/JPype; SKIP), pyromat (SKIP).
+    73→- KEY QUESTION resolved: CoolProp & Cantera CANNOT do NH3-H2-N2-CH4-Ar VLE at -20C/150bar as a general mixture flash. Standard practice = cubic EOS (PR/SRK/Patel-Teja) with BIPs (mines-paris course, PR-vs-PT comparisons, VTPR). Research-grade reference EOS exists for exactly NH3+Ar/CH4/H2/N2/CO (Herrmann, FPE 2020). => Use `thermo` PR flash for condenser; CoolProp for pure fluids + IF97 steam.
+    74→- Domain 2 (TTS): Piper (MIT code; voice models dataset-licensed, some non-commercial; ~700ms/10s CPU; "fastest but most robotic"), Kokoro-82M (Apache 2.0; ~200x RT CPU; quality > Piper; no cloning; dataset-provenance caveats), OpenAI gpt-4o-mini-tts ($0.60/1M in + $12/1M audio-out tokens = ~$0.015/min; voice-instructions persona steering; tts-1 $15/1M, hd $30/1M), ElevenLabs (v2/v3 $100/1M chars, Flash/Turbo $50/1M; Flash v2.5 75ms TTFB, 32 langs; free ~10k credits/mo; cloning paid), Azure ($15-16/1M neural, $22-30/1M HD; FREE 500k chars/mo F0; SSML explanatory styles), Google ($4-16/1M; free 4M standard/mo), Polly ($16-19.2/1M; free tier replaced by $200 credits Jul 15 2025), Cartesia Sonic ($30/1M, sub-100ms), Deepgram Aura-2 ($30/1M, $200 credits).
+    75→- Domain 3: OpenAI Structured Outputs (Aug 2024) = constrained decoding, 100% schema adherence vs ~93% function-calling / <40% prompting; Anthropic structured outputs Nov 2025 (schema w/ limitations); Instructor = Pydantic+retry shim, provider-agnostic; outlines & LM Format Enforcer = constrained decoding for local models; arXiv 2501.10868 survey. Hallucination-in-engineering sources: PatSnap (rates in engineering), "numerical hallucination" write-ups, arXiv 2404.00971 (LLM code hallucinations). Safe pattern: strict schema -> Pydantic physical-range validation (bounds from 2-c envelopes) -> deterministic engine computes; LLM narrates only.
+    76→- Wrote research/2b_techstack.md: per-tool verdicts (USE/SKIP/CONDITIONAL), pricing table, recommended stack + budget alternatives + semester cost sanity check (~$5-17 total, or $0 with Azure-free/Kokoro).
+    77→
+    78→Stage Summary:
+    79→- Artifact: /home/z/my-project/research/2b_techstack.md — 3 domains, 19 tools assessed, per-tool license/pricing/activity/verdict + sources; RECOMMENDED STACK section.
+    80→- Recommended: (1) thermo (PR EOS) + CoolProp (pure fluids/IF97) + 2-c's Kp correlations for the engine — all MIT; Cantera optional cross-check; DWSIM validation-only. (2) OpenAI gpt-4o-mini-tts (~$0.015/min, voice-instructions persona) for narration + Azure free 500k chars/mo or ElevenLabs Flash v2.5 (75ms) for conversational; budget = Kokoro self-hosted. (3) OpenAI structured outputs via Instructor + Pydantic range-validation layer; LLM never does arithmetic.
+    81→- Decision-changing findings: CoolProp cannot flash NH3 mixtures (thermo/PR fills the gap); Azure perpetual 500k free chars/mo; OpenAI gpt-4o-mini-tts is ~$0.015/min with persona steering; structured-output reliability is 100% at format level but value-level validation still required (Pydantic bounds).
+    82→
+    83→---
+    84→Task ID: 3
+    85→Agent: main (Super Z)
+    86→Task: Synthesize research and generate the final PDF deliverable
+    87→
+    88→Work Log:
+    89→- Read all 4 research files (2a landscape, 2b tech stack, 2c ammonia engineering, 2d interactivity) and synthesized into 9-chapter document plan
+    90→- Loaded pdf skill report brief + fonts, palette, cover, charts, overflow, pagination, typography, fill-engine, geometry, cover-backgrounds specs
+    91→- Generated cascade palette (intent=cold, seed=42, steel-blue family)
+    92→- Generated 5 matplotlib charts (equilibrium curves w/ approach correction, voice latency, TTS prices, interactivity ladder, roadmap timeline) per charts.md rules
+    93→- Built 30-page body via ReportLab (TocDocTemplate + multiBuild, roman/arabic page numbering with body-start marker, 20+ palette-styled tables, callouts, code blocks, chart embeds); fixed em-dash line-start issues via non-breaking glue
+    94→- Built Template 01 HUD cover (HTML -> cover_validate.js pass -> html2poster.js @794px); fixed one title text-overlap flagged by validator
+    95→- Merged cover + body via pypdf with exact A4 normalization (fixed sub-point page-size drift)
+    96→- QA chain: code.sanitize, meta.brand, font.check (0 issues), toc.check (pass), pages.clean (0 blank), pdf_qa.py (11 passed, 0 errors), VLM visual review of 12 pages (NO DEFECTS FOUND)
+    97→
+    98→Stage Summary:
+    99→- Deliverable: /home/z/my-project/download/Ammonia_Plant_Builder_Agent_Research_and_Enhancement_Plan.pdf (31 pages, ~805 KB)
+   100→- Supporting: download/cover_source.html (editable cover source)
+   101→- Research artifacts: research/2a_landscape.md, research/2b_techstack.md, research/2c_ammonia_eng.md, research/2d_interactivity.md
+   102→- Key findings baked in: 5 must-fix corrections (approach 90-95%, thermo library for VLE, 2-zone secondary reformer, Ar species, real validation sources), verified Gillespie-Beattie table, 15-rung interactivity ladder, full stack picks, 15-risk register, 27-week roadmap v2
+   103→
+   104→---
+   105→Task ID: 4 (build phases 1+2)
+   106→Agent: main (Super Z)
+   107→Task: Build Phase 1 (deterministic engine core) and Phase 2 (PFD workbench UI) of the ammonia plant builder, per the phased stage-gate plan agreed with the user.
+   108→
+   109→Work Log:
+   110→- Initialized fullstack env (Next.js 16 + React 19 + Tailwind 4 + shadcn, bun runtime).
+   111→- Decision (communicated to user): engine in TypeScript in-process instead of Python — identical verified math (PR EOS + research correlations), but sub-100ms re-solve enables live slider-drag interaction, the core product differentiator. Python/thermo/DWSIM remain the offline validation oracle.
+   112→- Engine (src/lib/engine/): species.ts (9 species, SVA props, Cp fits, atom matrix), thermo.ts (ideal-gas enthalpy w/ ΔHf), pr.ts (PR EOS fugacity + residual enthalpy), flash.ts (Rachford-Rice PT flash), reactions.ts (Gillespie-Beattie w/ β-I table, K_SR1, K_WGS, nested-bisection SMR+WGS solver, dedicated methanator solver, NH3 bed solver w/ dissociation), units.ts (19 unit ops incl. dual-zone secondary reformer, 3-bed converter w/ fractional approach, polytropic compressor train, isenthalpic product letdown), plant.ts (spec + base case + front-end sequential pass + air secant controller for H2/N2=3 + synthesis loop tear solved by damped-DS×4 → Broyden with trust region + atom-scaled convergence residual).
+   113→- Bugs found & fixed via the test gate: ln(Z) instead of ln(Z−B) in PR fugacity; enthalpyRate /1000 unit error (all duties 1000× small); methanator equilibrium unreachable via signed SMR extents (inner WGS pins CO) — rewrote as dedicated methanation reaction solver; isothermal letdown flash unphysical — replaced with isenthalpic (self-refrigerating) flash; convergence metric hid trace-species mismatch (Ar balance) — atom-flow-scaled residual; Wegstein linear tail (111 iters) — replaced with Broyden (17 iters).
+   114→- Validation suite scripts/engine-tests.ts: 61 checks — G-B equilibrium table (10 anchors), K_WGS/K_SR1 anchors, PR NH3 Psat + latent heat, loop-gas flash, KO flash, base-case KPI envelopes vs EFMA/Flórez-Orrego/Rice ranges, front-end spot checks (CH4 slip, CO, ppm), element balance closure < 1e-6, physical monotonicity probes (8), determinism, 60-spec robustness fuzz. ALL GREEN.
+   115→- Base case: 796 t/d NH3, 99.24 wt% purity, 28.6% per-pass, 6.9% inerts, H2/N2 3.10, 65 MW reformer, 33.4 GJ/t (partial scope), 17 iterations, ~55-90 ms solve.
+   116→- UI (src/components/workbench/ + src/lib/workbench/layout.ts): dark control-room theme (no gradients/emoji/AI-slop), hand-drawn SVG PFD (19 unit symbols, 27 stream polylines, pan/zoom, hover tooltips w/ composition, click-select, subtle flow animation), inspector (plant overview + per-unit specs, 25 spec fields w/ engineering sliders + clamps), bottom tabs (stream table wet/dry, solver console w/ Broyden trace, element balance), top KPI bar, /api/solve route mirror.
+   117→- Browser verification (agent-browser): 0 errors after fixing hydration mismatch (solveMs SSR) via useSyncExternalStore; live re-solve verified (loopP 150→200 bar → per-pass 28.6→30.3%); unit/stream selection, tabs, reset, mobile stacking all verified; VLM visual reviews clean; lint clean.
+   118→
+   119→Stage Summary:
+   120→- Phase 1 GATE: PASSED (61/61). Phase 2 GATE: PASSED (lint + browser E2E).
+   121→- Deliverable: runnable Next.js workbench at / (preview panel), engine library, test suite (bun scripts/engine-tests.ts).
+   122→- Key artifacts: src/lib/engine/* (9 modules), src/components/workbench/* (4), scripts/engine-tests.ts, scripts/diag-convergence.ts.
+   123→- Next phases (not started): P3 analysis suite (sensitivity sweeps, scenario compare, Prisma persistence), P4 LLM copilot (NL→spec with validation, z-ai sdk), P5 voice (TTS walkthroughs), P6 3D view (R3F), P7 ops game (fault injection).
+   124→
+   125→---
+   126→Task ID: 5
+   127→Agent: main (Super Z)
+   128→Task: Post-build UI critique + product re-plan (user feedback: flowsheet sucks, too much info, strictly educational, Google Flow-style project home, 3D only for 1-2 units). NO BUILD — planning discussion only.
+   129→
+   130→Work Log:
+   131→- VLM-analyzed user's 3 Google Flow reference screenshots (landing w/ hero + single CTA; project card grid w/ thumbnails + titles/dates; workspace = calm canvas + right agent panel w/ suggestion chips).
+   132→- VLM-analyzed current workbench screenshot: diagnosed (1) gray-on-gray flowsheet = near-zero contrast ghost, (2) small ambiguous symbols, (3) NO equipment tags or stream numbers on canvas, (4) spaghetti line routing, (5) everything-at-once layout (KPI bar + legend + dense panel + tabs) overwhelms new users.
+   133→- Product reframe: plants-as-projects library home; 2D flowsheet as the hero (textbook-grade rebuild); 3D demoted to 1-2 hero units; AI repositioned to "+ New plant" builder entry + right-side tutor panel (Flow screen-3 pattern).
+   134→- Engine (Phase 1, 61/61) preserved untouched; old workbench panels re-housed behind Operate mode.
+   135→- Proposed phase sequence: A flowsheet design language → B library+shell (Explore mode) → C wire engine (Operate) → D AI plant builder → E 3D hero units → F educational layer (tours, tutor; voice later).
+   136→- Submitted re-plan + 8 decision questions to user (audience, canvas theme, data-on-canvas default, library size, new-plant UX, mode split, tutor panel placement, 3D unit picks).
+   137→
+   138→Stage Summary:
+   139→- Planning turn only; no code changed. Awaiting user decisions before Phase A starts.
+   140→
+   141→DECISIONS LOCKED (user, via question round):
+   142→1. Audience: BOTH ChE students + self-learners → dual-layer content per unit (plain-language + technical depth)
+   143→2. Canvas: soft warm-gray studio (light, textbook-legible, softer ink — not paper-white, not dark)
+   144→3. Default canvas data: equipment tags + stream numbers only; values on hover/click
+   145→4. Library at first release: ONE reference plant (1,000 t/d SMR), done deep
+   146→5. '+ New plant': hybrid wizard (structured steps + AI chat alongside, form always visible)
+   147→6. Modes: Explore / Operate (+ Analyze later)
+   148→7. AI tutor: persistent right agent panel w/ suggestion chips (Flow screen-3 pattern)
+   149→8. 3D hero units: converter + primary reformer furnace
+   150→- Phase A spec issued (design tokens, 19-symbol SVG set w/ tags, hand-authored textbook layout w/ section bands + lane discipline, hover/click interactions, dual-layer panel content for 19 units, 7-point acceptance gate incl. 30-second test + silhouette ID test + ≥7:1 contrast).
+   151→- Tutor panel shells in Phase B: suggestion chips wired to deterministic authored tours (no LLM needed); free-form AI Q&A + voice deferred to Phase F.
+   152→- Old dark workbench: keep at /legacy for engine debugging through Phase C, then remove.
+   153→
+   154→---
+   155→Task ID: 6 (build phases A+B)
+   156→Agent: main (Super Z)
+   157→Task: Build Phase A (flowsheet craft) + Phase B (library home + workspace shell) — the clean, project-structured, educational interface. Engine untouched.
+   158→
+   159→Work Log:
+   160→- Design tokens (src/lib/design/tokens.ts): soft warm-gray studio (#F1F0ED canvas, #26282B ink ≈12.9:1, paper equipment fill, 4 muted service hues: feed ochre / process-gas steel blue / NH3 green / dashed utilities gray).
+   161→- New hand-authored layout (src/lib/flowsheet/layout.ts): 1800×880 world, 3 narrative section bands (FEED & REFORMING → SHIFT & PURIFICATION → SYNTHESIS LOOP & COMPRESSION), 19 units with real equipment tags (M-101…K-102), 27 streams re-routed with lane discipline (synthesis loop drawn as literal closed circuit w/ long return line S23), margin annotations. Topology mirrors engine ids exactly.
+   162→- Symbol library (src/components/flowsheet/Symbols.tsx): 11 distinct silhouettes (furnace w/ tubes+flames+stack, dual-zone secondary w/ cone+air nozzle, 3-bed converter w/ quench stubs, hatched reactors/columns, drums w/ boots, compressor cone, mixer/splitter wedges) on paper fill.
+   163→- Diagram (pure SVG, server-safe) + interactive Canvas: pan/drag, wheel zoom (letterbox-correct cursor→world), pinch, keyboard (+/-/arrows/f), animated panTo (used by tours), hover tooltips fed by live base-case solve, stream dimming on selection, legend + zoom overlays, first-visit hint.
+   164→- Educational content (src/lib/content/units.ts): 19 units × dual-layer (What it does / How it works / Why it matters, ~150-200 words each, ranges from EFMA/Flórez-Orrego), 3 deterministic tours (13-step walkthrough, 9-step hydrogen-atom journey, 6-step why-a-loop) + colors answer card.
+   165→- Workspace (src/app/plant/reference): top bar (back, title, Explore|Operate switch — Operate disabled honestly until Phase C, Learn toggle, Console link), right panel swapping detail ↔ tour ↔ tutor, mobile bottom sheet.
+   166→- Library home (src/app/page.tsx): minimal project grid — reference plant card with REAL mini-flowsheet thumbnail (static Diagram render) + honest "+ New plant" coming-soon card + validation footnote.
+   167→- Legacy: old dark workbench recovered from git → /legacy (unmodified).
+   168→- Bugs found & fixed: (1) container empty-click handler matched unit hit-rects by tagName → wiped selections immediately; replaced with dedicated click-catcher background rect. (2) boxToAspect shorthand property TS error. (3) react-hooks/refs violations (ref mirror during render, ref read in render for tooltip clamp) → effect-synced mirror + handler-side clamp. (4) 'PROCESS STEAM' annotation collided with M-101 name label → shortened to 'STEAM'. (5) Engine type lie: 'broyden' missing from SolverTraceRow method union. (6) Stale page metadata retitled 'Ammonia Plant Lab'.
+   169→
+   170→Stage Summary:
+   171→- GATE A+B: PASSED. VLM visual reviews: home 9/10 (clean, uncluttered, thumbnail legible), workspace 9.5/10 (dark-on-light contrast "excellent", tags + pills legible, bands readable, loop reads as closed circuit). Interactions verified in browser: stream hover tooltip w/ real engine numbers (S04: 805°C/30bar/5361 kmol/h + composition), unit click → dual-layer panel (reformer duty 64.9 MW matches base case), stream click → composition bars (S24 NH3 99.3%), 13-step tour with animated camera + halos, FIT, mobile 390px clean (top bar fits, bottom sheet works), legacy intact & converged. Lint clean, tsc clean, production build green (all routes static), engine gate still 61/61.
+   172→- Key artifacts: src/lib/design/tokens.ts, src/lib/flowsheet/{layout,geom}.ts, src/lib/content/units.ts, src/components/flowsheet/{Symbols,Diagram,Canvas}.tsx, src/components/workspace/{Workspace,DetailPanel,TutorPanel}.tsx, src/app/page.tsx, src/app/plant/reference/page.tsx, src/app/legacy/page.tsx.
+   173→- Next: Phase C — wire live solving into the new skin (Operate mode: spec sliders + live re-solve + stream table in the clean theme), then D (AI builder wizard), E (3D converter+reformer), F (tutor Q&A/voice).
+   174→
+   175→---
+   176→Task ID: 7
+   177→Agent: main (Super Z)
+   178→Task: Delete the legacy console entirely (route, components, code) and implement dark mode for the clean educational interface. Engine untouched.
+   179→
+   180→Work Log:
+   181→- DELETED: src/app/legacy/page.tsx, src/components/workbench/ (TopBar, PfdCanvas, Inspector, BottomPanel), src/lib/workbench/layout.ts, the entire .wb* / .st-* CSS block in globals.css, and both "Console" links (home header, workspace top bar). /legacy now 404 (browser-verified).
+   182→- Token refactor for theming: tokens.ts now emits CSS variable references (var(--fs-*)); globals.css defines the full light palette (:root, byte-identical to the previous hardcoded values) and a new dark palette (.dark): canvas #1F1E1C, paper #2A2926, ink #EDEBE6 (~14:1), inkSoft #A9A79F, service hues brightened (feed #C9A66B, gas #8FB2CF, nh3 #85BD9A, utility #96999E), + paperA95 / tipShadow / cardShadow / warn tokens.
+   183→- Key mechanism: SVG presentation attributes cannot resolve var(), so ALL color usage in Diagram.tsx / Symbols.tsx was converted from fill=/stroke= attributes to inline style props (style objects carry stroke, strokeWidth, fill, linejoin). Diagram stays server-renderable (home thumbnail) AND theme-reactive. Symbols' stroke()/thin helpers now return CSSProperties.
+   184→- Hardcoded hexes eliminated: 12× hover:bg-[#E9E7E1] -> .hover-band utility class; tooltip rgba shadow -> C.tipShadow; legend C.paper+'F2' concat -> C.paperA95 var; DetailPanel warn '#8A5A2B' -> C.warn; home card hover shadow -> .card-lift; root layout hardcoded dark body removed.
+   185→- Theme infra: next-themes (already installed) via src/app/providers.tsx (attribute="class", defaultTheme light, enableSystem); new src/components/ThemeToggle.tsx in home header + workspace top bar. Toggle icon/label read the APPLIED theme from the <html> class via useSyncExternalStore + MutationObserver (source of truth = the same class the CSS keys off, so the label can never desync; also satisfies react-hooks/set-state-in-effect lint rule). Persistence verified across reloads.
+   186→- BUGS found & fixed during verify: (1) Turbopack served a stale CSS chunk after the globals.css rewrite (JS fresh, CSS still contained deleted .wb rules) — fixed by rm -rf .next/cache + reload; if theme vars ever resolve empty in dev, flush the cache. (2) First ThemeToggle used resolvedTheme from context — observed one desynced label state; replaced with DOM-class observer. (3) react-hooks/set-state-in-effect on the mounted-guard pattern — replaced with useSyncExternalStore hydration probe, then removed entirely in the DOM-observer rewrite.
+   187→- VERIFIED in browser: light home + dark home; dark workspace (bands #262523, labels #A9A79F, stream strokes in dark service hues, diagram bg #1F1E1C — all via computed styles); hover tooltip w/ live engine numbers (S01: 40C/32bar/1000 kmol/h/CH4 100%); unit click (Primary reformer panel, 64.9 MW base case, dual-layer sections); 13-step tour with dark halo #37352E; /legacy 404; mobile 390px dark; dark->light round-trip + persistence; lint clean; tsc clean (src).
+   188→- VLM reviews: dark home 8.5/10, dark workspace 9/10 ("avoided the gray-on-gray trap", "production-ready"); tooltip 9/10; unit panel 8/10; tour 8/10; mobile 7/10; light regression 9/10 (unchanged design). Flagged nits are pre-existing Phase B traits (mobile title truncation, small close-button touch target) — parked for the polish backlog.
+   189→
+   190→Stage Summary:
+   191→- GATE: PASSED. Console fully removed from code; dark mode shipped as a first-class theme ("dark studio textbook" — same grammar, high contrast, no gray-on-gray).
+   192→- Key artifacts: src/lib/design/tokens.ts (var-based), src/app/globals.css (both palettes + .hover-band/.card-lift), src/app/providers.tsx, src/components/ThemeToggle.tsx; refactored Diagram/Symbols/Canvas/Workspace/page/DetailPanel/TutorPanel.
+   193→- Engine gate still 61/61 (untouched). api/solve kept (reserved for Phase D LLM tooling).
+   194→- Next: Phase C — Operate mode in the clean skin (spec controls + live re-solve + stream table), per the locked re-plan.
+   195→
+   196→---
+   197→Task ID: 8 (Phase C · minimal)
+   198→Agent: main (Super Z)
+   199→Task: Build Phase C — minimal Operate mode. User directive: "let's go minimal for now, focusing only on the important stuff." Three live levers + reset + KPI readout; everything else (tooltips, panels) updates from the one live solve. Engine untouched.
+   200→
+   201→Work Log:
+   202→- Probed engine: run() = ~36 ms avg (bun), converges across full lever envelope (loopP 80–250, primaryT 700–900, ngFeed 100–3000). Corner warnings are honest (H2/N2 controller residual) — surfaced in panel.
+   203→- New src/components/workspace/OperatePanel.tsx: 3 levers — Synthesis loop pressure (R-107 · K-102, 80–250 bar, step 5), Reformer outlet temperature (R-102, 700–900 °C, step 5), Natural gas feed (M-101, 100–3000 kmol/h, step 25). Each: label + equipment tag ref, big mono value, native range slider (token-styled via .op-slider + inline --op-fill gradient), min/max ticks, one-line educational hint. "Plant answer" KPI block: NH3 production (t/d, signed Δ vs design, green/amber), per-pass conversion (Δ pt), product purity, H2/N2 at converter. Footer: converged + loop iterations, warnings, full-width "Reset to design conditions".
+   204→- globals.css: .op-slider class (webkit + moz track/thumb from --fs tokens, focus-visible ring on thumb). Track fill = inline linear-gradient via --op-fill so both themes work with one rule.
+   205→- Workspace.tsx: mode state ('explore' | 'operate'), spec state (PlantSpec, baseCase init); result = useMemo(run(spec)) — the SAME result object feeds canvas + tooltips + panels, so every value in the app is live. enterOperate clears tour/selection/opens panel; enterExplore resets spec to baseCase (book mode always shows design conditions). Mode switch: both tabs enabled, active = ink pill.
+   206→- DetailPanel.tsx: new condLabel prop ("base case" in Explore / "operating point" in Operate) threaded to UnitDetail + StreamDetail section titles.
+   207→- Import fix: PlantSpec lives in engine/plant.ts, not types.ts.
+   208→- VERIFIED (agent-browser): Operate tab clickable → panel renders at design values (150/805/1,000); loopP → 200 bar re-solves live (KPIs 800.6 t/d +4.9, 33.8 % +5.2 pt, 18 iterations — matches offline engine probe); converter detail panel shows "Live conditions — operating point" w/ per-pass 33.8 %; stream tooltips live (S20 converter feed at 200.0 bar, S22 at 195 bar); Reset → back to 795.7 t/d design, deltas cleared; 240 bar then Explore → TutorHome + plant reset (slider back at 150 on re-entry); dark mode: live KPIs at 210 bar (801 t/d +5.4); console clean; home regression clean; mobile 390px bottom sheet works.
+   209→- Gates: tsc clean (src), eslint clean, engine 61/61, production build green (/, /plant/reference static).
+   210→- VLM: light operate 9/10, dark operate 9/10 ("no gray-on-gray"), mobile 9/10 (sheet scroll truncation = expected).
+   211→
+   212→Stage Summary:
+   213→- GATE: PASSED. Phase C (minimal) shipped: Operate mode is live — 3 real levers, ~36 ms full-plant re-solve, whole canvas answers.
+   214→- Key artifacts: src/components/workspace/OperatePanel.tsx, .op-slider CSS, Workspace/DetailPanel edits. Screenshots: scripts/op1–op6.
+   215→- Deliberately deferred (kept minimal per user): full spec inspector (25 fields), stream table, Analyze mode, scenario compare.
+   216→- Next options: D (AI plant builder wizard on "+ New plant"), or deepen C first (stream table, more levers, preset scenarios like "cold loop / turndown").
+   217→
+   218→---
+   219→Task ID: 9 (D1 · Engine 2.0)
+   220→Agent: main (Super Z)
+   221→Task: D1 — refactor the engine's wiring layer into flowsheet-as-data (graph + registry + executor + auto-tear + validator) behind a hard identity gate. Physics (thermo/pr/flash/reactions/units) untouched. User directive: "go" on the locked D1 plan (free composition, multi-agent, no voice-narration during builds).
+   222→
+   223→Work Log:
+   224→- Read plant.ts (967 lines) fully; mapped every stream, unit, metric string, warning, controller, and constant.
+   225→- NEW src/lib/engine/graph.ts: FlowGraph data model — units {id, type, specs}, stream edges {id, name, cls, from: unit+port, to: unit+port|null, implicit?}, controllers {manipulate source, measure stream, num/den species, set, auto}.
+   226→- NEW src/lib/engine/registry.ts: the ammonia catalog — 22 unit types (3 feed sources + 19 process units), each with typed ports (gas/liquid), spec fields with physical clamps/defaults, and solve() wrappers calling the EXISTING physics verbatim (same calls, same metric formatting). Species hooks: tearInit (loop tear guess), airControllerInit (secant bracket). feed-preheater declares fixedOutlet (outlet T/P pure spec) — the property the tear selection keys on.
+   227→- NEW src/lib/engine/reference.ts: the reference SMR plant as data (unit ids match UI layout: M1..C2 + SRC_NG/SRC_ST/SRC_AIR; 28 edges incl. S24S self-loop + implicit letdown-vapor line IF1) + applyPlantSpec (the one table mapping flat PlantSpec knobs onto unit specs) + buildGraph.
+   228→- NEW src/lib/engine/converge.ts: solveLinear9, solveSecant (air controller secant, verbatim), solveTearLoop (damped-DS + Broyden with trust region/step-limiting/rank-1/stall-reset, verbatim), makeResid.
+   229→- NEW src/lib/engine/executor.ts: executeGraph — Tarjan SCC → tear selection (prefer fixedOutlet edges → lands on S20 converter feed) → controller phase (secant re-runs the front-end scope, best-state snapshot/restore) → Kahn topo walk → tear loop → assembly (streams, units, element balance from source-out/sink-in edges, ammonia KPIs with defensive reads for modified graphs). planTear exported for introspection.
+   230→- NEW src/lib/engine/validate.ts: the agent-facing cage — unknown types, duplicate ids, unfed inlets, double-fed inlets, dangling outlets, port phase mismatches, spec ranges, controller refs, reachability, no-sinks, multi-loop + no-tearable-edge detection. All messages plain-English (what D2's agent will read to self-correct).
+   231→- plant.ts: run() now = executeGraph(buildGraph(spec)); the original implementation preserved VERBATIM as runLegacy() — the identity oracle (delete in D2 once the gate has baked). frontEndPass/loopPass still exported (tests + oracle).
+   232→- NEW scripts/graph-tests.ts: the D1 gate — 19 specs (base, corners, manual air, seeded randoms) comparing run vs runLegacy on EVERY field (streams T/P/n, metric strings + raws, KPIs, balance, exact trace rows, warnings order) at 1e-9/1e-12; + tear detection (SCC = 7 loop units, tear = S20); + 7 validator rejection classes; + a MODIFIED graph (LTS bypassed) that validates, solves, closes its balance, and physically drops production.
+   233→- BUGS the identity gate caught (this is why the gate exists): (1) R1 dp 0→1 bar — legacy pressure cascade sets the reformer outlet at P0+0 while its inlet is P0+1; my inlet-relative dp needs 1. (2) makeResid captured scale=total(makeup) outside the closure; legacy recomputes scale=total(b) per call (b = current tear flows) — atom terms masked the difference early/late, flow term exposed it mid-convergence. Both fixed; trace now bit-identical.
+   234→- Debug scripts (trace/broyden/gfn isolation) deleted after use.
+   235→
+   236→Stage Summary:
+   237→- GATES ALL GREEN: Engine 2.0 gate 35/35 (IDENTITY HOLDS — max numeric diff 0.0 at 1e-12 trace tolerance across the envelope), Phase 1 gate 61/61 (old suite now running THROUGH the graph path), tsc clean, eslint clean, production build green, browser spot-check identical numbers (200 bar → 800.6 t/d +4.9, 33.8% +5.2 pt).
+   238→- The flowsheet is now DATA the agent can compose; the validator is the cage; physics untouched.
+   239→- Key artifacts: src/lib/engine/{graph,registry,reference,executor,converge,validate}.ts (+7 modules, ~1900 lines), plant.ts run/runLegacy split, scripts/graph-tests.ts (permanent gate, run with engine-tests).
+   240→- Next: D2 — agent runtime (multi-agent pipeline over z-ai sdk: Architect/Engineer/Critic/Narrator roles, tools add_unit/connect/set_spec/validate/solve, events streamed to the browser, text only, no voice). Then D3 builder UI (canvas assembles live from events).
+   241→
