@@ -9,6 +9,8 @@ import type {
   Stream,
   UnitResult,
 } from './types';
+import { executeGraph } from './executor';
+import { buildGraph } from './reference';
 import {
   adiabaticEqReactor,
   compressorTrain,
@@ -662,10 +664,17 @@ function solveAir(spec: PlantSpec): { air: number; fe: FrontEnd; err: number | n
 }
 
 // ---------------------------------------------------------------------------
-// Public solve entry point
+// Public solve entry points
 // ---------------------------------------------------------------------------
 
-export function run(spec: PlantSpec): PlantResult {
+/**
+ * runLegacy — the ORIGINAL hand-wired implementation, kept VERBATIM as the
+ * identity oracle for Engine 2.0: scripts/graph-tests.ts asserts
+ * run(spec) ≡ runLegacy(spec) across the spec envelope. Once D2's agent
+ * builds plants through the graph path and the gate has baked, this
+ * function (plus frontEndPass/loopPass/solveAir) gets deleted.
+ */
+export function runLegacy(spec: PlantSpec): PlantResult {
   const t0 = performance.now();
   const warnings: string[] = [];
 
@@ -945,4 +954,13 @@ export function run(spec: PlantSpec): PlantResult {
     warnings: [...new Set(warnings)],
     h2n2Err: h2n2Resid,
   };
+}
+
+/**
+ * run — the public solve. Engine 2.0 path: express the plant as a FlowGraph
+ * (reference topology + this spec applied), then walk it with the graph
+ * executor. Identical numbers to runLegacy — enforced by the identity gate.
+ */
+export function run(spec: PlantSpec): PlantResult {
+  return executeGraph(buildGraph(spec));
 }

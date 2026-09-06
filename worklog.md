@@ -214,3 +214,27 @@ Stage Summary:
 - Key artifacts: src/components/workspace/OperatePanel.tsx, .op-slider CSS, Workspace/DetailPanel edits. Screenshots: scripts/op1–op6.
 - Deliberately deferred (kept minimal per user): full spec inspector (25 fields), stream table, Analyze mode, scenario compare.
 - Next options: D (AI plant builder wizard on "+ New plant"), or deepen C first (stream table, more levers, preset scenarios like "cold loop / turndown").
+
+---
+Task ID: 9 (D1 · Engine 2.0)
+Agent: main (Super Z)
+Task: D1 — refactor the engine's wiring layer into flowsheet-as-data (graph + registry + executor + auto-tear + validator) behind a hard identity gate. Physics (thermo/pr/flash/reactions/units) untouched. User directive: "go" on the locked D1 plan (free composition, multi-agent, no voice-narration during builds).
+
+Work Log:
+- Read plant.ts (967 lines) fully; mapped every stream, unit, metric string, warning, controller, and constant.
+- NEW src/lib/engine/graph.ts: FlowGraph data model — units {id, type, specs}, stream edges {id, name, cls, from: unit+port, to: unit+port|null, implicit?}, controllers {manipulate source, measure stream, num/den species, set, auto}.
+- NEW src/lib/engine/registry.ts: the ammonia catalog — 22 unit types (3 feed sources + 19 process units), each with typed ports (gas/liquid), spec fields with physical clamps/defaults, and solve() wrappers calling the EXISTING physics verbatim (same calls, same metric formatting). Species hooks: tearInit (loop tear guess), airControllerInit (secant bracket). feed-preheater declares fixedOutlet (outlet T/P pure spec) — the property the tear selection keys on.
+- NEW src/lib/engine/reference.ts: the reference SMR plant as data (unit ids match UI layout: M1..C2 + SRC_NG/SRC_ST/SRC_AIR; 28 edges incl. S24S self-loop + implicit letdown-vapor line IF1) + applyPlantSpec (the one table mapping flat PlantSpec knobs onto unit specs) + buildGraph.
+- NEW src/lib/engine/converge.ts: solveLinear9, solveSecant (air controller secant, verbatim), solveTearLoop (damped-DS + Broyden with trust region/step-limiting/rank-1/stall-reset, verbatim), makeResid.
+- NEW src/lib/engine/executor.ts: executeGraph — Tarjan SCC → tear selection (prefer fixedOutlet edges → lands on S20 converter feed) → controller phase (secant re-runs the front-end scope, best-state snapshot/restore) → Kahn topo walk → tear loop → assembly (streams, units, element balance from source-out/sink-in edges, ammonia KPIs with defensive reads for modified graphs). planTear exported for introspection.
+- NEW src/lib/engine/validate.ts: the agent-facing cage — unknown types, duplicate ids, unfed inlets, double-fed inlets, dangling outlets, port phase mismatches, spec ranges, controller refs, reachability, no-sinks, multi-loop + no-tearable-edge detection. All messages plain-English (what D2's agent will read to self-correct).
+- plant.ts: run() now = executeGraph(buildGraph(spec)); the original implementation preserved VERBATIM as runLegacy() — the identity oracle (delete in D2 once the gate has baked). frontEndPass/loopPass still exported (tests + oracle).
+- NEW scripts/graph-tests.ts: the D1 gate — 19 specs (base, corners, manual air, seeded randoms) comparing run vs runLegacy on EVERY field (streams T/P/n, metric strings + raws, KPIs, balance, exact trace rows, warnings order) at 1e-9/1e-12; + tear detection (SCC = 7 loop units, tear = S20); + 7 validator rejection classes; + a MODIFIED graph (LTS bypassed) that validates, solves, closes its balance, and physically drops production.
+- BUGS the identity gate caught (this is why the gate exists): (1) R1 dp 0→1 bar — legacy pressure cascade sets the reformer outlet at P0+0 while its inlet is P0+1; my inlet-relative dp needs 1. (2) makeResid captured scale=total(makeup) outside the closure; legacy recomputes scale=total(b) per call (b = current tear flows) — atom terms masked the difference early/late, flow term exposed it mid-convergence. Both fixed; trace now bit-identical.
+- Debug scripts (trace/broyden/gfn isolation) deleted after use.
+
+Stage Summary:
+- GATES ALL GREEN: Engine 2.0 gate 35/35 (IDENTITY HOLDS — max numeric diff 0.0 at 1e-12 trace tolerance across the envelope), Phase 1 gate 61/61 (old suite now running THROUGH the graph path), tsc clean, eslint clean, production build green, browser spot-check identical numbers (200 bar → 800.6 t/d +4.9, 33.8% +5.2 pt).
+- The flowsheet is now DATA the agent can compose; the validator is the cage; physics untouched.
+- Key artifacts: src/lib/engine/{graph,registry,reference,executor,converge,validate}.ts (+7 modules, ~1900 lines), plant.ts run/runLegacy split, scripts/graph-tests.ts (permanent gate, run with engine-tests).
+- Next: D2 — agent runtime (multi-agent pipeline over z-ai sdk: Architect/Engineer/Critic/Narrator roles, tools add_unit/connect/set_spec/validate/solve, events streamed to the browser, text only, no voice). Then D3 builder UI (canvas assembles live from events).
