@@ -192,3 +192,25 @@ Stage Summary:
 - Key artifacts: src/lib/design/tokens.ts (var-based), src/app/globals.css (both palettes + .hover-band/.card-lift), src/app/providers.tsx, src/components/ThemeToggle.tsx; refactored Diagram/Symbols/Canvas/Workspace/page/DetailPanel/TutorPanel.
 - Engine gate still 61/61 (untouched). api/solve kept (reserved for Phase D LLM tooling).
 - Next: Phase C — Operate mode in the clean skin (spec controls + live re-solve + stream table), per the locked re-plan.
+
+---
+Task ID: 8 (Phase C · minimal)
+Agent: main (Super Z)
+Task: Build Phase C — minimal Operate mode. User directive: "let's go minimal for now, focusing only on the important stuff." Three live levers + reset + KPI readout; everything else (tooltips, panels) updates from the one live solve. Engine untouched.
+
+Work Log:
+- Probed engine: run() = ~36 ms avg (bun), converges across full lever envelope (loopP 80–250, primaryT 700–900, ngFeed 100–3000). Corner warnings are honest (H2/N2 controller residual) — surfaced in panel.
+- New src/components/workspace/OperatePanel.tsx: 3 levers — Synthesis loop pressure (R-107 · K-102, 80–250 bar, step 5), Reformer outlet temperature (R-102, 700–900 °C, step 5), Natural gas feed (M-101, 100–3000 kmol/h, step 25). Each: label + equipment tag ref, big mono value, native range slider (token-styled via .op-slider + inline --op-fill gradient), min/max ticks, one-line educational hint. "Plant answer" KPI block: NH3 production (t/d, signed Δ vs design, green/amber), per-pass conversion (Δ pt), product purity, H2/N2 at converter. Footer: converged + loop iterations, warnings, full-width "Reset to design conditions".
+- globals.css: .op-slider class (webkit + moz track/thumb from --fs tokens, focus-visible ring on thumb). Track fill = inline linear-gradient via --op-fill so both themes work with one rule.
+- Workspace.tsx: mode state ('explore' | 'operate'), spec state (PlantSpec, baseCase init); result = useMemo(run(spec)) — the SAME result object feeds canvas + tooltips + panels, so every value in the app is live. enterOperate clears tour/selection/opens panel; enterExplore resets spec to baseCase (book mode always shows design conditions). Mode switch: both tabs enabled, active = ink pill.
+- DetailPanel.tsx: new condLabel prop ("base case" in Explore / "operating point" in Operate) threaded to UnitDetail + StreamDetail section titles.
+- Import fix: PlantSpec lives in engine/plant.ts, not types.ts.
+- VERIFIED (agent-browser): Operate tab clickable → panel renders at design values (150/805/1,000); loopP → 200 bar re-solves live (KPIs 800.6 t/d +4.9, 33.8 % +5.2 pt, 18 iterations — matches offline engine probe); converter detail panel shows "Live conditions — operating point" w/ per-pass 33.8 %; stream tooltips live (S20 converter feed at 200.0 bar, S22 at 195 bar); Reset → back to 795.7 t/d design, deltas cleared; 240 bar then Explore → TutorHome + plant reset (slider back at 150 on re-entry); dark mode: live KPIs at 210 bar (801 t/d +5.4); console clean; home regression clean; mobile 390px bottom sheet works.
+- Gates: tsc clean (src), eslint clean, engine 61/61, production build green (/, /plant/reference static).
+- VLM: light operate 9/10, dark operate 9/10 ("no gray-on-gray"), mobile 9/10 (sheet scroll truncation = expected).
+
+Stage Summary:
+- GATE: PASSED. Phase C (minimal) shipped: Operate mode is live — 3 real levers, ~36 ms full-plant re-solve, whole canvas answers.
+- Key artifacts: src/components/workspace/OperatePanel.tsx, .op-slider CSS, Workspace/DetailPanel edits. Screenshots: scripts/op1–op6.
+- Deliberately deferred (kept minimal per user): full spec inspector (25 fields), stream table, Analyze mode, scenario compare.
+- Next options: D (AI plant builder wizard on "+ New plant"), or deepen C first (stream table, more levers, preset scenarios like "cold loop / turndown").

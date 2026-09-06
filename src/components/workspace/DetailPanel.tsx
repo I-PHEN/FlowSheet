@@ -44,14 +44,20 @@ export function DetailPanel({
   selected,
   onSelect,
   onClose,
+  condLabel = 'base case',
 }: {
   result: PlantResult;
   selected: Focus;
   onSelect: (f: Focus) => void;
   onClose: () => void;
+  /** live-conditions label: "base case" in Explore, "operating point" in Operate */
+  condLabel?: string;
 }) {
-  if (selected.type === 'unit') return <UnitDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} />;
-  return <StreamDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} />;
+  if (selected.type === 'unit')
+    return (
+      <UnitDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} />
+    );
+  return <StreamDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} />;
 }
 
 function PanelHeader({
@@ -106,11 +112,13 @@ function UnitDetail({
   id,
   onSelect,
   onClose,
+  condLabel,
 }: {
   result: PlantResult;
   id: string;
   onSelect: (f: Focus) => void;
   onClose: () => void;
+  condLabel: string;
 }) {
   const node = UNIT_MAP[id];
   const unit = result.units[id];
@@ -142,7 +150,7 @@ function UnitDetail({
         </>
       )}
 
-      <Section title={`Live conditions — base case`}>
+      <Section title={`Live conditions — ${condLabel}`}>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           {unit.metrics.map((m) => (
             <div key={m.label} className="flex items-baseline justify-between gap-2 border-b py-1" style={{ borderColor: C.bandLine }}>
@@ -189,11 +197,13 @@ function StreamDetail({
   id,
   onSelect,
   onClose,
+  condLabel,
 }: {
   result: PlantResult;
   id: string;
   onSelect: (f: Focus) => void;
   onClose: () => void;
+  condLabel: string;
 }) {
   const s = result.streams[id];
   if (!s) return null;
@@ -217,7 +227,7 @@ function StreamDetail({
     <div>
       <PanelHeader eyebrow={`${id} · ${from || 'FEED'} → ${to || 'PRODUCT'}`} title={s.name} onClose={onClose} />
 
-      <Section title="Live conditions — base case">
+      <Section title={`Live conditions — ${condLabel}`}>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           {[
             { k: 'Temperature', v: `${fmt(s.T - 273.15)} °C` },

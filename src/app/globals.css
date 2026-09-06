@@ -181,6 +181,57 @@
   box-shadow: var(--fs-card-shadow);
 }
 
+/* operate-mode levers: native range inputs styled with flowsheet tokens.
+   The filled portion of the track is a gradient set inline via --op-fill
+   (works in both themes; ink thumb on a hairline track). */
+.op-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 3px 0 0;
+  background: transparent;
+  cursor: pointer;
+}
+.op-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--op-fill);
+}
+.op-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--fs-ink);
+  border: 3px solid var(--fs-paper);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.op-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--op-fill);
+}
+.op-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--fs-ink);
+  border: 3px solid var(--fs-paper);
+}
+.op-slider:focus-visible {
+  outline: none;
+}
+.op-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--fs-canvas), 0 0 0 4px var(--fs-ink);
+}
+.op-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--fs-canvas), 0 0 0 4px var(--fs-ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hover-band,
   .card-lift {

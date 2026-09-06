@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 import { C } from '@/lib/design/tokens';
 import { baseCase, run } from '@/lib/engine';
+import type { PlantSpec } from '@/lib/engine/plant';
 import { STREAM_MAP, UNIT_MAP } from '@/lib/flowsheet/layout';
 import { bboxOf } from '@/lib/flowsheet/geom';
 import type { Tour } from '@/lib/content/units';
@@ -17,9 +18,11 @@ import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canva
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { DetailPanel } from './DetailPanel';
+import { OperatePanel } from './OperatePanel';
 import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
 
 type TourState = { tour: Tour; idx: number } | null;
+type Mode = 'explore' | 'operate';
 
 function refBox(ref: Focus) {
   if (ref.type === 'unit') {
@@ -31,13 +34,35 @@ function refBox(ref: Focus) {
 }
 
 export function Workspace() {
-  // one deterministic solve of the base case — real numbers everywhere
-  const result = useMemo(() => run(baseCase()), []);
+  // mode: explore = the book (design case), operate = the live control room
+  const [mode, setMode] = useState<Mode>('explore');
+  // the live plant specification — base case until a lever moves
+  const [spec, setSpec] = useState<PlantSpec>(() => baseCase());
+  // the whole canvas + every panel + every tooltip reads from this one solve
+  const result = useMemo(() => run(spec), [spec]);
+  const baseKpis = useMemo(() => run(baseCase()).kpis, []);
   const canvasRef = useRef<CanvasHandle>(null);
   const [selected, setSelected] = useState<Focus | null>(null);
   const [tour, setTour] = useState<TourState>(null);
   const [colors, setColors] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+
+  const enterOperate = () => {
+    setMode('operate');
+    setTour(null);
+    setColors(false);
+    setSelected(null);
+    setPanelOpen(true);
+  };
+
+  const enterExplore = () => {
+    // the book mode always shows design conditions — leave the lab, reset
+    setMode('explore');
+    setSpec(baseCase());
+  };
+
+  const patchSpec = (patch: Partial<PlantSpec>) => setSpec((s) => ({ ...s, ...patch }));
+  const resetSpec = () => setSpec(baseCase());
 
   const spotlight = tour ? tour.tour.steps[tour.idx].ref : null;
 
@@ -74,11 +99,25 @@ export function Workspace() {
   };
 
   const panelBody = selected ? (
-    <DetailPanel result={result} selected={selected} onSelect={select} onClose={() => setSelected(null)} />
+    <DetailPanel
+      result={result}
+      selected={selected}
+      onSelect={select}
+      onClose={() => setSelected(null)}
+      condLabel={mode === 'operate' ? 'operating point' : 'base case'}
+    />
   ) : tour ? (
     <TourRunner tour={tour.tour} idx={tour.idx} onStep={stepTo} onExit={exitTour} />
   ) : colors ? (
     <ColorAnswer onBack={() => setColors(false)} />
+  ) : mode === 'operate' ? (
+    <OperatePanel
+      spec={spec}
+      result={result}
+      baseKpis={baseKpis}
+      onChange={patchSpec}
+      onReset={resetSpec}
+    />
   ) : (
     <TutorHome onTour={startTour} onColors={() => setColors(true)} />
   );
@@ -117,19 +156,27 @@ export function Workspace() {
           >
             <button
               role="tab"
-              aria-selected="true"
+              aria-selected={mode === 'explore'}
+              onClick={enterExplore}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={{ background: C.ink, color: C.paper }}
+              style={
+                mode === 'explore'
+                  ? { background: C.ink, color: C.paper }
+                  : { color: C.inkSoft }
+              }
             >
               Explore
             </button>
             <button
               role="tab"
-              aria-selected="false"
-              disabled
-              title="Live operating controls arrive in the next phase"
-              className="cursor-not-allowed rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={{ color: C.inkFaint }}
+              aria-selected={mode === 'operate'}
+              onClick={enterOperate}
+              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              style={
+                mode === 'operate'
+                  ? { background: C.ink, color: C.paper }
+                  : { color: C.inkSoft }
+              }
             >
               Operate
             </button>
