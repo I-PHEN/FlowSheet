@@ -1,43 +1,29 @@
 'use client';
 
 /**
- * /plant/builder — the AI plant builder interface.
+ * /plant/builder — the AI plant builder studio.
  *
- * Type a design brief → the multi-agent runtime (Architect → Engineer →
- * Solver → Critic) builds a flowsheet through the engine's tool surface,
- * streaming events over SSE. This page mirrors the FlowGraph from the
- * graph snapshots so the canvas assembles live, shows the transcript of
- * every agent decision and tool result, the plant KPIs after each solve,
- * the critic's verdict, and saves finished plants to the local library.
+ * Two zones, Flow-inspired but ours: the stage (left) is the live flowsheet —
+ * it assembles as the agents work and inspects like the reference plant
+ * (pan, zoom, hover streams, click units); the session (right) is the chat —
+ * the narrative spine of the build. The session shrinks to a rail so the
+ * plant gets the attention, and the whole thing runs on the existing agent
+ * stream (Architect → Engineer → Solver → Critic over SSE). Engine and
+ * agent: untouched.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { BuildEvent, BuildPhase, CriticVerdict, SavedPlant, SolveSummary } from '@/lib/agent/protocol';
-import { LIBRARY_KEY, PRESET_BRIEFS } from '@/lib/agent/protocol';
-import { BuildCanvas, UnitInspector } from '@/components/builder/BuildCanvas';
-import { BuildLog, KpiPanel, VerdictCard, type LogEntry } from '@/components/builder/BuildPanels';
+import { LIBRARY_KEY } from '@/lib/agent/protocol';
+import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
+import { SessionPanel, PHASE_COLOR, PHASE_LABEL, type LogEntry } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { C } from '@/lib/design/tokens';
 
 type Status = 'idle' | 'running' | 'finished';
-
-const PHASE_LABEL: Record<BuildPhase, string> = {
-  architect: 'Architect planning',
-  engineer: 'Engineer building',
-  solver: 'Solver verifying',
-  critic: 'Critic reviewing',
-  done: 'Done',
-};
-
-const PHASE_COLOR: Record<BuildPhase, string> = {
-  architect: C.feed,
-  engineer: C.gas,
-  solver: C.inkSoft,
-  critic: C.nh3,
-  done: C.nh3,
-};
 
 export default function BuilderPage() {
   const [brief, setBrief] = useState('');
@@ -50,9 +36,10 @@ export default function BuilderPage() {
   const [doneOk, setDoneOk] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [restored, setRestored] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
+  const canvasRef = useRef<BuildCanvasHandle>(null);
 
   const addEntry = useCallback((e: Omit<LogEntry, 'key'>) => {
     setEntries((prev) => {
@@ -73,12 +60,24 @@ export default function BuilderPage() {
       setGraph(rec.graph);
       setVerdict(rec.verdict);
       if (rec.kpis) {
-        setSolve({ kpis: rec.kpis, converged: true, iterations: 0, solveMs: 0, balanceWorstRelErr: 0, warnings: [] });
+        const s: SolveSummary = {
+          kpis: rec.kpis,
+          converged: true,
+          iterations: 0,
+          solveMs: 0,
+          balanceWorstRelErr: 0,
+          warnings: [],
+        };
+        setSolve(s);
+        addEntry({ kind: 'solve', solve: s });
       }
+      if (rec.verdict) addEntry({ kind: 'verdict', verdict: rec.verdict });
+      if (rec.brief) addEntry({ kind: 'user', text: rec.brief });
+      addEntry({ kind: 'note', text: `Loaded “${rec.name}” from the library — inspect it below or start a new session.` });
       setStatus('finished');
       setDoneOk(rec.verdict?.verdict !== 'fail');
-      setRestored(true);
-      addEntry({ kind: 'note', text: `Loaded “${rec.name}” from the library — ask for a new build to rebuild or modify.` });
+      setSaved(true);
+      setChatOpen(true);
     } catch {
       // ignore corrupt library
     }
@@ -101,14 +100,11 @@ export default function BuilderPage() {
         break;
       case 'solve':
         setSolve(ev.solve);
-        addEntry({
-          kind: 'solve',
-          text: `${ev.solve.kpis.productionTpd.toFixed(1)} t/d · purity ${(ev.solve.kpis.productPurityWt * 100).toFixed(1)} wt % · per-pass ${(ev.solve.kpis.perPassConv * 100).toFixed(1)} % · ${ev.solve.converged ? `converged (${ev.solve.iterations} it)` : 'NOT converged'}`,
-        });
+        addEntry({ kind: 'solve', solve: ev.solve });
         break;
       case 'verdict':
         setVerdict(ev.verdict);
-        addEntry({ kind: 'message', role: 'critic', text: `${ev.verdict.verdict.toUpperCase()} · ${ev.verdict.score}/100 — ${ev.verdict.summary}` });
+        addEntry({ kind: 'verdict', verdict: ev.verdict });
         break;
       case 'error':
         addEntry({ kind: 'error', text: ev.message });
@@ -116,7 +112,11 @@ export default function BuilderPage() {
       case 'done':
         setDoneOk(ev.success);
         setStatus('finished');
-        addEntry({ kind: 'note', text: `Build finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the log)'}.` });
+        addEntry({
+          kind: 'note',
+          text: `Build finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the session)'}.`,
+        });
+        canvasRef.current?.fit();
         break;
     }
   };
@@ -126,13 +126,13 @@ export default function BuilderPage() {
     setStatus('running');
     setPhase(null);
     setGraph(null);
-    setEntries([]);
+    setEntries([{ key: ++keyRef.current, kind: 'user', text: brief.trim() }]);
     setSolve(null);
     setVerdict(null);
     setDoneOk(null);
     setSelected(null);
     setSaved(false);
-    setRestored(false);
+    setChatOpen(true);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
@@ -191,7 +191,7 @@ export default function BuilderPage() {
     setDoneOk(null);
     setSelected(null);
     setSaved(false);
-    setRestored(false);
+    setChatOpen(true);
   }
 
   function saveToLibrary() {
@@ -256,119 +256,110 @@ export default function BuilderPage() {
         </div>
       </header>
 
-      {/* brief composer */}
-      <div className="shrink-0 border-b px-3 py-2.5 sm:px-4" style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}>
-        {status === 'idle' ? (
-          <div className="flex flex-col gap-2">
-            <textarea
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              placeholder="Describe the plant to build — e.g. “Build the standard SMR ammonia plant for ~800 t/day…”"
-              rows={2}
-              className="w-full resize-none rounded-xl border px-3 py-2 text-[13px] leading-relaxed outline-none focus:ring-2"
-              style={{ color: C.ink, background: C.canvas, borderColor: 'var(--fs-band-line)' }}
-            />
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PRESET_BRIEFS.map((p) => (
-                <button
-                  key={p.label}
-                  onClick={() => setBrief(p.text)}
-                  className="hover-band rounded-full border px-3 py-1 text-[11.5px] font-bold"
-                  style={{ color: C.inkSoft, borderColor: 'var(--fs-band-line)' }}
-                >
-                  {p.label}
-                </button>
-              ))}
-              <button
-                onClick={startBuild}
-                disabled={!brief.trim()}
-                className="ml-auto rounded-full border px-5 py-1.5 text-[12.5px] font-extrabold disabled:opacity-40"
-                style={{ color: C.paper, background: C.ink, borderColor: C.ink }}
-              >
-                Build it →
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: C.inkSoft }} title={brief}>
-              “{brief.trim() || 'restored plant'}”
-            </p>
-            {running ? (
-              <button onClick={stopBuild} className="hover-band rounded-full border px-4 py-1.5 text-[12px] font-bold" style={{ color: C.warn, borderColor: C.warn }}>
-                Stop
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                {graph && unitCount > 0 && (
-                  <button
-                    onClick={saveToLibrary}
-                    disabled={saved}
-                    className="hover-band rounded-full border px-4 py-1.5 text-[12px] font-bold disabled:opacity-50"
-                    style={{ color: saved ? C.nh3 : C.ink, borderColor: saved ? C.nh3 : 'var(--fs-band-line)' }}
-                  >
-                    {saved ? 'Saved ✓' : 'Save to library'}
-                  </button>
-                )}
-                <button onClick={resetToIdle} className="hover-band rounded-full border px-4 py-1.5 text-[12px] font-bold" style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}>
-                  New build
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* main split */}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        {/* canvas column */}
-        <div className="flex min-h-[46dvh] min-w-0 flex-1 flex-col lg:min-h-0">
-          <div className="flex items-center gap-3 border-b px-4 py-1.5" style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}>
-            <span className="font-mono text-[10px] font-extrabold tracking-[0.16em]" style={{ color: C.inkSoft }}>
-              LIVE FLOWSHEET
-            </span>
-            {unitCount > 0 && (
-              <span className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
-                {unitCount} units · {streamCount} streams
-              </span>
-            )}
-            {selected && (
-              <button onClick={() => setSelected(null)} className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.inkFaint }}>
-                deselect
-              </button>
-            )}
-          </div>
+      {/* the studio: stage + session */}
+      <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* stage */}
+        <section className="relative flex min-h-0 flex-1 flex-col" aria-label="Live flowsheet stage">
           <div className="min-h-0 flex-1">
-            <BuildCanvas graph={graph} selected={selected} onUnitClick={(id) => setSelected((cur) => (cur === id ? null : id))} />
+            <BuildCanvas
+              ref={canvasRef}
+              graph={graph}
+              selected={selected}
+              warm={status === 'finished'}
+              onUnitClick={(id) => setSelected((cur) => (cur === id ? null : id))}
+              onBackgroundClick={() => setSelected(null)}
+            />
           </div>
-          {graph && selected && (
-            <UnitInspector graph={graph} unitId={selected} onClose={() => setSelected(null)} />
-          )}
-        </div>
-
-        {/* log column */}
-        <aside className="flex min-h-0 w-full flex-col border-t lg:w-[400px] lg:border-l lg:border-t-0" style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}>
-          <div className="flex items-center gap-2 border-b px-4 py-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
-            <span className="font-mono text-[10px] font-extrabold tracking-[0.16em]" style={{ color: C.inkSoft }}>
-              BUILD LOG
-            </span>
-            <span className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
-              {entries.length} events
-            </span>
-          </div>
-          {entries.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center px-6 text-center">
-              <p className="text-[12.5px] leading-relaxed" style={{ color: C.inkFaint }}>
-                Every agent decision, tool call, validator finding, solve result, and the critic&apos;s verdict will appear here while the plant is being built.
-              </p>
+          {unitCount > 0 && (
+            <div
+              className="pointer-events-none absolute left-3 top-3 z-10 rounded-full border px-3 py-1 font-mono text-[10px] font-extrabold tracking-[0.14em]"
+              style={{ background: 'var(--fs-paper-a95)', borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+            >
+              LIVE FLOWSHEET · {unitCount} UNITS · {streamCount} STREAMS
             </div>
-          ) : (
-            <BuildLog entries={entries} running={running} />
           )}
-          {solve && <KpiPanel solve={solve} />}
-          {verdict && <VerdictCard verdict={verdict} />}
-        </aside>
-      </div>
+          {graph && selected && <UnitInspector graph={graph} unitId={selected} onClose={() => setSelected(null)} />}
+        </section>
+
+        {/* session — the chat */}
+        {chatOpen ? (
+          <aside
+            className="flex h-[56dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:w-[420px] lg:border-l lg:border-t-0"
+            style={{ borderColor: 'var(--fs-band-line)' }}
+            aria-label="Build session"
+          >
+            <SessionPanel
+              entries={entries}
+              status={status}
+              phase={phase}
+              brief={brief}
+              onBriefChange={setBrief}
+              onStart={startBuild}
+              onStop={stopBuild}
+              onReset={resetToIdle}
+              onSave={saveToLibrary}
+              onZoomIn={() => {
+                setChatOpen(false);
+                canvasRef.current?.fit();
+              }}
+              onCollapse={() => setChatOpen(false)}
+              saved={saved}
+              hasGraph={unitCount > 0}
+              unitCount={unitCount}
+              streamCount={streamCount}
+              doneOk={doneOk}
+            />
+          </aside>
+        ) : (
+          <>
+            {/* desktop rail */}
+            <aside
+              className="hidden w-[52px] shrink-0 flex-col items-center gap-3 border-l py-3 lg:flex"
+              style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}
+              aria-label="Session, collapsed"
+            >
+              <button
+                onClick={() => setChatOpen(true)}
+                aria-label="Open the session panel"
+                title="Open the session panel"
+                className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border"
+                style={{ borderColor: 'var(--fs-band-line)', color: C.ink }}
+              >
+                <ChevronRight size={16} />
+              </button>
+              <div className="flex flex-col items-center gap-2 pt-1">
+                {running && (
+                  <span
+                    className="bd-pulse inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ background: phase ? PHASE_COLOR[phase] : C.gas }}
+                  />
+                )}
+                <span
+                  className="font-mono text-[10px] font-extrabold tracking-[0.22em]"
+                  style={{ color: C.inkSoft, writingMode: 'vertical-rl' }}
+                >
+                  SESSION
+                </span>
+              </div>
+            </aside>
+            {/* mobile reopen pill — raised above the canvas legend */}
+            <button
+              onClick={() => setChatOpen(true)}
+              className="hover-band fixed bottom-16 right-4 z-40 flex items-center gap-2 rounded-full border px-4 py-2.5 text-[12px] font-bold shadow-lg lg:hidden"
+              style={{ background: C.paper, borderColor: 'var(--fs-band-line)', color: C.ink }}
+            >
+              {running && (
+                <span
+                  className="bd-pulse inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: phase ? PHASE_COLOR[phase] : C.gas }}
+                />
+              )}
+              Session
+              <ChevronRight size={14} />
+            </button>
+          </>
+        )}
+      </main>
     </div>
   );
 }

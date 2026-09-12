@@ -255,6 +255,20 @@
 .bd-unit-in {
   animation: bd-in 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
+/* chat messages settling into the session transcript */
+@keyframes bd-msg-kf {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.bd-msg-in {
+  animation: bd-msg-kf 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
 @keyframes bd-pulse-kf {
   0%,
   100% {
@@ -270,6 +284,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bd-unit-in,
+  .bd-msg-in,
   .bd-pulse {
     animation: none;
   }
