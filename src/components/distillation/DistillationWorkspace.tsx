@@ -40,6 +40,7 @@ type TourState = { tour: Tour; idx: number } | null;
 type Mode = 'explore' | 'operate';
 
 const DISTILL_PLANT_CONTENT: PlantContent = {
+  plantId: 'distillation',
   unitMap: DISTILL_UNIT_MAP,
   unitStreams: DISTILL_UNIT_STREAMS,
   unitContent: DISTILL_UNIT_CONTENT,

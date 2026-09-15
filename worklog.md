@@ -459,3 +459,23 @@ Work Log:
 Stage Summary:
 - Voice + music are back on ALL tour surfaces: reference plant, flash, distillation (shared TourRunner), and project viewer (never lost). Music ducks to 0.30 under narration; voice/music prefs persist; replay works.
 - NEXT: 3D Component Viewer MVP — shell-and-tube GLB (public/models/shell-and-tube-exchanger.glb, 885KB, meshopt) via R3F + drei.
+
+---
+Task ID: 22 (3D Component Viewer MVP)
+Agent: main (Super Z)
+Task: 3D Component Viewer MVP — the queued next step after voice/music restoration ("before we move to the 3D part so yh")
+
+Work Log:
+- DEPS: three@0.186 + @react-three/fiber@9.7 + @react-three/drei@10.7 + @types/three via bun (npm eresolve chokes on R3F's react-native peerOptional chain; bun resolves fine).
+- PROBED the GLB (scripts/probe-glb-three.ts): meshopt-compressed, 4 mesh nodes, overall 2.65 × 0.77 × 3.39 m (real scale) — shell cylinder + head + bundle parts; decoder wired from three/examples meshopt_decoder.
+- NEW src/lib/three/registry.ts: ModelEntry shape + SHELL_AND_TUBE entry (src, title, blurb, GrabCAD credit, dims) + MODEL_BY_KIND ({hex → shell-and-tube}) + PLANTS meta (reference/flash/distillation unit maps) + resolveUnit(). One model stands in for every hex tag — stated honestly in the UI.
+- NEW src/components/three/ModelStage.tsx: R3F Canvas (dpr [1,2], fov 38) + Bounds fit/clip/observe + Center bottom → camera auto-frames the real-size model; drei OrbitControls (damped, slow turntable that yields on first pointer/wheel); ContactShadows + infinite Grid; hemisphere + 2 directionals + locally-rendered Lightformer Environment (PBR reflections with zero network fetches); theme read from --fs-* CSS vars with MutationObserver on <html>.class so dark mode live-updates the canvas.
+- NEW route /plant/[plant]/3d/[unit]: client page, ModelStage via next/dynamic ssr:false (three never enters the server bundle; flowsheet pages never pay for it) + Suspense mono loading state. HUD: top-left "3D COMPONENT MODEL · tag · REAL SCALE", bottom-right dims chip, "drag to orbit · scroll to zoom" hint, collapsible info card (title/blurb/credit). Honest states: unknown plant/unit → "Nothing to render here"; unit without a model → "No 3D model for <tag> yet" + links to the plant's modeled units (e.g. reference lists E-101..E-104).
+- WIRED affordance: PlantContent gained plantId ('reference'|'flash'|'distillation'); DetailPanel UnitDetail renders a "View in 3D — real component model" button (Box icon, band background) under the header when hasModel(node.kind) — flash + distillation bundles updated. On-canvas badges deliberately NOT added yet (label engine is collision-tuned; noted as follow-up).
+- VERIFIED (agent-browser + VLM): reference E-101 click → button → viewer loads GLB, model fully rendered (shell, tube bundle, flanged head), grid + soft shadow, info card correct — VLM 9/10; orbit drag changes angle (turntable yields); dark mode re-themes canvas + UI live; /plant/reference/3d/R1 → honest no-model state listing the four modeled exchangers; flash E-101 CHILL → viewer at /plant/flash/3d/CHILL; mobile 390px fits (card wraps, no horizontal scroll); zero page errors anywhere (only harmless THREE.Clock deprecation warning from drei). tsc + eslint clean on all touched files.
+- COMMITTED immediately.
+
+Stage Summary:
+- The app now has its first real 3D surface: click any heat exchanger (E-101/E-102/E-103/E-104 on the reference sheet, E-101 on flash, E-101/E-102/E-103 on distillation) → View in 3D → full-screen orbit viewer of the real GrabCAD shell-and-tube model at true scale, theme-aware, 885KB lazy chunk.
+- Registry is the extension point: one entry + one kind mapping per future model (reformer, converter, column…).
+- NEXT candidates: more unit models (converter R-104 first?), on-canvas 3D badges, builder/project-unit 3D links, plant-level flythrough reusing graph+router data.

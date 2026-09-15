@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes. The 3D model (a shell-and-tube heat exchanger) is rendered in the center of the canvas, and the header clearly displays **E-101 · CHILLER** with the subtitle \"Flash Drum Plant · 3D component model\".\n\n(2) Yes. In the 390px mobile view, the layout is responsive: the 3D canvas is visible (showing a zoomed-in portion of the model), and the info card fits within the screen width without causing horizontal overflow or requiring scrolling.\n\n(3) No significant defects are visible. The UI elements (header, tags, info card, compass, and scale indicator) are all present and properly positioned in both views. The text in the info card wraps correctly for the narrow mobile width.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789447441,
+  "id": "202609151243567844fd7337d645af",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151243567844fd7337d645af",
+  "usage": {
+    "completion_tokens": 163,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2156,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2319
+  }
+}

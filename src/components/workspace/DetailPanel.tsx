@@ -3,13 +3,17 @@
 /**
  * Detail panel — dual-layer educational content for the selected unit or
  * stream. Plain language first, technical layer second, live numbers from
- * the solved engine underneath.
+ * the solved engine underneath. Units with a 3D model in the registry get
+ * a "View in 3D" action that opens the component viewer.
  */
 
+import Link from 'next/link';
+import { Box } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { BANDS, UNIT_MAP, UNIT_STREAMS, type Band, type UnitNode } from '@/lib/flowsheet/layout';
 import { UNIT_CONTENT, type UnitContent } from '@/lib/content/units';
 import { SPECIES } from '@/lib/engine/species';
+import { hasModel } from '@/lib/three/registry';
 import type { PlantResult } from '@/lib/engine/types';
 import type { Focus } from '@/components/flowsheet/Diagram';
 
@@ -22,6 +26,8 @@ const fmt = (x: number, d = 0) =>
  * is the ammonia reference content.
  */
 export interface PlantContent {
+  /** URL segment for 3D links: /plant/<plantId>/3d/<unitId> */
+  plantId: string;
   unitMap: Record<string, UnitNode>;
   unitStreams: Record<string, { in: string[]; out: string[] }>;
   unitContent: Record<string, UnitContent>;
@@ -30,6 +36,7 @@ export interface PlantContent {
 }
 
 const REFERENCE_CONTENT: PlantContent = {
+  plantId: 'reference',
   unitMap: UNIT_MAP,
   unitStreams: UNIT_STREAMS,
   unitContent: UNIT_CONTENT,
@@ -155,6 +162,17 @@ function UnitDetail({
   return (
     <div>
       <PanelHeader eyebrow={band ? `${node.tag} · ${band}` : node.tag} title={unit.name} onClose={onClose} />
+
+      {plant.plantId && hasModel(node.kind) && (
+        <Link
+          href={`/plant/${plant.plantId}/3d/${id}`}
+          className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg border text-[12.5px] font-bold hover-band"
+          style={{ borderColor: C.bandLine, color: C.ink, background: C.band }}
+        >
+          <Box className="h-3.5 w-3.5" aria-hidden="true" />
+          View in 3D — real component model
+        </Link>
+      )}
 
       {content && (
         <>

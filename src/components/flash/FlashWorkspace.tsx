@@ -35,6 +35,7 @@ type TourState = { tour: Tour; idx: number } | null;
 type Mode = 'explore' | 'operate';
 
 const FLASH_PLANT_CONTENT: PlantContent = {
+  plantId: 'flash',
   unitMap: FLASH_UNIT_MAP,
   unitStreams: {
     FEED: { in: [], out: ['S01'] },
