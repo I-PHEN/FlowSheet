@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided image, here are the answers to your questions:\n\n1.  **Is there a drawing sheet frame (border) around the diagram?**\n    Yes, there is a light gray rectangular border/frame enclosing the entire process flow diagram area.\n\n2.  **Is there a title block in a corner? What text does it contain? Where is it positioned?**\n    Yes, there is a title block. It is located in the **bottom-right corner** of the diagram.\n    *   **Title:** \"AMMONIA SYNTHESIS\"\n    *   **Subtitle/Description:** \"PROCESS FLOW DIAGRAM\"\n    *   **Footer:** \"SHEET 1 OF 1 · REV A\"\n\n3.  **Are there zone/section band labels? What are they?**\n    Yes, there are section band labels located at the top-left of their respective diagram sections:\n    *   **\"1 - FEED & REFORMING\"**\n    *   **\"2 - SHIFT & PURIFICATION\"**\n    *   **\"3 - SYNTHESIS LOOP & COMPRESSION\"**\n\n4.  **Any legend bottom-left?**\n    Yes, there is a legend in the bottom-left corner. It displays line styles for:\n    *   **FEED** (Solid black line)\n    *   **PROCESS GAS** (Solid dark gray/blue line)\n    *   **NH3** (Solid green line)\n    *   **UTILITIES** (Dashed line)\n\n5.  **Overall, do stream lines avoid crossing unit labels?**\n    Yes, the stream lines are routed to avoid overlapping with the text labels of the units. For example, stream lines curve around equipment like **R-102** and **V-103** to ensure the labels \"**PRIMARY REFORMER**\" and \"**NH3 SEPARATOR**\" remain clearly legible without lines striking through them.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789445033,
+  "id": "202609151203363058ffe9cf224df1",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151203363058ffe9cf224df1",
+  "usage": {
+    "completion_tokens": 389,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2122,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2511
+  }
+}

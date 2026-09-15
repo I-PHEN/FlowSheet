@@ -15,8 +15,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { C } from '@/lib/design/tokens';
-import { CANVAS } from '@/lib/flowsheet/layout';
+import { C, STREAM_STYLE } from '@/lib/design/tokens';
+import { REFERENCE_LAYOUT, type PlantLayout } from '@/lib/flowsheet/layout';
 import { bboxOf, boxToAspect, type Box } from '@/lib/flowsheet/geom';
 import { SPECIES } from '@/lib/engine/species';
 import type { PlantResult } from '@/lib/engine/types';
@@ -31,19 +31,27 @@ export interface CanvasHandle {
 }
 
 interface CanvasProps {
+  /** the plant to draw (defaults to the SMR reference sheet) */
+  layout?: PlantLayout;
   result: PlantResult;
   selected: Focus | null;
   spotlight?: Focus | null;
   onSelect: (f: Focus | null) => void;
 }
 
-const FULL: View = { x: 0, y: 0, w: CANVAS.w, h: CANVAS.h };
-const MIN_W = 260;
-const MAX_W = CANVAS.w * 1.35;
-const ASPECT = CANVAS.w / CANVAS.h;
-
 const fmt = (x: number, d = 0) =>
   x.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+
+/** friendly legend names for the stream classes a sheet may use */
+const LEGEND_LABEL: Record<string, string> = {
+  feed: 'FEED',
+  syngas: 'PROCESS GAS',
+  loopgas: 'LOOP GAS',
+  product: 'PRODUCT',
+  water: 'CONDENSATE',
+  co2: 'CO2',
+  purge: 'PURGE',
+};
 
 function streamTip(result: PlantResult, id: string) {
   const s = result.streams[id];
@@ -73,10 +81,36 @@ function unitTip(result: PlantResult, id: string) {
 
 type TipData = ReturnType<typeof streamTip> | ReturnType<typeof unitTip>;
 
+/** keep a view inside the sheet bounds (some overhang allowed) — pure */
+function clampView(v: View, L: PlantLayout): View {
+  const maxW = L.canvas.w * 1.35;
+  const aspect = L.canvas.w / L.canvas.h;
+  const w = Math.min(maxW, Math.max(260, v.w));
+  const h = w / aspect;
+  const x = Math.min(L.canvas.w - w * 0.25, Math.max(-w * 0.75, v.x));
+  const y = Math.min(L.canvas.h - h * 0.25, Math.max(-h * 0.75, v.y));
+  return { x, y, w, h };
+}
+
 export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function FlowsheetCanvas(
-  { result, selected, spotlight, onSelect },
+  { layout, result, selected, spotlight, onSelect },
   ref,
 ) {
+  const L = layout ?? REFERENCE_LAYOUT;
+  const FULL: View = { x: 0, y: 0, w: L.canvas.w, h: L.canvas.h };
+  const ASPECT = L.canvas.w / L.canvas.h;
+  const legend = (() => {
+    const seen: string[] = [];
+    for (const s of L.streams) {
+      const cls = STREAM_STYLE[s.cls] ? s.cls : 'syngas';
+      if (!seen.includes(cls)) seen.push(cls);
+    }
+    return seen.slice(0, 4).map((cls) => ({
+      label: LEGEND_LABEL[cls] ?? cls.toUpperCase(),
+      color: (STREAM_STYLE[cls] ?? STREAM_STYLE.syngas).color,
+      dash: Boolean(STREAM_STYLE[cls]?.dash),
+    }));
+  })();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>(FULL);
   const viewRef = useRef(view);
@@ -89,10 +123,10 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
   const movedRef = useRef(false);
   const animRef = useRef<number | null>(null);
 
-  const stopAnim = () => {
+  const stopAnim = useCallback(() => {
     if (animRef.current != null) cancelAnimationFrame(animRef.current);
     animRef.current = null;
-  };
+  }, []);
 
   /** letterbox-aware client→world mapping (view keeps canvas aspect) */
   const worldFromClient = useCallback((cx: number, cy: number) => {
@@ -110,56 +144,55 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
       y: v.y + ((cy - r.top - oy) / dh) * v.h,
       pxPerWorld: dw / v.w,
     };
-  }, []);
+  }, [ASPECT]);
 
-  const clampView = (v: View): View => {
-    const w = Math.min(MAX_W, Math.max(MIN_W, v.w));
-    const h = w / ASPECT;
-    const x = Math.min(CANVAS.w - w * 0.25, Math.max(-w * 0.75, v.x));
-    const y = Math.min(CANVAS.h - h * 0.25, Math.max(-h * 0.75, v.y));
-    return { x, y, w, h };
-  };
-
-  const zoomAtWorld = useCallback((wx: number, wy: number, factor: number) => {
-    stopAnim();
-    setView((v) => {
-      const k = 1 / factor;
-      return clampView({ x: wx - (wx - v.x) * k, y: wy - (wy - v.y) * k, w: v.w * k, h: v.h * k });
-    });
-  }, []);
+  const zoomAtWorld = useCallback(
+    (wx: number, wy: number, factor: number) => {
+      stopAnim();
+      setView((v) => {
+        const k = 1 / factor;
+        return clampView({ x: wx - (wx - v.x) * k, y: wy - (wy - v.y) * k, w: v.w * k, h: v.h * k }, L);
+      });
+    },
+    [stopAnim, L],
+  );
 
   const fit = useCallback(() => {
     stopAnim();
-    setView(FULL);
-  }, []);
+    setView({ x: 0, y: 0, w: L.canvas.w, h: L.canvas.h });
+  }, [stopAnim, L]);
 
-  const panTo = useCallback((box: Box, opts?: { immediate?: boolean }) => {
-    stopAnim();
-    const target = clampView(
-      boxToAspect(
-        bboxOf([[box.x, box.y], [box.x + box.w, box.y + box.h]], 70),
-        ASPECT,
-      ),
-    );
-    if (opts?.immediate) {
-      setView(target);
-      return;
-    }
-    const from = viewRef.current;
-    const t0 = performance.now();
-    const step = (t: number) => {
-      const p = Math.min(1, (t - t0) / 520);
-      const e = 1 - Math.pow(1 - p, 3);
-      setView({
-        x: from.x + (target.x - from.x) * e,
-        y: from.y + (target.y - from.y) * e,
-        w: from.w + (target.w - from.w) * e,
-        h: from.h + (target.h - from.h) * e,
-      });
-      if (p < 1) animRef.current = requestAnimationFrame(step);
-    };
-    animRef.current = requestAnimationFrame(step);
-  }, []);
+  const panTo = useCallback(
+    (box: Box, opts?: { immediate?: boolean }) => {
+      stopAnim();
+      const target = clampView(
+        boxToAspect(
+          bboxOf([[box.x, box.y], [box.x + box.w, box.y + box.h]], 70),
+          ASPECT,
+        ),
+        L,
+      );
+      if (opts?.immediate) {
+        setView(target);
+        return;
+      }
+      const from = viewRef.current;
+      const t0 = performance.now();
+      const step = (t: number) => {
+        const p = Math.min(1, (t - t0) / 520);
+        const e = 1 - Math.pow(1 - p, 3);
+        setView({
+          x: from.x + (target.x - from.x) * e,
+          y: from.y + (target.y - from.y) * e,
+          w: from.w + (target.w - from.w) * e,
+          h: from.h + (target.h - from.h) * e,
+        });
+        if (p < 1) animRef.current = requestAnimationFrame(step);
+      };
+      animRef.current = requestAnimationFrame(step);
+    },
+    [stopAnim, L, ASPECT],
+  );
 
   useImperativeHandle(ref, () => ({
     panTo,
@@ -217,7 +250,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
             y: v.y - ((e.clientY - prev.y) / px),
             w: v.w,
             h: v.h,
-          }),
+          }, L),
         );
       } else if (pts.size === 2) {
         const [a, b] = [...pts.values()];
@@ -252,7 +285,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
   const onKeyDown = (e: React.KeyboardEvent) => {
     const v = viewRef.current;
     const pan = (fx: number, fy: number) =>
-      setView(clampView({ x: v.x + v.w * fx, y: v.y + v.h * fy, w: v.w, h: v.h }));
+      setView(clampView({ x: v.x + v.w * fx, y: v.y + v.h * fy, w: v.w, h: v.h }, L));
     if (e.key === '+' || e.key === '=') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1.2);
     else if (e.key === '-') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);
     else if (e.key === 'f' || e.key === '0') fit();
@@ -290,6 +323,7 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
       }}
     >
       <Diagram
+        layout={L}
         view={view}
         focus={focus}
         hover={hover}
@@ -347,22 +381,15 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
         className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-[10.5px] font-semibold tracking-wide"
         style={{ background: C.paperA95, borderColor: C.bandLine, color: C.inkSoft }}
       >
-        <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-5 rounded-full" style={{ background: C.feed }} /> FEED
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-5 rounded-full" style={{ background: C.gas }} /> PROCESS GAS
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-5 rounded-full" style={{ background: C.nh3 }} /> NH3
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span
-            className="w-5 border-t-2 border-dashed"
-            style={{ borderColor: C.inkFaint }}
-          />
-          UTILITIES
-        </span>
+        {legend.map((e) => (
+          <span key={e.label} className="flex items-center gap-1.5">
+            <span
+              className={e.dash ? 'w-5 border-t-2 border-dashed' : 'h-[3px] w-5 rounded-full'}
+              style={e.dash ? { borderColor: e.color } : { background: e.color }}
+            />
+            {e.label}
+          </span>
+        ))}
       </div>
 
       {/* zoom controls */}

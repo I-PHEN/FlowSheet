@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "./providers";
 
 const geistSans = Geist({
@@ -15,11 +15,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ammonia Plant Lab",
+  title: "Flowsheet — AI-native process simulator",
   description:
-    "Open, inspect and operate a live ammonia plant flowsheet — 19 unit operations, real thermodynamics, guided tours. Built for chemical engineering students and the curious.",
-  keywords: ["ammonia", "Haber-Bosch", "process simulation", "flowsheet", "chemical engineering", "education"],
-  authors: [{ name: "Ammonia Plant Lab" }],
+    "Describe any chemical plant and watch AI engineer it live — architect, engineer, solver and critic build a flowsheet you can walk, operate and tour. Runs entirely in your browser.",
+  keywords: [
+    "process simulation",
+    "flowsheet",
+    "chemical engineering",
+    "PFD",
+    "distillation",
+    "flash separation",
+    "ammonia",
+    "education",
+  ],
+  authors: [{ name: "Flowsheet" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

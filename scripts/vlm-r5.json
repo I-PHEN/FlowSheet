@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Verdict: Yes to all four checks.**\n\n1.  **Visible Trays:** The tall column **T-101** is rendered with multiple horizontal lines inside its outline, clearly representing the internal trays/stages.\n2.  **Stream Routing:** Stream lines are routed cleanly and do not cross or overlap the unit labels (E-102 CONDENSER, V-101 REFLUX DRUM, E-103 REBOILER, E-101 FEED PREHEATER).\n3.  **Product Annotations:** Both \"**BENZENE PRODUCT**\" (top right) and \"**TOLUENE PRODUCT**\" (bottom right) are clearly labeled inside the main drawing sheet.\n4.  **Title Block:** A title block is present in the upper right corner of the drawing area, containing the project name (\"BENZENE-TOLUENE\"), document type (\"DISTILLATION · PFD\"), and revision info (\"SHEET 1 OF 1 · REV A\").",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789445916,
+  "id": "202609151218318687f8ab58264adf",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151218318687f8ab58264adf",
+  "usage": {
+    "completion_tokens": 204,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1760,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1964
+  }
+}

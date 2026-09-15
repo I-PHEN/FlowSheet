@@ -15,13 +15,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { BuildEvent, BuildPhase, CriticVerdict, SavedPlant, SolveSummary } from '@/lib/agent/protocol';
-import { LIBRARY_KEY } from '@/lib/agent/protocol';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { SessionPanel, PHASE_COLOR, PHASE_LABEL, type LogEntry } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { C } from '@/lib/design/tokens';
+import {
+  getPlant,
+  findLegacyBySlug,
+  putPlant,
+} from '@/lib/projects/store';
+import {
+  getOwnerId,
+  newPlantId,
+  PLANT_SCHEMA_VERSION,
+  type PlantRecord,
+} from '@/lib/projects/record';
 
 type Status = 'idle' | 'running' | 'finished';
 
@@ -36,6 +47,7 @@ export default function BuilderPage() {
   const [doneOk, setDoneOk] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
@@ -48,20 +60,21 @@ export default function BuilderPage() {
     });
   }, []);
 
-  // restore from library (?load=slug) — client-only read
+  // restore a project (?load=id reads the IndexedDB store, then falls back
+  // to the legacy localStorage slug) — client-only
   useEffect(() => {
-    const slug = new URLSearchParams(window.location.search).get('load');
-    if (!slug) return;
-    try {
-      const list = JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? '[]') as SavedPlant[];
-      const rec = list.find((r) => r.slug === slug);
-      if (!rec) return;
-      setBrief(rec.brief);
-      setGraph(rec.graph);
-      setVerdict(rec.verdict);
-      if (rec.kpis) {
+    const loadId = new URLSearchParams(window.location.search).get('load');
+    if (!loadId) return;
+    let alive = true;
+    const restore = (
+      src: Pick<PlantRecord, 'brief' | 'graph' | 'verdict' | 'kpis' | 'name'>,
+    ) => {
+      setBrief(src.brief);
+      setGraph(src.graph);
+      setVerdict(src.verdict);
+      if (src.kpis) {
         const s: SolveSummary = {
-          kpis: rec.kpis,
+          kpis: src.kpis,
           converged: true,
           iterations: 0,
           solveMs: 0,
@@ -71,16 +84,36 @@ export default function BuilderPage() {
         setSolve(s);
         addEntry({ kind: 'solve', solve: s });
       }
-      if (rec.verdict) addEntry({ kind: 'verdict', verdict: rec.verdict });
-      if (rec.brief) addEntry({ kind: 'user', text: rec.brief });
-      addEntry({ kind: 'note', text: `Loaded “${rec.name}” from the library — inspect it below or start a new session.` });
+      if (src.verdict) addEntry({ kind: 'verdict', verdict: src.verdict });
+      if (src.brief) addEntry({ kind: 'user', text: src.brief });
+      addEntry({ kind: 'note', text: `Loaded “${src.name}” — inspect it below or start a new session.` });
       setStatus('finished');
-      setDoneOk(rec.verdict?.verdict !== 'fail');
+      setDoneOk(src.verdict?.verdict !== 'fail');
       setSaved(true);
       setChatOpen(true);
-    } catch {
-      // ignore corrupt library
-    }
+    };
+    void (async () => {
+      const rec = await getPlant(loadId);
+      if (!alive) return;
+      if (rec) {
+        restore(rec);
+        return;
+      }
+      // pre-migration links still work
+      const legacy = findLegacyBySlug(loadId);
+      if (legacy) {
+        restore({
+          name: legacy.name,
+          brief: legacy.brief,
+          graph: legacy.graph,
+          verdict: legacy.verdict,
+          kpis: legacy.kpis,
+        });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [addEntry]);
 
   const handleEvent = (ev: BuildEvent) => {
@@ -191,25 +224,41 @@ export default function BuilderPage() {
     setDoneOk(null);
     setSelected(null);
     setSaved(false);
+    setSavedId(null);
     setChatOpen(true);
   }
 
-  function saveToLibrary() {
+  // save as a first-class project (IndexedDB, this browser) — one click to
+  // reopen it any time from the home grid
+  async function saveProject() {
     if (!graph) return;
-    const rec: SavedPlant = {
-      slug: `p${Date.now().toString(36)}`,
+    const now = new Date().toISOString();
+    const rec: PlantRecord = {
+      id: newPlantId(),
       name: brief.trim().slice(0, 48) || 'Agent-built plant',
       brief: brief.trim(),
-      savedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: PLANT_SCHEMA_VERSION,
+      ownerId: getOwnerId(),
       graph,
       kpis: solve?.kpis ?? null,
       verdict,
       productionTpd: solve?.kpis.productionTpd ?? null,
+      source: 'user',
     };
     try {
-      const list = JSON.parse(localStorage.getItem(LIBRARY_KEY) ?? '[]') as SavedPlant[];
-      localStorage.setItem(LIBRARY_KEY, JSON.stringify([rec, ...list].slice(0, 12)));
+      await putPlant(rec);
       setSaved(true);
+      setSavedId(rec.id);
+      toast.success('Project saved', {
+        action: {
+          label: 'Open',
+          onClick: () => {
+            window.location.href = `/plant/p/${rec.id}`;
+          },
+        },
+      });
     } catch {
       addEntry({ kind: 'error', text: 'Could not save in this browser (storage unavailable).' });
     }
@@ -251,6 +300,16 @@ export default function BuilderPage() {
             >
               {doneOk ? 'BUILD OK' : 'BUILD ISSUES'}
             </span>
+          )}
+          {savedId && (
+            <Link
+              href={`/plant/p/${savedId}`}
+              className="hidden items-center rounded-full border px-3 py-1 text-[11.5px] font-bold sm:flex"
+              style={{ borderColor: C.bandLine, color: C.ink, background: C.paper }}
+              title="Open the saved project"
+            >
+              Open project →
+            </Link>
           )}
           <ThemeToggle />
         </div>
@@ -297,7 +356,7 @@ export default function BuilderPage() {
               onStart={startBuild}
               onStop={stopBuild}
               onReset={resetToIdle}
-              onSave={saveToLibrary}
+              onSave={() => void saveProject()}
               onZoomIn={() => {
                 setChatOpen(false);
                 canvasRef.current?.fit();

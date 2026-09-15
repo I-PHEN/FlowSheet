@@ -17,11 +17,13 @@ export type UnitKind =
   | 'hex'
   | 'reactor'
   | 'column'
+  | 'dcolumn'
   | 'drum'
   | 'vdrum'
   | 'compressor'
   | 'splitter'
-  | 'converter';
+  | 'converter'
+  | 'source';
 
 export interface UnitNode {
   id: string;
@@ -112,7 +114,7 @@ export const STREAMS: StreamEdge[] = [
   { id: 'S20', pts: [[1190, 628], [1140, 628], [1140, 565], [1090, 565]], cls: 'loopgas' },
   { id: 'S21', pts: [[1040, 660], [1040, 706], [920, 706], [920, 628], [880, 628]], cls: 'loopgas', labelAt: 0.28 },
   { id: 'S22', pts: [[810, 628], [760, 628], [760, 565], [704, 565]], cls: 'loopgas' },
-  { id: 'S24', pts: [[662, 666], [662, 780]], cls: 'product', labelAt: 0.5 },
+  { id: 'S24', pts: [[662, 630], [662, 780]], cls: 'product', labelAt: 0.5 },
   { id: 'S25', pts: [[620, 565], [560, 565], [560, 614], [506, 614]], cls: 'loopgas' },
   { id: 'S26', pts: [[478, 638], [478, 730]], cls: 'purge', labelAt: 0.55 },
   { id: 'S27', pts: [[450, 614], [380, 614], [380, 648], [310, 648]], cls: 'loopgas' },
@@ -161,4 +163,63 @@ export const UNIT_STREAMS: Record<string, { in: string[]; out: string[] }> = {
   V3: { in: ['S22'], out: ['S24', 'S25'] },
   SP1: { in: ['S25'], out: ['S26', 'S27'] },
   C2: { in: ['S27'], out: ['S23'] },
+};
+
+// ---------------------------------------------------------------------------
+// PlantLayout — every plant (prebuilt or computed) is ONE sheet of paper
+// ---------------------------------------------------------------------------
+
+export interface TitleBlock {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  title: string;
+  subtitle: string;
+  foot: string;
+}
+
+/** a wall between adjacent zones (drawn as a hairline) */
+export interface ZoneDivider {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface PlantLayout {
+  canvas: { w: number; h: number };
+  /** the drawing sheet — frame + the bounds annotations must respect */
+  sheet: { x: number; y: number; w: number; h: number };
+  /** section bands (may be empty — one idea needs no walls) */
+  zones: Band[];
+  zoneDividers: ZoneDivider[];
+  titleBlock: TitleBlock;
+  units: UnitNode[];
+  streams: StreamEdge[];
+  annotations: Array<{ x: number; y: number; text: string; anchor?: 'start' | 'middle' | 'end' }>;
+}
+
+/**
+ * The reference plant (SMR ammonia) as a PlantLayout. Same hand-authored
+ * coordinates as ever, now composed so every renderer — labels, masks,
+ * halos, thumbnails — reads one shape of data.
+ */
+export const REFERENCE_LAYOUT: PlantLayout = {
+  canvas: { ...CANVAS },
+  sheet: { x: 12, y: 12, w: CANVAS.w - 24, h: CANVAS.h - 24 },
+  zones: BANDS,
+  zoneDividers: [],
+  titleBlock: {
+    x: 1596,
+    y: 768,
+    w: 180,
+    h: 96,
+    title: 'AMMONIA SYNTHESIS',
+    subtitle: 'PROCESS FLOW DIAGRAM',
+    foot: 'SHEET 1 OF 1 · REV A',
+  },
+  units: UNITS,
+  streams: STREAMS,
+  annotations: ANNOTATIONS,
 };

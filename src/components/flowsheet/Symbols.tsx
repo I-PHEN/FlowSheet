@@ -215,6 +215,53 @@ export function UnitSymbol({ node, hi, sel }: SymProps) {
         </g>
       );
 
+    case 'source':
+      // battery-limit source — a sphere (the feed comes from "outside")
+      return (
+        <g>
+          <circle cx={w / 2} cy={h / 2} r={Math.min(w, h) / 2 - 3} style={s} />
+          {/* latitude hint, so the circle reads as a vessel not a disc */}
+          <ellipse
+            cx={w / 2}
+            cy={h / 2}
+            rx={Math.min(w, h) / 2 - 3}
+            ry={(Math.min(w, h) / 2 - 3) * 0.36}
+            style={{ stroke: C.inkSoft, strokeWidth: 1.2, fill: 'none' }}
+          />
+        </g>
+      );
+
+    case 'dcolumn':
+      // the distillation tower — tall, many trays, feed nozzle mid-height
+      return (
+        <g>
+          <rect x={5} y={2} width={w - 10} height={h - 4} rx={12} style={s} />
+          {/* alternating sieve trays (short / long) */}
+          {Array.from({ length: 14 }).map((_, i) => {
+            const ty = h * 0.05 + (i * (h * 0.9)) / 13;
+            const long = i % 2 === 0;
+            return (
+              <line
+                key={i}
+                x1={long ? 12 : 12 + (w - 24) * 0.22}
+                y1={ty}
+                x2={long ? w - 12 : w - 12 - (w - 24) * 0.22}
+                y2={ty}
+                style={thin}
+              />
+            );
+          })}
+          {/* the feed stage nozzle (side stub at tray 8 of 14) */}
+          <line
+            x1={0}
+            y1={h * 0.05 + (7 * (h * 0.9)) / 13}
+            x2={5}
+            y2={h * 0.05 + (7 * (h * 0.9)) / 13}
+            style={{ stroke: C.ink, strokeWidth: 2 }}
+          />
+        </g>
+      );
+
     default:
       return <rect x={2} y={2} width={w - 4} height={h - 4} rx={3} style={s} />;
   }

@@ -32,6 +32,8 @@ import type { PlantResult } from '@/lib/engine/types';
 import { SPECIES } from '@/lib/engine/species';
 import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
 import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
+import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet/route';
+import { pointAt } from '@/lib/flowsheet/geom';
 
 const NODE_W = 168;
 const NODE_H = 74;
@@ -241,6 +243,36 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
   const [dragging, setDragging] = useState(false);
   const movedRef = useRef(false);
 
+  // entrance choreography: new ids animate once (≈700ms), then the class
+  // releases so re-renders never replay the animation
+  const doneRef = useRef<Set<string>>(new Set());
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!graph || graph.units.length === 0) {
+      doneRef.current = new Set();
+      setFresh(new Set());
+      return;
+    }
+    const ids: string[] = [];
+    for (const u of graph.units) if (!doneRef.current.has(u.id)) ids.push(u.id);
+    for (const s of graph.streams) if (!doneRef.current.has(s.id)) ids.push(s.id);
+    if (ids.length === 0) return;
+    ids.forEach((id) => doneRef.current.add(id));
+    setFresh((prev) => {
+      const n = new Set(prev);
+      ids.forEach((id) => n.add(id));
+      return n;
+    });
+    const t = window.setTimeout(() => {
+      setFresh((prev) => {
+        const n = new Set(prev);
+        ids.forEach((id) => n.delete(id));
+        return n;
+      });
+    }, 760);
+    return () => window.clearTimeout(t);
+  }, [graph]);
+
   const fitView = useCallback(
     () => (layout ? { x: 0, y: 0, w: layout.width, h: layout.height } : { x: 0, y: 0, w: 900, h: 360 }),
     [layout],
@@ -398,14 +430,28 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
 
   const { width: W, height: H, units: pos } = layout;
 
+  // grid routing — corridors and lanes only, so a line can never cross a unit
+  const rects: RRect[] = graph.units.map((u) => {
+    const p = pos.get(u.id)!;
+    return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+  });
+  const grid = buildGrid(rects, W, H);
+  const pairSeen = new Map<string, number>();
+  let recycleLanes = 0;
+
   const streams = graph.streams.map((s) => {
     const st = STREAM_STYLE[s.cls] ?? STREAM_STYLE.syngas;
     const a = pos.get(s.from.unit);
+    if (!a) return null;
+    const rectOf = (id: string): RRect => {
+      const p = pos.get(id)!;
+      return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+    };
     let d = '';
     let endX = 0;
     let endY = 0;
     let endAngle = 0;
-    if (!a) return null;
+    let pill = { x: 0, y: 0 };
     if (s.to && s.to.unit === s.from.unit) {
       // self-loop (internal recycle, e.g. separator letdown)
       const x0 = a.x + NODE_W - 26;
@@ -415,22 +461,27 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       endX = x1;
       endY = y0;
       endAngle = Math.PI; // pointing left into the unit
+      pill = { x: (x0 + x1) / 2, y: y0 + 26 };
     } else {
-      const sx = a.x + NODE_W;
-      const sy = a.y + NODE_H / 2;
-      const b = s.to ? pos.get(s.to.unit) : undefined;
-      const ex = b ? b.x : a.x + NODE_W + 74;
-      const ey = b ? b.y + NODE_H / 2 : sy;
-      const dx = Math.max(48, Math.abs(ex - sx) / 2);
-      d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
-      endX = ex;
-      endY = ey;
-      endAngle = b ? (ey < sy ? -0.28 : ey > sy ? 0.28 : 0) : 0;
+      const ra = rectOf(s.from.unit);
+      const rb = s.to ? rectOf(s.to.unit) : null;
+      const forward = s.to
+        ? (pos.get(s.to.unit)?.depth ?? 0) > a.depth
+        : true;
+      const key = `${s.from.unit}→${s.to?.unit ?? 'env'}`;
+      const pairIndex = pairSeen.get(key) ?? 0;
+      pairSeen.set(key, pairIndex + 1);
+      const laneIndex = forward ? 0 : recycleLanes++;
+      const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
+      d = roundedPath(r.pts, 10);
+      const last = r.pts[r.pts.length - 1];
+      endX = last[0];
+      endY = last[1];
+      endAngle = r.endAngle;
+      pill = pointAt(r.pts, 0.5);
     }
-    const midX = (a.x + NODE_W + endX) / 2;
-    const midY = (a.y + NODE_H / 2 + endY) / 2 + (s.to && s.to.unit === s.from.unit ? 26 : 0);
     const pillW = 12 + s.id.length * 8;
-    return { s, st, d, endX, endY, endAngle, midX, midY, pillW };
+    return { s, st, d, endX, endY, endAngle, pill, pillW };
   });
 
   const hoveredStream = hover?.type === 'stream' ? graph.streams.find((x) => x.id === hover.id) : undefined;
@@ -488,19 +539,25 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                 onPointerEnter={() => setHover({ type: 'stream', id: it.s.id })}
                 onPointerLeave={() => setHover((h) => (h?.id === it.s.id ? null : h))}
               />
+              {/* the line draws itself in; dashed utilities skip the draw-on
+                  so their dash pattern is never disturbed */}
               <path
                 d={it.d}
                 fill="none"
+                pathLength={1}
                 strokeWidth={hover?.id === it.s.id ? STREAM_W_HI : STREAM_W}
                 strokeDasharray={it.st.dash}
                 strokeLinecap="round"
+                className={fresh.has(it.s.id) && !it.st.dash ? 'bd-draw' : undefined}
                 style={{ stroke: it.st.color, pointerEvents: 'none' }}
               />
-              <Arrow x={it.endX} y={it.endY} angle={it.endAngle} color={it.st.color} />
+              <g className={fresh.has(it.s.id) ? 'bd-pop' : undefined} style={{ pointerEvents: 'none' }}>
+                <Arrow x={it.endX} y={it.endY} angle={it.endAngle} color={it.st.color} />
+              </g>
               {!it.s.implicit && (
-                <g style={{ pointerEvents: 'none' }}>
-                  <rect x={it.midX - it.pillW / 2} y={it.midY - 10} width={it.pillW} height={20} rx={10} strokeWidth={1.2} style={{ fill: C.paper, stroke: it.st.color }} />
-                  <text x={it.midX} y={it.midY + 4.5} textAnchor="middle" fontSize={11} fontWeight={700} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                <g className={fresh.has(it.s.id) ? 'bd-late' : undefined} style={{ pointerEvents: 'none' }}>
+                  <rect x={it.pill.x - it.pillW / 2} y={it.pill.y - 10} width={it.pillW} height={20} rx={10} strokeWidth={1.2} style={{ fill: C.paper, stroke: it.st.color }} />
+                  <text x={it.pill.x} y={it.pill.y + 4.5} textAnchor="middle" fontSize={11} fontWeight={700} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     {it.s.id}
                   </text>
                 </g>
@@ -526,7 +583,10 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
             >
               {/* transparent hit area — visuals below are pointer-events:none */}
               <rect x={-10} y={-10} width={NODE_W + 20} height={NODE_H + 20} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
-              <g className="bd-unit-in" style={{ pointerEvents: 'none' }}>
+              <g
+                className={fresh.has(u.id) ? 'bd-unit-in' : undefined}
+                style={{ pointerEvents: 'none' }}
+              >
                 {sel && <rect x={-9} y={-9} width={NODE_W + 18} height={NODE_H + 18} rx={14} style={{ fill: C.halo }} />}
                 <rect
                   width={NODE_W}

@@ -289,3 +289,212 @@
     animation: none;
   }
 }
+
+/* ---- MiniFlow / hero choreography (Task 21) ---- */
+
+/* equipment settles onto the sheet with a small overshoot */
+@keyframes mf-settle-kf {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mf-settle {
+  animation: mf-settle-kf 520ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* a stream draws itself in (pathLength=1) */
+@keyframes mf-draw-kf {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.mf-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mf-draw-kf 640ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+/* dashed utilities: after the solid draw lands, fade the dash pattern over it,
+   then let the solid draw step aside */
+@keyframes mf-dash-in-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.mf-dash-in {
+  opacity: 0;
+  animation: mf-dash-in-kf 300ms ease 320ms forwards;
+}
+@keyframes mf-draw-out-kf {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.mf-draw-out {
+  animation: mf-draw-out-kf 540ms ease 300ms forwards;
+}
+
+/* arrowheads pop as they land */
+@keyframes mf-pop-kf {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.mf-pop {
+  animation: mf-pop-kf 380ms cubic-bezier(0.2, 0.8, 0.3, 1) 300ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* stream annotations fade in after the wiring */
+@keyframes mf-label-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.mf-label {
+  animation: mf-label-kf 420ms ease 260ms both;
+}
+
+/* count-up chips / stamps arriving */
+@keyframes mf-in-kf {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mf-in {
+  animation: mf-in-kf 320ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* the hero's typing caret */
+@keyframes caret-kf {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.caret {
+  animation: caret-kf 840ms steps(1) infinite;
+}
+
+/* ---- builder canvas: streams draw themselves in (Task 21) ---- */
+.bd-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mf-draw-kf 700ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes bd-pop-kf {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.bd-pop {
+  animation: bd-pop-kf 360ms cubic-bezier(0.2, 0.8, 0.3, 1) 320ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes bd-late-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.bd-late {
+  animation: bd-late-kf 280ms ease 380ms both;
+}
+
+/* one-time pulse for the floating Build button */
+@keyframes fab-pulse-kf {
+  0% {
+    box-shadow: 0 6px 24px rgb(0 0 0 / 18%), 0 0 0 0 rgb(0 0 0 / 35%);
+  }
+  100% {
+    box-shadow: 0 6px 24px rgb(0 0 0 / 18%), 0 0 0 18px rgb(0 0 0 / 0%);
+  }
+}
+.fab-pulse {
+  animation: fab-pulse-kf 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-settle,
+  .mf-pop,
+  .mf-in,
+  .bd-pop,
+  .bd-late {
+    animation: none;
+  }
+  .mf-draw,
+  .bd-draw {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .mf-dash-in {
+    animation: none;
+    opacity: 1;
+  }
+  .mf-draw-out {
+    animation: none;
+    opacity: 0;
+  }
+  .mf-label,
+  .bd-late {
+    animation: none;
+    opacity: 1;
+  }
+  .caret,
+  .fab-pulse {
+    animation: none;
+  }
+}

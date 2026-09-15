@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the detailed breakdown of the top hero area:\n\n**1) Small Pill/Badge Text**\n> **✦ AI-NATIVE PROCESS SIMULATOR**\n\n**2) Big Headline (Exact Text, Line Breaks & Styling)**\nThe headline uses a large serif font. The first line and the word \"live\" are **bold/black**, while the middle line is **gray**.\n\n*   **Line 1 (Black/Bold):** Describe any chemical plant.\n*   **Line 2 (Gray):** Watch AI engineer it\n*   **Line 3 (Black/Bold):** — live.\n\n**3) The Two Buttons**\n*   **Button 1 (Primary):**\n    *   **Text:** ✦ Build a plant with AI\n    *   **Appearance:** Dark gray/black background with white text. Rounded pill shape.\n*   **Button 2 (Secondary):**\n    *   **Text:** Start at the basics ↓\n    *   **Appearance:** White background with a thin light gray border and black text. Rounded pill shape. Includes a down-arrow icon.\n\n**4) Layout Structure**\n*   **Yes, it is a 2-column layout.**\n    *   **Left Column:** Contains the badge, headline, body copy (\"Type a sentence...\"), and the two buttons.\n    *   **Right Column:** Contains the \"AI Plant Builder\" demo panel.\n*   **Approximate Proportions:** It looks like roughly a **45% / 55% split** or potentially **50/50**, with the right-side demo panel taking up slightly more visual width or being balanced by the whitespace on the left.\n\n**5) Notable Details in the Hero Area**\n*   **Demo Panel Header:** \"● ○ AI PLANT BUILDER · LIVE LOOP\" followed by \"2.5s\" on the far right.\n*   **Demo Panel Content:**\n    *   Label: \"DESCRIBE YOUR PLANT\"\n    *   Input text inside box: \"Build a 500 t/day methanol plant — natural gas feed.▌\" (includes a blinking cursor block).\n    *   Status indicators below input:\n        *   ◆ ARCHITECT\n        *   ◆ ENGINEER\n        *   ◆ CRITIC\n    *   Console/Status line at bottom left of panel: \"▶ reading the brief_\"\n*   **Body Copy (below headline):** \"Type a sentence — any route, any capacity. An architect plans it, an engineer wires every unit and stream, a solver closes the mass and energy balance, and a critic signs it off. Then walk your plant with a narrated, scored tour. No installs — everything runs and solves in your browser.\"",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789444945,
+  "id": "20260915120212c48cdc7c826441f7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915120212c48cdc7c826441f7",
+  "usage": {
+    "completion_tokens": 574,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1778,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2352
+  }
+}

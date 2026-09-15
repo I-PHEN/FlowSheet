@@ -1,0 +1,703 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * BuildCanvas — the stage of the builder studio.
+     5→ *
+     6→ * The graph arrives piecewise from the agent's tool events, so the layout is
+     7→ * computed: BFS depth from the feed sources, depth-columns wrapped into
+     8→ * bands. New units fade in as the engineer places them; streams are
+     9→ * class-colored beziers with id pills, arrowheads, self-loops for internal
+    10→ * recycles, and off-canvas arrows for product/waste sinks.
+    11→ *
+    12→ * Inspection parity with the reference plant: drag to pan, wheel / pinch /
+    13→ * button zoom, FIT, hover tooltips on streams AND units. Stream tooltips
+    14→ * show live values — the engine is pure TypeScript, so the built graph is
+    15→ * re-solved lazily in the browser (cached per snapshot, never blocking the
+    16→ * build) and falls back to structural info when a mid-build graph does not
+    17→ * solve yet. Clicking a unit selects it for the spec inspector.
+    18→ */
+    19→
+    20→import {
+    21→  forwardRef,
+    22→  useCallback,
+    23→  useEffect,
+    24→  useImperativeHandle,
+    25→  useMemo,
+    26→  useRef,
+    27→  useState,
+    28→} from 'react';
+    29→import type { FlowGraph, StreamEdge } from '@/lib/engine/graph';
+    30→import { executeGraph } from '@/lib/engine';
+    31→import type { PlantResult } from '@/lib/engine/types';
+    32→import { SPECIES } from '@/lib/engine/species';
+    33→import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
+    34→import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
+    35→
+    36→const NODE_W = 168;
+    37→const NODE_H = 74;
+    38→const COL_W = 236;
+    39→const ROW_H = 124;
+    40→const PAD = 48;
+    41→const BAND_COLS = 8; // wrap the chain into readable bands
+    42→
+    43→interface Placed {
+    44→  id: string;
+    45→  x: number;
+    46→  y: number;
+    47→  depth: number;
+    48→  col: number;
+    49→  band: number;
+    50→}
+    51→
+    52→interface Layout {
+    53→  width: number;
+    54→  height: number;
+    55→  units: Map<string, Placed>;
+    56→  bandCount: number;
+    57→}
+    58→
+    59→function computeLayout(graph: FlowGraph): Layout {
+    60→  const units = graph.units;
+    61→  if (units.length === 0) return { width: 900, height: 360, units: new Map(), bandCount: 1 };
+    62→
+    63→  // adjacency (unit digraph, self-loops ignored)
+    64→  const preds = new Map<string, Set<string>>();
+    65→  const succs = new Map<string, Set<string>>();
+    66→  for (const u of units) {
+    67→    preds.set(u.id, new Set());
+    68→    succs.set(u.id, new Set());
+    69→  }
+    70→  for (const s of graph.streams) {
+    71→    if (s.to && s.to.unit !== s.from.unit) {
+    72→      preds.get(s.to.unit)?.add(s.from.unit);
+    73→      succs.get(s.from.unit)?.add(s.to.unit);
+    74→    }
+    75→  }
+    76→
+    77→  // BFS depth from units with no predecessors (feeds)
+    78→  const depth = new Map<string, number>();
+    79→  const queue: string[] = [];
+    80→  for (const u of units) {
+    81→    if ((preds.get(u.id) ?? new Set()).size === 0) {
+    82→      depth.set(u.id, 0);
+    83→      queue.push(u.id);
+    84→    }
+    85→  }
+    86→  while (queue.length > 0) {
+    87→    const cur = queue.shift()!;
+    88→    const d = depth.get(cur) ?? 0;
+    89→    for (const next of succs.get(cur) ?? []) {
+    90→      const nd = d + 1;
+    91→      if ((depth.get(next) ?? Infinity) > nd) {
+    92→        depth.set(next, nd);
+    93→        queue.push(next);
+    94→      }
+    95→    }
+    96→  }
+    97→  // unreachable units (shouldn't happen post-validation) park at depth 0
+    98→  for (const u of units) if (!depth.has(u.id)) depth.set(u.id, 0);
+    99→
+   100→  // group by depth, preserving insertion (build) order within a column
+   101→  const byDepth = new Map<number, string[]>();
+   102→  for (const u of units) {
+   103→    const d = depth.get(u.id) ?? 0;
+   104→    if (!byDepth.has(d)) byDepth.set(d, []);
+   105→    byDepth.get(d)!.push(u.id);
+   106→  }
+   107→  const maxDepth = Math.max(...byDepth.keys());
+   108→  const maxColLen = Math.max(...[...byDepth.values()].map((v) => v.length), 1);
+   109→
+   110→  const bandCount = Math.floor(maxDepth / BAND_COLS) + 1;
+   111→  const bandGap = 64;
+   112→  const placed = new Map<string, Placed>();
+   113→  for (const u of units) {
+   114→    const d = depth.get(u.id) ?? 0;
+   115→    const col = byDepth.get(d)!.indexOf(u.id);
+   116→    const band = Math.floor(d / BAND_COLS);
+   117→    // wrap the chain into bands: column position within the band, band rows
+   118→    // stacked vertically — keeps the canvas near-square instead of 20-wide
+   119→    const x = PAD + (d % BAND_COLS) * COL_W;
+   120→    const y = PAD + band * (maxColLen * ROW_H + bandGap) + col * ROW_H + (band % 2 === 1 ? 24 : 0);
+   121→    placed.set(u.id, { id: u.id, x, y, depth: d, col, band });
+   122→  }
+   123→
+   124→  const width = PAD * 2 + Math.min(maxDepth + 1, BAND_COLS) * COL_W;
+   125→  const height = PAD * 2 + bandCount * (maxColLen * ROW_H) + (bandCount - 1) * bandGap + 48;
+   126→  return { width: Math.max(width, 900), height: Math.max(height, 360), units: placed, bandCount };
+   127→}
+   128→
+   129→function Arrow({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
+   130→  const L = 11;
+   131→  const W = 5.5;
+   132→  return (
+   133→    <polygon
+   134→      points={`${x},${y} ${x - L * Math.cos(angle) + W * Math.sin(angle)},${y - L * Math.sin(angle) - W * Math.cos(angle)} ${x - L * Math.cos(angle) - W * Math.sin(angle)},${y - L * Math.sin(angle) + W * Math.cos(angle)}`}
+   135→      style={{ fill: color, pointerEvents: 'none' }}
+   136→    />
+   137→  );
+   138→}
+   139→
+   140→const fmt = (x: number, d = 0) =>
+   141→  x.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+   142→
+   143→/** keep a view inside the layout bounds (some overhang allowed, like the reference canvas) */
+   144→function clampView(v: View, L: Layout): View {
+   145→  const w = Math.min(L.width * 1.6, Math.max(L.width / 5, v.w));
+   146→  const h = w * (L.height / L.width);
+   147→  const x = Math.min(L.width - w * 0.25, Math.max(-w * 0.75, v.x));
+   148→  const y = Math.min(L.height - h * 0.25, Math.max(-h * 0.75, v.y));
+   149→  return { x, y, w, h };
+   150→}
+   151→
+   152→/** live-value solves, memoized per graph snapshot (mid-build snapshots may be
+   153→    unsolvable — null is cached too, so nothing ever blocks or re-solves) */
+   154→const solveCache = new WeakMap<FlowGraph, PlantResult | null>();
+   155→
+   156→function solveFor(g: FlowGraph): PlantResult | null {
+   157→  if (!solveCache.has(g)) {
+   158→    let r: PlantResult | null = null;
+   159→    try {
+   160→      r = executeGraph(g);
+   161→    } catch {
+   162→      r = null; // mid-build snapshots may be unsolvable — that is fine
+   163→    }
+   164→    solveCache.set(g, r);
+   165→  }
+   166→  return solveCache.get(g) ?? null;
+   167→}
+   168→
+   169→/** tooltip payload for a stream — live values when the graph solves, structure otherwise */
+   170→function streamTip(s: StreamEdge, result: PlantResult | null) {
+   171→  const rows: Array<{ k: string; v: string }> = [];
+   172→  const live = result?.streams[s.id];
+   173→  if (live) {
+   174→    const tot = live.n.reduce((a, b) => a + b, 0) || 1;
+   175→    const top = live.n
+   176→      .map((v, i) => ({ sp: SPECIES[i], x: v / tot }))
+   177→      .filter((e) => e.x > 0.005)
+   178→      .sort((a, b) => b.x - a.x)
+   179→      .slice(0, 4);
+   180→    rows.push(
+   181→      { k: 'T', v: `${fmt(live.T - 273.15)} °C` },
+   182→      { k: 'P', v: `${fmt(live.P / 1e5, 1)} bar` },
+   183→      { k: 'Flow', v: `${fmt(tot)} kmol/h` },
+   184→    );
+   185→    return {
+   186→      title: `${s.id} · ${s.name || s.cls}`,
+   187→      rows,
+   188→      foot: top.map((e) => `${e.sp} ${(e.x * 100).toFixed(1)}%`).join(' · '),
+   189→    };
+   190→  }
+   191→  rows.push(
+   192→    { k: 'from', v: s.from.unit },
+   193→    { k: 'to', v: s.to ? s.to.unit : 'sink' },
+   194→    { k: 'class', v: s.cls },
+   195→  );
+   196→  return { title: `${s.id} · ${s.name || s.cls}`, rows, foot: 'values appear once this snapshot solves' };
+   197→}
+   198→
+   199→export interface BuildCanvasHandle {
+   200→  fit: () => void;
+   201→}
+   202→
+   203→export interface BuildCanvasProps {
+   204→  graph: FlowGraph | null;
+   205→  selected: string | null;
+   206→  onUnitClick?: (id: string) => void;
+   207→  onBackgroundClick?: () => void;
+   208→  /** when true (post-build) the live-value cache is warmed in the background */
+   209→  warm?: boolean;
+   210→}
+   211→
+   212→type View = { x: number; y: number; w: number; h: number };
+   213→type Hover = { type: 'unit' | 'stream'; id: string } | null;
+   214→
+   215→export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(function BuildCanvas(
+   216→  { graph, selected, onUnitClick, onBackgroundClick, warm },
+   217→  ref,
+   218→) {
+   219→  const wrapRef = useRef<HTMLDivElement>(null);
+   220→  const layout = useMemo(() => (graph ? computeLayout(graph) : null), [graph]);
+   221→  // the user's frame — null means "fit the whole layout". The effective view is
+   222→  // DERIVED (clamped against the current layout), so a growing canvas keeps
+   223→  // fitting while the user's zoomed frame stays clamped — no state syncing.
+   224→  const [view, setView] = useState<View | null>(null);
+   225→  const effView = useMemo(
+   226→    () =>
+   227→      layout
+   228→        ? view
+   229→          ? clampView(view, layout)
+   230→          : { x: 0, y: 0, w: layout.width, h: layout.height }
+   231→        : { x: 0, y: 0, w: 900, h: 360 },
+   232→    [view, layout],
+   233→  );
+   234→  const viewRef = useRef(effView);
+   235→  useEffect(() => {
+   236→    viewRef.current = effView;
+   237→  }, [effView]);
+   238→  const [hover, setHover] = useState<Hover>(null);
+   239→  const [tipPos, setTipPos] = useState({ x: 0, y: 0 });
+   240→  const [hinted, setHinted] = useState(true);
+   241→  const [dragging, setDragging] = useState(false);
+   242→  const movedRef = useRef(false);
+   243→
+   244→  const fitView = useCallback(
+   245→    () => (layout ? { x: 0, y: 0, w: layout.width, h: layout.height } : { x: 0, y: 0, w: 900, h: 360 }),
+   246→    [layout],
+   247→  );
+   248→
+   249→  // post-build: warm the cache so first hover is instant
+   250→  useEffect(() => {
+   251→    if (!warm || !graph) return;
+   252→    const g = graph;
+   253→    const t = window.setTimeout(() => solveFor(g), 400);
+   254→    return () => window.clearTimeout(t);
+   255→  }, [warm, graph]);
+   256→
+   257→  /** letterbox-aware client→world mapping (view keeps the layout aspect) */
+   258→  const worldFromClient = useCallback((cx: number, cy: number) => {
+   259→    const el = wrapRef.current!;
+   260→    const r = el.getBoundingClientRect();
+   261→    const L = layout!;
+   262→    const aspect = L.width / L.height;
+   263→    let dw = r.width;
+   264→    let dh = r.height;
+   265→    if (r.width / r.height > aspect) dw = r.height * aspect;
+   266→    else dh = r.width / aspect;
+   267→    const ox = (r.width - dw) / 2;
+   268→    const oy = (r.height - dh) / 2;
+   269→    const v = viewRef.current;
+   270→    return {
+   271→      x: v.x + ((cx - r.left - ox) / dw) * v.w,
+   272→      y: v.y + ((cy - r.top - oy) / dh) * v.h,
+   273→      pxPerWorld: dw / v.w,
+   274→    };
+   275→  }, [layout]);
+   276→
+   277→  const zoomAtWorld = useCallback(
+   278→    (wx: number, wy: number, factor: number) => {
+   279→      setHinted(false);
+   280→      setView((v) => {
+   281→        const base = v ?? fitView();
+   282→        const nw = base.w / factor;
+   283→        const k = nw / base.w;
+   284→        return { x: wx - (wx - base.x) * k, y: wy - (wy - base.y) * k, w: nw, h: nw * (base.h / base.w) };
+   285→      });
+   286→    },
+   287→    [fitView],
+   288→  );
+   289→
+   290→  const fit = useCallback(() => {
+   291→    setHinted(false);
+   292→    setView(null);
+   293→  }, []);
+   294→
+   295→  useImperativeHandle(ref, () => ({ fit }));
+   296→
+   297→  // wheel zoom
+   298→  useEffect(() => {
+   299→    const el = wrapRef.current;
+   300→    if (!el || !layout) return;
+   301→    const onWheel = (e: WheelEvent) => {
+   302→      e.preventDefault();
+   303→      const w = worldFromClient(e.clientX, e.clientY);
+   304→      zoomAtWorld(w.x, w.y, e.deltaY < 0 ? 1.14 : 1 / 1.14);
+   305→    };
+   306→    el.addEventListener('wheel', onWheel, { passive: false });
+   307→    return () => el.removeEventListener('wheel', onWheel);
+   308→  }, [zoomAtWorld, worldFromClient, layout]);
+   309→
+   310→  // drag pan + pinch zoom + drag-vs-click suppression
+   311→  useEffect(() => {
+   312→    const el = wrapRef.current;
+   313→    if (!el || !layout) return;
+   314→    const pts = new Map<number, { x: number; y: number }>();
+   315→    let moved = 0;
+   316→    let lastDist = 0;
+   317→
+   318→    const down = (e: PointerEvent) => {
+   319→      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   320→      moved = 0;
+   321→      movedRef.current = false;
+   322→      lastDist = 0;
+   323→      if (pts.size === 1) setDragging(true);
+   324→    };
+   325→    const move = (e: PointerEvent) => {
+   326→      if (!pts.has(e.pointerId)) return;
+   327→      const prev = pts.get(e.pointerId)!;
+   328→      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   329→      moved += Math.hypot(e.clientX - prev.x, e.clientY - prev.y);
+   330→      if (moved > 4) {
+   331→        movedRef.current = true;
+   332→        setHinted(false);
+   333→      }
+   334→      if (pts.size === 1) {
+   335→        const v = viewRef.current;
+   336→        const px = worldFromClient(prev.x, prev.y).pxPerWorld;
+   337→        setView({ x: v.x - (e.clientX - prev.x) / px, y: v.y - (e.clientY - prev.y) / px, w: v.w, h: v.h });
+   338→      } else if (pts.size === 2) {
+   339→        const [a, b] = [...pts.values()];
+   340→        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+   341→        if (lastDist > 0 && dist > 0) {
+   342→          const w = worldFromClient((a.x + b.x) / 2, (a.y + b.y) / 2);
+   343→          zoomAtWorld(w.x, w.y, dist / lastDist);
+   344→        }
+   345→        lastDist = dist;
+   346→      }
+   347→    };
+   348→    const up = (e: PointerEvent) => {
+   349→      pts.delete(e.pointerId);
+   350→      lastDist = 0;
+   351→      if (pts.size === 0) setDragging(false);
+   352→      // allow click right after a suppressed drag ends
+   353→      window.setTimeout(() => {
+   354→        movedRef.current = false;
+   355→      }, 60);
+   356→    };
+   357→    el.addEventListener('pointerdown', down);
+   358→    el.addEventListener('pointermove', move);
+   359→    el.addEventListener('pointerup', up);
+   360→    el.addEventListener('pointercancel', up);
+   361→    return () => {
+   362→      el.removeEventListener('pointerdown', down);
+   363→      el.removeEventListener('pointermove', move);
+   364→      el.removeEventListener('pointerup', up);
+   365→      el.removeEventListener('pointercancel', up);
+   366→    };
+   367→  }, [zoomAtWorld, worldFromClient, layout]);
+   368→
+   369→  const onKeyDown = (e: React.KeyboardEvent) => {
+   370→    const v = viewRef.current;
+   371→    const pan = (fx: number, fy: number) =>
+   372→      setView({ x: v.x + v.w * fx, y: v.y + v.h * fy, w: v.w, h: v.h });
+   373→    if (e.key === '+' || e.key === '=') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1.2);
+   374→    else if (e.key === '-') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);
+   375→    else if (e.key === 'f' || e.key === '0') fit();
+   376→    else if (e.key === 'ArrowLeft') pan(0.08, 0);
+   377→    else if (e.key === 'ArrowRight') pan(-0.08, 0);
+   378→    else if (e.key === 'ArrowUp') pan(0, 0.08);
+   379→    else if (e.key === 'ArrowDown') pan(0, -0.08);
+   380→    else return;
+   381→    e.preventDefault();
+   382→  };
+   383→
+   384→  if (!graph || !layout || graph.units.length === 0) {
+   385→    return (
+   386→      <div className="flex h-full items-center justify-center" style={{ background: C.canvas }}>
+   387→        <div className="text-center">
+   388→          <div className="font-mono text-[13px] font-bold tracking-widest" style={{ color: C.inkFaint }}>
+   389→            THE CANVAS IS WAITING
+   390→          </div>
+   391→          <div className="mt-2 max-w-[300px] text-[12.5px]" style={{ color: C.inkSoft }}>
+   392→            Units the engineer places will appear here, live, as the build runs.
+   393→          </div>
+   394→        </div>
+   395→      </div>
+   396→    );
+   397→  }
+   398→
+   399→  const { width: W, height: H, units: pos } = layout;
+   400→
+   401→  const streams = graph.streams.map((s) => {
+   402→    const st = STREAM_STYLE[s.cls] ?? STREAM_STYLE.syngas;
+   403→    const a = pos.get(s.from.unit);
+   404→    let d = '';
+   405→    let endX = 0;
+   406→    let endY = 0;
+   407→    let endAngle = 0;
+   408→    if (!a) return null;
+   409→    if (s.to && s.to.unit === s.from.unit) {
+   410→      // self-loop (internal recycle, e.g. separator letdown)
+   411→      const x0 = a.x + NODE_W - 26;
+   412→      const y0 = a.y + NODE_H;
+   413→      const x1 = a.x + 26;
+   414→      d = `M ${x0} ${y0} C ${x0 + 26} ${y0 + 34}, ${x1 - 26} ${y0 + 34}, ${x1} ${y0}`;
+   415→      endX = x1;
+   416→      endY = y0;
+   417→      endAngle = Math.PI; // pointing left into the unit
+   418→    } else {
+   419→      const sx = a.x + NODE_W;
+   420→      const sy = a.y + NODE_H / 2;
+   421→      const b = s.to ? pos.get(s.to.unit) : undefined;
+   422→      const ex = b ? b.x : a.x + NODE_W + 74;
+   423→      const ey = b ? b.y + NODE_H / 2 : sy;
+   424→      const dx = Math.max(48, Math.abs(ex - sx) / 2);
+   425→      d = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`;
+   426→      endX = ex;
+   427→      endY = ey;
+   428→      endAngle = b ? (ey < sy ? -0.28 : ey > sy ? 0.28 : 0) : 0;
+   429→    }
+   430→    const midX = (a.x + NODE_W + endX) / 2;
+   431→    const midY = (a.y + NODE_H / 2 + endY) / 2 + (s.to && s.to.unit === s.from.unit ? 26 : 0);
+   432→    const pillW = 12 + s.id.length * 8;
+   433→    return { s, st, d, endX, endY, endAngle, midX, midY, pillW };
+   434→  });
+   435→
+   436→  const hoveredStream = hover?.type === 'stream' ? graph.streams.find((x) => x.id === hover.id) : undefined;
+   437→  const hoveredUnit = hover?.type === 'unit' ? graph.units.find((x) => x.id === hover.id) : undefined;
+   438→
+   439→  const tipData = (() => {
+   440→    if (hoveredStream) return streamTip(hoveredStream, solveFor(graph));
+   441→    if (hoveredUnit) {
+   442→      const def = getUnitType(hoveredUnit.type);
+   443→      return {
+   444→        title: `${hoveredUnit.id} · ${def?.name ?? hoveredUnit.type}`,
+   445→        rows: [] as Array<{ k: string; v: string }>,
+   446→        foot: def ? def.model(resolveSpecs(hoveredUnit)) : hoveredUnit.type,
+   447→      };
+   448→    }
+   449→    return null;
+   450→  })();
+   451→
+   452→  return (
+   453→    <div
+   454→      ref={wrapRef}
+   455→      tabIndex={0}
+   456→      onKeyDown={onKeyDown}
+   457→      className="relative h-full w-full overflow-hidden outline-none"
+   458→      style={{ background: C.canvas, touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
+   459→      onPointerMove={(e) => {
+   460→        const r = wrapRef.current?.getBoundingClientRect();
+   461→        if (r) {
+   462→          setTipPos({
+   463→            x: Math.min(e.clientX - r.left + 16, r.width - 250),
+   464→            y: e.clientY - r.top + 14,
+   465→          });
+   466→        }
+   467→      }}
+   468→    >
+   469→      <svg
+   470→        viewBox={`${effView.x} ${effView.y} ${effView.w} ${effView.h}`}
+   471→        preserveAspectRatio="xMidYMid meet"
+   472→        style={{ display: 'block', width: '100%', height: '100%', fontFamily: 'inherit' }}
+   473→        aria-label="Plant flowsheet being built by the AI agent"
+   474→        onClick={(e) => {
+   475→          if (e.target === e.currentTarget && !movedRef.current) onBackgroundClick?.();
+   476→        }}
+   477→      >
+   478→        {streams.map((it) =>
+   479→          it ? (
+   480→            <g key={it.s.id} opacity={it.s.implicit ? 0.55 : 1}>
+   481→              {/* fat invisible hit path — hover + live values */}
+   482→              <path
+   483→                d={it.d}
+   484→                fill="none"
+   485→                strokeWidth={16}
+   486→                stroke="rgba(0,0,0,0)"
+   487→                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+   488→                onPointerEnter={() => setHover({ type: 'stream', id: it.s.id })}
+   489→                onPointerLeave={() => setHover((h) => (h?.id === it.s.id ? null : h))}
+   490→              />
+   491→              <path
+   492→                d={it.d}
+   493→                fill="none"
+   494→                strokeWidth={hover?.id === it.s.id ? STREAM_W_HI : STREAM_W}
+   495→                strokeDasharray={it.st.dash}
+   496→                strokeLinecap="round"
+   497→                style={{ stroke: it.st.color, pointerEvents: 'none' }}
+   498→              />
+   499→              <Arrow x={it.endX} y={it.endY} angle={it.endAngle} color={it.st.color} />
+   500→              {!it.s.implicit && (
+   501→                <g style={{ pointerEvents: 'none' }}>
+   502→                  <rect x={it.midX - it.pillW / 2} y={it.midY - 10} width={it.pillW} height={20} rx={10} strokeWidth={1.2} style={{ fill: C.paper, stroke: it.st.color }} />
+   503→                  <text x={it.midX} y={it.midY + 4.5} textAnchor="middle" fontSize={11} fontWeight={700} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+   504→                    {it.s.id}
+   505→                  </text>
+   506→                </g>
+   507→              )}
+   508→            </g>
+   509→          ) : null,
+   510→        )}
+   511→
+   512→        {graph.units.map((u) => {
+   513→          const p = pos.get(u.id)!;
+   514→          const def = getUnitType(u.type);
+   515→          const sel = selected === u.id;
+   516→          return (
+   517→            <g
+   518→              key={u.id}
+   519→              transform={`translate(${p.x}, ${p.y})`}
+   520→              style={{ cursor: 'pointer' }}
+   521→              onClick={() => {
+   522→                if (!movedRef.current) onUnitClick?.(u.id);
+   523→              }}
+   524→              onPointerEnter={() => setHover({ type: 'unit', id: u.id })}
+   525→              onPointerLeave={() => setHover((h) => (h?.id === u.id ? null : h))}
+   526→            >
+   527→              {/* transparent hit area — visuals below are pointer-events:none */}
+   528→              <rect x={-10} y={-10} width={NODE_W + 20} height={NODE_H + 20} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
+   529→              <g className="bd-unit-in" style={{ pointerEvents: 'none' }}>
+   530→                {sel && <rect x={-9} y={-9} width={NODE_W + 18} height={NODE_H + 18} rx={14} style={{ fill: C.halo }} />}
+   531→                <rect
+   532→                  width={NODE_W}
+   533→                  height={NODE_H}
+   534→                  rx={11}
+   535→                  strokeWidth={sel ? 2.6 : 1.8}
+   536→                  style={{ fill: C.paper, stroke: sel ? C.ink : hover?.id === u.id ? C.inkSoft : C.inkFaint }}
+   537→                />
+   538→                <text x={12} y={24} fontSize={15} fontWeight={800} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+   539→                  {u.id}
+   540→                </text>
+   541→                <text x={12} y={44} fontSize={11.5} fontWeight={600} style={{ fill: C.inkSoft }}>
+   542→                  {(def?.name ?? u.type).slice(0, 26)}
+   543→                </text>
+   544→                <text x={12} y={62} fontSize={9.5} fontWeight={600} letterSpacing={0.8} style={{ fill: C.inkFaint }}>
+   545→                  {u.type}
+   546→                </text>
+   547→                <circle cx={0} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
+   548→                <circle cx={NODE_W} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
+   549→              </g>
+   550→            </g>
+   551→          );
+   552→        })}
+   553→      </svg>
+   554→
+   555→      {/* hover tooltip */}
+   556→      {hover && tipData && (
+   557→        <div
+   558→          className="pointer-events-none absolute z-20 w-[240px] rounded-lg border px-3 py-2 text-[12px] leading-snug"
+   559→          style={{
+   560→            background: C.paper,
+   561→            borderColor: 'var(--fs-band-line)',
+   562→            color: C.ink,
+   563→            boxShadow: 'var(--fs-tip-shadow)',
+   564→            left: tipPos.x,
+   565→            top: tipPos.y,
+   566→          }}
+   567→        >
+   568→          <div className="mb-1 font-mono text-[11px] font-bold tracking-wide">{tipData.title}</div>
+   569→          {tipData.rows.map((r) => (
+   570→            <div key={r.k} className="flex justify-between gap-4">
+   571→              <span style={{ color: C.inkSoft }}>{r.k}</span>
+   572→              <span className="font-mono">{r.v}</span>
+   573→            </div>
+   574→          ))}
+   575→          {tipData.foot && (
+   576→            <div className="mt-1 border-t pt-1 font-mono text-[10.5px]" style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}>
+   577→              {tipData.foot}
+   578→            </div>
+   579→          )}
+   580→        </div>
+   581→      )}
+   582→
+   583→      {/* first-visit hint */}
+   584→      {hinted && (
+   585→        <div
+   586→          className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border px-3.5 py-1.5 text-[11px] font-medium tracking-wide"
+   587→          style={{ background: 'var(--fs-paper-a95)', borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+   588→        >
+   589→          Drag to pan · scroll to zoom · hover a stream · click a unit
+   590→        </div>
+   591→      )}
+   592→
+   593→      {/* legend */}
+   594→      <div
+   595→        className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-[10.5px] font-semibold tracking-wide"
+   596→        style={{ background: 'var(--fs-paper-a95)', borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+   597→      >
+   598→        <span className="flex items-center gap-1.5">
+   599→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.feed }} /> FEED
+   600→        </span>
+   601→        <span className="flex items-center gap-1.5">
+   602→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.gas }} /> PROCESS GAS
+   603→        </span>
+   604→        <span className="flex items-center gap-1.5">
+   605→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.nh3 }} /> NH3
+   606→        </span>
+   607→        <span className="flex items-center gap-1.5">
+   608→          <span className="w-5 border-t-2 border-dashed" style={{ borderColor: C.inkFaint }} />
+   609→          UTILITIES
+   610→        </span>
+   611→      </div>
+   612→
+   613→      {/* zoom controls */}
+   614→      <div
+   615→        className="absolute bottom-3 right-3 z-10 flex overflow-hidden rounded-lg border"
+   616→        style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}
+   617→      >
+   618→        <button
+   619→          aria-label="Zoom out"
+   620→          className="hover-band h-8 w-8 text-sm font-bold"
+   621→          style={{ color: C.ink }}
+   622→          onClick={() => {
+   623→            const v = viewRef.current;
+   624→            zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);
+   625→          }}
+   626→        >
+   627→          −
+   628→        </button>
+   629→        <button
+   630→          aria-label="Zoom in"
+   631→          className="hover-band h-8 w-8 border-l text-sm font-bold"
+   632→          style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
+   633→          onClick={() => {
+   634→            const v = viewRef.current;
+   635→            zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1.2);
+   636→          }}
+   637→        >
+   638→          +
+   639→        </button>
+   640→        <button
+   641→          aria-label="Fit to screen"
+   642→          className="hover-band h-8 w-10 border-l text-[11px] font-bold tracking-wider"
+   643→          style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
+   644→          onClick={fit}
+   645→        >
+   646→          FIT
+   647→        </button>
+   648→      </div>
+   649→    </div>
+   650→  );
+   651→});
+   652→
+   653→/** compact spec inspector for the selected unit (pure registry reads) */
+   654→export function UnitInspector({ graph, unitId, onClose }: { graph: FlowGraph; unitId: string; onClose: () => void }) {
+   655→  const u = graph.units.find((x) => x.id === unitId);
+   656→  if (!u) return null;
+   657→  const def = getUnitType(u.type);
+   658→  if (!def) return null;
+   659→  const specs = resolveSpecs(u);
+   660→  return (
+   661→    <div className="border-t px-4 py-3" style={{ background: C.paper }}>
+   662→      <div className="flex items-start justify-between gap-3">
+   663→        <div className="min-w-0">
+   664→          <div className="flex items-baseline gap-2">
+   665→            <span className="font-mono text-[15px] font-extrabold" style={{ color: C.ink }}>
+   666→              {u.id}
+   667→            </span>
+   668→            <span className="text-[13px] font-bold" style={{ color: C.inkSoft }}>
+   669→              {def.name}
+   670→            </span>
+   671→          </div>
+   672→          <div className="mt-0.5 text-[11.5px]" style={{ color: C.inkFaint }}>
+   673→            {def.model(specs)}
+   674→          </div>
+   675→        </div>
+   676→        <button onClick={onClose} className="hover-band shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold" style={{ color: C.inkSoft }}>
+   677→          close
+   678→        </button>
+   679→      </div>
+   680→      {def.specFields.length > 0 && (
+   681→        <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
+   682→          {def.specFields.map((f) => {
+   683→            const val = specs[f.key];
+   684→            const changed = JSON.stringify(val) !== JSON.stringify(f.default);
+   685→            const shown = Array.isArray(val) ? `[${val.join(', ')}]` : String(val);
+   686→            return (
+   687→              <div key={f.key} className="flex items-baseline justify-between gap-2 border-b border-dashed py-0.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+   688→                <span className="font-mono text-[11px]" style={{ color: C.inkSoft }}>
+   689→                  {f.key}
+   690→                  {f.unit ? ` (${f.unit})` : ''}
+   691→                </span>
+   692→                <span className="font-mono text-[11px] font-bold" style={{ color: changed ? C.ink : C.inkFaint }}>
+   693→                  {shown}
+   694→                </span>
+   695→              </div>
+   696→            );
+   697→          })}
+   698→        </div>
+   699→      )}
+   700→    </div>
+   701→  );
+   702→}
+   703→

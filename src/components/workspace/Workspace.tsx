@@ -7,16 +7,17 @@
  */
 
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { C } from '@/lib/design/tokens';
 import { baseCase, run } from '@/lib/engine';
 import type { PlantSpec } from '@/lib/engine/plant';
-import { STREAM_MAP, UNIT_MAP } from '@/lib/flowsheet/layout';
+import { REFERENCE_LAYOUT, STREAM_MAP, UNIT_MAP } from '@/lib/flowsheet/layout';
 import { bboxOf } from '@/lib/flowsheet/geom';
 import type { Tour } from '@/lib/content/units';
 import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canvas';
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { setTourActive } from '@/lib/ui/tourBus';
 import { DetailPanel } from './DetailPanel';
 import { OperatePanel } from './OperatePanel';
 import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
@@ -46,6 +47,12 @@ export function Workspace() {
   const [tour, setTour] = useState<TourState>(null);
   const [colors, setColors] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+
+  // publish tour state for the floating Build button (ducks while narrating)
+  useEffect(() => {
+    setTourActive(tour !== null);
+    return () => setTourActive(false);
+  }, [tour]);
 
   const enterOperate = () => {
     setMode('operate');
@@ -203,6 +210,7 @@ export function Workspace() {
         <div className="min-w-0 flex-1">
           <FlowsheetCanvas
             ref={canvasRef}
+            layout={REFERENCE_LAYOUT}
             result={result}
             selected={selected}
             spotlight={spotlight}

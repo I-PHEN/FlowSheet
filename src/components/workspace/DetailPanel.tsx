@@ -7,8 +7,8 @@
  */
 
 import { C } from '@/lib/design/tokens';
-import { BANDS, UNIT_MAP, UNIT_STREAMS } from '@/lib/flowsheet/layout';
-import { UNIT_CONTENT } from '@/lib/content/units';
+import { BANDS, UNIT_MAP, UNIT_STREAMS, type Band, type UnitNode } from '@/lib/flowsheet/layout';
+import { UNIT_CONTENT, type UnitContent } from '@/lib/content/units';
 import { SPECIES } from '@/lib/engine/species';
 import type { PlantResult } from '@/lib/engine/types';
 import type { Focus } from '@/components/flowsheet/Diagram';
@@ -16,12 +16,32 @@ import type { Focus } from '@/components/flowsheet/Diagram';
 const fmt = (x: number, d = 0) =>
   x.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
 
-function bandOf(unitId: string): string {
-  const u = UNIT_MAP[unitId];
-  if (!u) return '';
+/**
+ * Per-plant content bundle — what the detail panels need to teach ANY
+ * plant, not just the reference sheet. Prebuilts assemble one; the default
+ * is the ammonia reference content.
+ */
+export interface PlantContent {
+  unitMap: Record<string, UnitNode>;
+  unitStreams: Record<string, { in: string[]; out: string[] }>;
+  unitContent: Record<string, UnitContent>;
+  /** section bands (only the reference sheet has them) */
+  zones?: Band[];
+}
+
+const REFERENCE_CONTENT: PlantContent = {
+  unitMap: UNIT_MAP,
+  unitStreams: UNIT_STREAMS,
+  unitContent: UNIT_CONTENT,
+  zones: BANDS,
+};
+
+function bandOf(unitId: string, plant: PlantContent): string {
+  const u = plant.unitMap[unitId];
+  if (!u || !plant.zones) return '';
   const cx = u.x + u.w / 2;
   const cy = u.y + u.h / 2;
-  const b = BANDS.find((bb) => cx >= bb.x && cx <= bb.x + bb.w && cy >= bb.y && cy <= bb.y + bb.h);
+  const b = plant.zones.find((bb) => cx >= bb.x && cx <= bb.x + bb.w && cy >= bb.y && cy <= bb.y + bb.h);
   return b?.label ?? '';
 }
 
@@ -45,6 +65,7 @@ export function DetailPanel({
   onSelect,
   onClose,
   condLabel = 'base case',
+  plant = REFERENCE_CONTENT,
 }: {
   result: PlantResult;
   selected: Focus;
@@ -52,12 +73,14 @@ export function DetailPanel({
   onClose: () => void;
   /** live-conditions label: "base case" in Explore, "operating point" in Operate */
   condLabel?: string;
+  /** the plant whose content the panels teach (default: the reference sheet) */
+  plant?: PlantContent;
 }) {
   if (selected.type === 'unit')
     return (
-      <UnitDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} />
+      <UnitDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} plant={plant} />
     );
-  return <StreamDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} />;
+  return <StreamDetail result={result} id={selected.id} onSelect={onSelect} onClose={onClose} condLabel={condLabel} plant={plant} />;
 }
 
 function PanelHeader({
@@ -113,22 +136,25 @@ function UnitDetail({
   onSelect,
   onClose,
   condLabel,
+  plant,
 }: {
   result: PlantResult;
   id: string;
   onSelect: (f: Focus) => void;
   onClose: () => void;
   condLabel: string;
+  plant: PlantContent;
 }) {
-  const node = UNIT_MAP[id];
+  const node = plant.unitMap[id];
   const unit = result.units[id];
-  const content = UNIT_CONTENT[id];
+  const content = plant.unitContent[id];
   if (!node || !unit) return null;
-  const io = UNIT_STREAMS[id] ?? { in: [], out: [] };
+  const io = plant.unitStreams[id] ?? { in: [], out: [] };
+  const band = bandOf(id, plant);
 
   return (
     <div>
-      <PanelHeader eyebrow={`${node.tag} · ${bandOf(id)}`} title={unit.name} onClose={onClose} />
+      <PanelHeader eyebrow={band ? `${node.tag} · ${band}` : node.tag} title={unit.name} onClose={onClose} />
 
       {content && (
         <>
@@ -198,12 +224,14 @@ function StreamDetail({
   onSelect,
   onClose,
   condLabel,
+  plant,
 }: {
   result: PlantResult;
   id: string;
   onSelect: (f: Focus) => void;
   onClose: () => void;
   condLabel: string;
+  plant: PlantContent;
 }) {
   const s = result.streams[id];
   if (!s) return null;
@@ -218,9 +246,9 @@ function StreamDetail({
   // which units feed / receive this stream
   let from = '';
   let to = '';
-  for (const [uid, io] of Object.entries(UNIT_STREAMS)) {
-    if (io.out.includes(id)) from = UNIT_MAP[uid]?.tag ?? from;
-    if (io.in.includes(id)) to = UNIT_MAP[uid]?.tag ?? to;
+  for (const [uid, io] of Object.entries(plant.unitStreams)) {
+    if (io.out.includes(id)) from = plant.unitMap[uid]?.tag ?? from;
+    if (io.in.includes(id)) to = plant.unitMap[uid]?.tag ?? to;
   }
 
   return (
