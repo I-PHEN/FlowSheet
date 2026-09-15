@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes. The rendering uses a dark canvas with high-contrast light text and distinct, non-washed-out line colors (blue/green). Unit labels (F-101, E-101, V-101) are clearly legible and positioned without overlapping.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789446048,
+  "id": "2026091512204542ea4da7241f4fdb",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091512204542ea4da7241f4fdb",
+  "usage": {
+    "completion_tokens": 53,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1714,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1767
+  }
+}

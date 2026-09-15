@@ -415,3 +415,30 @@ Work Log:
 Stage Summary:
 - Newest state fully restored; /tmp/my-project left untouched as recovery source until next commit
 - LESSON: platform auto-commits (UUID messages) captured only scripts/*.json — the src tree of Tasks 12–21 was never committed to git. Commit src changes promptly at task end.
+
+---
+Task ID: R2 (Second Restoration)
+Agent: main (Super Z)
+Task: User reported the app reverted to a previous version ("how did the app go to the previous version... make sure it returns to the most recent version we had, with the hero and all") — full diagnosis + restoration
+
+Work Log:
+- DIAGNOSIS: a second sandbox rollback struck between sessions. The Task R recovery (commit cffa765) had restored NEW files from Tasks 17-21 (components/home/*, lib/flowsheet/{labels,route,flashLayout,distillationLayout}.ts, lib/projects/*, lib/ui/tourBus.ts, plant/p/[id], flash+distillation plants+workspaces+content, audio layer, engine changes in a07cfa9, 3D GLB) — but every file those tasks MODIFIED was stale: page.tsx (Sep 6, "Ammonia Plant Lab", no hero), layout.tsx (Sep 1), globals.css (missing ALL Task-21 keyframes), Diagram.tsx (Sep 1, ammonia-only, no labels), Canvas.tsx (no layout prop), BuildCanvas.tsx (naive beziers), Workspace.tsx (no tourBus/layout), DetailPanel.tsx (no PlantContent), builder page (localStorage SavedPlant), layout.ts (no PlantLayout/REFERENCE_LAYOUT, no S24 fix, no source/dcolumn kinds). /tmp/my-project had itself been rolled back (now an Aug-30-era snapshot mirror) — no recovery source existed; everything was rebuilt from worklog Task 20/21 specs + VLM analysis of the final verification screenshots (lab9-home-projects, lab5-hero-typing, dst6-reference-regression).
+- REBUILT layout.ts: PlantLayout/TitleBlock/ZoneDivider interfaces + REFERENCE_LAYOUT composition (sheet frame, zones=BANDS, AMMONIA SYNTHESIS title block) + S24 boot fix ([662,630]) + UnitKind += 'source'|'dcolumn'.
+- REBUILT page.tsx: Flowsheet header, 2-col hero (badge ✦ AI-NATIVE PROCESS SIMULATOR, "Describe any chemical plant. Watch AI engineer it — live.", ✦Build a plant with AI / Start at the basics ↓, HeroDemo right), ProjectsGrid, THE LEARNING PATH (Flash LEVEL 1·BEGINNER + START HERE, Distillation LEVEL 2·INTERMEDIATE, SMR LEVEL 3·CAPSTONE — bandLine borders, no blue rings), footer lines, BuildFab.
+- layout.tsx: Flowsheet metadata + sonner Toaster (was classic ui/toaster).
+- globals.css: appended the full Task-21 animation layer — mf-settle/mf-draw/mf-draw-out/mf-dash-in/mf-pop/mf-label/mf-in, caret, bd-draw/bd-pop/bd-late, fab-pulse + prefers-reduced-motion kill list with static end-states.
+- REBUILT Diagram.tsx: layout prop (default REFERENCE_LAYOUT), placeUnitLabels + sheet-colored masks (band-inside→C.band else C.canvas), placeAnnotations clamped+masked, sheet frame + zones + zoneDividers + title block rendering, unitHitRect-driven halos + hit areas, generic "Process flow diagram" aria.
+- Canvas.tsx: layout prop, per-plant canvas/aspect/clamp, legend derived from the sheet's stream classes (feed/syngas/loopgas/product/water/co2/purge); fixed the 5 pre-existing React-Compiler memoization errors (clampView hoisted pure, stopAnim/fit/panTo/zoomAtWorld dep-correct).
+- Symbols.tsx: 'source' (sphere + latitude ellipse) and 'dcolumn' (14 alternating trays + feed-stage nozzle) symbols.
+- BuildCanvas.tsx: beziers → grid router (buildGrid/routeStream/roundedPath, pairIndex+recycleLanes staggering, self-loops kept as beziers); pills at pointAt(pts,0.5); streams draw themselves in (pathLength=1 + bd-draw, bd-pop arrowheads, bd-late pills; dashed utilities skip draw-on); fresh/doneRef entrance state (animate once ≈700ms then release).
+- Workspace.tsx: layout={REFERENCE_LAYOUT} + setTourActive publish.
+- builder/page.tsx: saveProject → PlantRecord to IndexedDB with sonner toast "Open" action + header "Open project →" link; ?load= reads IDB first, legacy slug fallback.
+- DetailPanel.tsx: PlantContent export (unitMap/unitStreams/unitContent/zones?) + plant prop, default = ammonia reference content.
+- Removed SavedPlants.tsx.
+- VERIFIED (agent-browser + VLM, zero page/console errors on every route): home hero animates through phases (typing w/ caret → placing → wiring → solving → converged); flash/distillation/ammonia sheets all collision-free with sheet frames + title blocks + inside-sheet annotations (ammonia 9/10); router stress plant (10 units, injected to IDB) renders with ZERO box crossings, recycles in lanes; YOUR PROJECTS grid shows with thumbnail+stats+CRITIC badge; mobile 390px stacks clean with round FAB; dark mode correct (class toggle). tsc + eslint clean on all touched files.
+- COMMITTED immediately (6252ec9) per the Task R lesson — src changes are never left uncommitted again.
+
+Stage Summary:
+- The app is back to the newest state: Flowsheet brand, looping hero, learning path, first-class projects, label engine, grid router, per-plant sheets — all verified end-to-end and committed.
+- Root cause is platform-level (two rollbacks in two sessions); /tmp is NOT a reliable recovery source. Mitigation: commit after every task.
+- NEXT (queued from user's last order): 3D Component Viewer MVP around the shell-and-tube GLB (public/models/shell-and-tube-exchanger.glb, 885KB, meshopt-compressed, ready) — R3F + drei, lazy bundle, model registry + cube badges on flowsheet units, /plant/<plant>/3d/<unit> routes, full-screen orbit viewer.
