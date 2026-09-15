@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes, there is a guided tour panel visible on the right side of the screen. It shows the following elements:\n\n*   **Progress Bar:** A horizontal bar at the top of the panel, partially filled, indicating the current position in the tour.\n*   **Step Counter:** The text \"**1 / 7**\" is displayed below the progress bar.\n*   **Step Title:** The title for the current step is \"**One stream becomes two**\".\n*   **Content:** Below the title is a sub-heading \"**The delivery arrives**\" followed by a paragraph describing the synthesis gas entering the system and the mission to recover ammonia.\n*   **Navigation Buttons:** At the bottom right of the panel, there are two buttons: a light-colored \"**← Back**\" button and a dark-colored \"**Next →**\" button.\n*   **Close Button:** There is also an \"x\" icon in the top-right corner of the panel to close the guided tour.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789337080,
+  "id": "20260914060435d87eaa2938024ef0",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914060435d87eaa2938024ef0",
+  "usage": {
+    "completion_tokens": 196,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 939,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1135
+  }
+}

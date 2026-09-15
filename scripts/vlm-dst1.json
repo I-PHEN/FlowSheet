@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **One drawing sheet:** Yes, the diagram is contained within a single, large rectangular frame (the light gray canvas area).\n2) **Key equipment visible:** Yes. The tall distillation column (T-101) with horizontal tray lines is central; the feed sphere (F-101) and preheater (E-101) are on the left; the condenser (E-102) and reflux drum (V-101) are at the top right; and the reboiler (E-103) is at the bottom right.\n3) **Stream lines:** Yes. Numbered stream pills (1 through 9) are clearly visible on the connecting lines, and they do not overlap with the equipment symbols or their labels.\n4) **Title block:** Yes, there is a title block in the upper right of the drawing area. The text \"BENZENE-TOLUENE DISTILLATION · PFD\", \"SHEET 1 OF 1\", and \"REV A\" is fully readable.\n5) **Visual glitches:** No. The layout is clean with no overlapping text, clipped elements, or missing pieces. All components are well-spaced and legible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789343961,
+  "id": "20260914075915834bf36a2c644c8d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914075915834bf36a2c644c8d",
+  "usage": {
+    "completion_tokens": 245,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2161,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2406
+  }
+}

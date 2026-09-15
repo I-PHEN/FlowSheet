@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Q1: yes\nQ2: \"Narrating — music lowers while I speak.\"\nQ3: It is ONE single large sheet rectangle with a dashed horizontal divider line inside it.\nQ4: The \"M-101 FEED MIX\" element overlaps the \"STEAM\" text label and the input lines for streams 1 and 2. Additionally, the title \"3 · SYNTHESIS LOOP & COMPRESSION\" at the bottom is partially clipped by the edge of the drawing area.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789339920,
+  "id": "20260914065155c43c4583a7314672",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914065155c43c4583a7314672",
+  "usage": {
+    "completion_tokens": 100,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1776,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1876
+  }
+}

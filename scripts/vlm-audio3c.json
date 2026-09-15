@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Q1: The text label 'STEAM' sits clearly above the steam line with readable spacing and does not physically collide or overlap with the box labeled 'M-101 FEED MIX' or its 'FEED MIX' text.\n\nQ2: No, stream line labels 1 and 2 do not collide with any text or each other.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789339931,
+  "id": "20260914065208e324f58b2566480a",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914065208e324f58b2566480a",
+  "usage": {
+    "completion_tokens": 71,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2112,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2183
+  }
+}

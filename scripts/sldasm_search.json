@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://convert3d.org",
+    "name": "3D Model Converter Online (Free)",
+    "snippet": "Convert your 3D models to multiple formats (OBJ, FBX, USDZ, GLB, GLTF, and more) online, free, and safe. SLDASM Converter SolidWorks Assembly",
+    "host_name": "convert3d.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://3dencoder.com",
+    "name": "SolidWorks to Glb",
+    "snippet": "Free online 3D file converter . Support SolidWorks, Catia, NX, SketchUp (SKP), IFC, 3ds Max, Maya. Convert to Web/AR (GLB, USD, glTF), Engineering (STP, IGS, ...",
+    "host_name": "3dencoder.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cadexchanger.com",
+    "name": "Convert SLDASM to GLB",
+    "snippet": "Convert SLDASM to GLB with ease and flexibility: hide certain details and groups before conversion; add XYZ section planes; explode assemblies; choose between ... Read more",
+    "host_name": "cadexchanger.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://imagetostl.com",
+    "name": "Convert SLDPRT to GLB for free",
+    "snippet": "A free and fast online tool to convert your SLDPRT files to 3D GLB mesh files for 3D printing or use in a 3D editing package.",
+    "host_name": "imagetostl.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.datakit.com",
+    "name": "Search a CAD convertor from SOLIDWORKS 3D to glTF",
+    "snippet": "This is a quick conversion solution for your files from SOLIDWORKS 3D (. sldprt . sldasm ) to glTF (.gltf .bin . glb ).will allow you to convert : . sldprt to .gltf ... Read more",
+    "host_name": "www.datakit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://fabconvert.com",
+    "name": "Free Online SLDPRT to GLB Converter",
+    "snippet": "Use our free and fast online tool to instantly convert your SLDPRT files to GLB files , ready for download.",
+    "host_name": "fabconvert.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided image of the process flow diagram web app:\n\n(1) **Yes.** The flowsheet is drawn inside one single, large bordered rectangle (the \"sheet\") that contains all three zones.\n(2) **Yes.** The dashed zone dividers and the labels (\"1 - FEED & REFORMING\", \"2 - SHIFT & PURIFICATION\", \"3 - SYNTHESIS LOOP & COMPRESSION\") are clearly visible and readable in a light grey color against the dark charcoal background.\n(3) **Yes.** The title block in the bottom-right corner (labeled \"AMMONIA SYNTHESIS PROCESS FLOW DIAGRAM\") is fully readable with good contrast.\n(4) **Yes.** The recycle loop at the bottom is drawn as one continuous line that runs along the bottom edge of the sheet, connecting the circulator back to the loop mixer.\n(5) **No.** There are no significant contrast or readability problems, no overlapping elements, and no clipped elements. The design uses high-contrast white and light-grey lines and text on a dark background to ensure clarity.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789285206,
+  "id": "20260913153957e299581e6470422c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260913153957e299581e6470422c",
+  "usage": {
+    "completion_tokens": 227,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2132,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2359
+  }
+}

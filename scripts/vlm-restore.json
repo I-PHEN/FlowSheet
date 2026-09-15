@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Light Theme:**\n1.  **Yes**, the flowsheet is contained within a single large bordered rectangle.\n2.  **Yes**, the dashed zone dividers (labeled \"1 - FEED & REFORMING\", \"2 - SHIFT & PURIFICATION\", \"3 - SYNTHESIS LOOP & COMPRESSION\"), zone labels, and the bottom-right title block (\"AMMONIA SYNTHESIS / PROCESS FLOW DIAGRAM\") are all visible and readable.\n3.  **Yes**, the recycle loop (labeled \"NH3 PRODUCT RECYCLE\") runs continuously from the bottom of the synthesis converter area, across the bottom of the sheet, and back to the circulator on the left.\n4.  **No glitches**: There are no obvious overlaps, clipped text, or missing elements.\n\n**Dark Theme:**\n1.  **Yes**, the flowsheet is contained within a single large bordered rectangle.\n2.  **Yes**, the dashed zone dividers, zone labels, and the bottom-right title block are all visible and readable.\n3.  **Yes**, the recycle loop runs continuously inside the sheet in the same manner as the light theme.\n4.  **No glitches**: The dark theme renders cleanly without overlaps, clipped text, or missing elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789336414,
+  "id": "20260914055326682fb3aa57de4ce4",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914055326682fb3aa57de4ce4",
+  "usage": {
+    "completion_tokens": 259,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1884,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2143
+  }
+}

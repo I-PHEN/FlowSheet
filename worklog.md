@@ -288,3 +288,130 @@ Stage Summary:
 - Key artifacts: src/components/builder/SessionPanel.tsx (new), src/components/builder/BuildCanvas.tsx (rewritten interactions + tooltips), src/app/plant/builder/page.tsx (reworked), globals.css (bd-msg-in), BuildPanels.tsx deleted. Screenshots: scripts/d3-01..d3-10b, vlm-d3-*.json.
 - Known limits (honest): no follow-up turns yet (D3-c: session continuity, edits, what-ifs — the next deep build), mobile canvas is overview-first at fit (zoom available), agent reliability unchanged (occasional miswire→validator feedback turns, 429s possible on long builds).
 - Next: D3-c conversational continuity (session state + incremental edits over saved graphs), then G voice narration (TTS on tour runner + LLM-authored tours for built plants — the tour engine already exists in the workspace), then E species pack, F 3D hero units.
+
+---
+Task ID: 12–16 (RECONSTRUCTED SUMMARY — verbatim entries lost in sandbox rollback, see Task R)
+Agent: main (Super Z)
+Task: Builder continuity + voice/music layer + flash template (L1 rung of the curriculum ladder)
+
+Work Log (reconstructed from artifacts on disk + session summaries — treat details as approximate):
+- Tasks in this window shipped: D3-c session continuity work on the builder; the audio layer — /api/tts route, src/lib/audio/{music,spoken,narration,tourAudio}.ts (spoken-term sanitization for TTS, procedural Web Audio lo-fi bed with ducking-to-0.30 during narration, tour narration wired into the existing TourRunner); the flash-drum template (L1) — src/lib/plants/flash.ts, src/lib/flowsheet/flashLayout.ts, src/lib/content/flash.ts, src/components/flash/, route /plant/flash, Explore/Operate/Learn studio pattern; a Task 14 builder-canvas textbook-mode attempt that was rolled back (src/app/legacy holds the archived pre-generalization ammonia app).
+- The old ammonia-only app was archived to src/app/legacy as part of brand generalization prep.
+
+Stage Summary:
+- Foundation laid that Tasks 17–21 build on: narrated tours with music ducking, a second curriculum rung slot pattern (plant-as-data), and the app no longer ammonia-only.
+
+---
+Task ID: 17
+Agent: main (Super Z)
+Task: Build the distillation-column template — rung 2 of the curriculum ladder (user-confirmed next step after the voice+music layer landed in Task 16)
+
+Work Log:
+- Studied the flash template end-to-end (registry pattern, PlantLayout/PlantContent plumbing, tour data flow) so rung 2 slots in as DATA, not a fork.
+- SPECIES EXTENSION (the risky part): appended benzene (C6H6) + toluene (C7H8) at indices 9-10 with Smith/Van Ness Tc-Pc-omega, Shomate-anchored Cp fits, and hf; ATOM_MATRIX rows extended to 11 columns so the executor's element balance closes for hydrocarbons too. Audited and fixed every fixed-length-9 hazard the append would break: tearInit y0 (registry.ts AND legacy plant.ts — NaN would have killed the ammonia loop), AIR_COMP (9-wide → NaN in every air-carrying stream), engine-tests.ts arrays, DetailPanel StreamDetail MW (hardcoded table → SP lookup; NaN for benzene streams), plants/flash.ts mass() (same fix, robustness). Gates re-run GREEN: engine 61/61, graph identity 35/35, agent 48/48, flash-check pass — the species append moved ZERO ammonia numbers.
+- COLUMN PHYSICS (engine/units.ts, distillationColumn()): the classic design-verification problem — given xD spec, reflux R, N stages, feed stage, find xB so that stepping exactly N Lewis–Sorel stages lands on the reboiler. Constant alpha from the SAME PR EOS the flash drum uses (evaluated at the feed bubble point via Wilson-initialized fugacity — gives 2.32 for benzene/toluene, textbook); q from PR flash between the saturation points and Cp/latent-heat corrections outside (subcooled q>1, superheated q<0); Rmin from the equilibrium pinch on the q-line (grid-scan + bisection); duties from PR-residual enthalpies with the reboiler closed by overall energy balance (cold feed honestly raises Qr). SOLVER HARDENING (two bugs found by probing): (1) pinched columns (R<Rmin) must not trust the stepping — the forced feed-stage switch can produce a fake solution with negative boilup; now pinched → honest no-split + warning naming Rmin. (2) the original g(hi)>=0 starved test probed a degenerate rich-end band (D→0) — replaced with a lean→rich 48-point grid scan for the first achievable bracket + bisection; high-xD columns (0.995) that were wrongly starved now solve to xB→0, and a mislocated feed gets a specific diagnosis ('Feed tray 8 is too high … until tray 14') instead of a misleading 'add stages'.
+- REGISTRY: three teaching types — 'column-feed' (binary spec source), 'feed-heater' (cooler wrapper, sets q), 'distillation-column' (compound unit: McCabe–Thiele solve, distillate+bottoms outlets, 12 metrics incl. Rmin, R/Rmin, Fenske Nmin, feed-tray optimum, duties; honest warnings). TYPE_KIND gains 'dcolumn' → new tall-tower symbol in Symbols.tsx (density-based trays, feed nozzle at 55% height, domed shell) — grammar invariant held (every registry type maps to a silhouette).
+- PLANT LAYER (src/lib/plants/distillation.ts): graph (FEED→HEATER→COLUMN, streams S01-S04) + ENRICHMENT — solveDistillation re-runs the deterministic column solve from the solved feed and injects the internal streams S05-S09 (overhead vapor, reflux, condensate, bottoms draw, boilup) and the auxiliaries COND/RDRUM/REB as virtual UnitResults: the sheet draws them, tooltips/detail panels render them with live values, zero executor changes. DistillSpec exposes 8 knobs; distillKpis() the scorecard.
+- LAYOUT (distillationLayout.ts): one sheet 1180x740 — F-101 sphere, E-101 preheater, T-101 tower (96x420) center-stage, E-102 condenser + V-101 reflux drum top right, E-103 reboiler bottom right; reflux and boilup loops drawn as real stream edges with pills; title block top-right (bottom-right is occupied by the toluene product run); presentation-level unitStreams match the drawing.
+- CONTENT + TOUR: six dual-layer unit entries (FEED/HEATER/COLUMN/COND/RDRUM/REB) and an 8-step tour 'The tower that repeats the flash' ending with the Operate pinch challenge — narration comes free from Task 16's audio layer. SPOKEN FIX: the formula-token regex could not match C6H6 (digit before a letter breaks \b) — rewritten to accept any alphanumeric formula token; spoken gate extended to cover the distillation tour (43 steps, 0 issues) + C6H6 spot-check.
+- WORKSPACE + ROUTE: DistillationWorkspace mirrors the flash studio (Explore/Operate/Learn, canvas + panel, mobile sheet); DistillOperatePanel has six levers (reflux R, stages, feed tray, feed temperature, benzene fraction, purity target) with live hints and a 9-row scorecard with deltas; route /plant/distillation. HOME: ladder is now LEVEL 1 flash (START HERE) → LEVEL 2 distillation (INTERMEDIATE) → LEVEL 3 SMR (CAPSTONE), 3-column grid, updated hero copy.
+- VERIFICATION (scripts/distill-check.ts, persisted, 48/48): base case xB=3.30%/recovery 95.9%/alpha 2.32/Rmin 1.59/feed tray 8 optimal/Qc 6.54+Qr 6.42 MW, element balance 0; lever physics — R↑ leans xB but costs duty, N=22→xB 0.05%, N=8→39.5%, R<Rmin pinches honestly (no fake split, non-negative internals), wrong feed tray warns + degrades (nf=13→19.27%), cold feed raises Qr (8.0 MW), vapor feed raises Rmin (3.02) and unburdens Qr, 99.5% purity reachable with stages+reflux; stream-sheet integrity (V=(R+1)D, L=R·D, boilup in eq with xB, balance closes with virtual streams); determinism to 1e-12. Browser (agent-browser + VLM): one sheet light AND dark (VLM 9/10, no glitches), tour narrated (AudioContext running, duck exactly 0.30, exactly 2 TTS POSTs — dedupe holds), spotlight pans to T-101 at step 4, Operate live — R=1.2 fires the pinch warning in-page, nf=13 scorecard matches the engine byte-for-byte, S06 hover tooltip shows live reflux (L=414=R·D), REB click opens its detail panel, reset restores the design point; home ladder verified; REGRESSIONS: reference plant still ONE sheet with zones+title block (no 3-box reappearance), flash intact, builder loads, zero console/page errors anywhere; mobile 390px no horizontal overflow; production build green (/plant/distillation static).
+- COMMITTED same-session (6700603) per the Task 14 lesson.
+- Known leftover (pre-existing, NOT from this diff — verified by stashing): `npx eslint src` reports 6 react-hooks/compiler findings in Canvas.tsx (manual-memoization preservation) and tourAudio.ts (setState-in-effect for localStorage hydration) that exist at HEAD, likely from an eslint-config drift after Tasks 11/16; this task's files are lint-clean. Flagged for a dedicated cleanup task.
+
+Stage Summary:
+- The curriculum ladder has its second rung: a benzene-toluene tower that teaches staged separation on the same one-sheet renderer, same PR-EOS physics, same narrated-tour studio UX — with McCabe-Thiele as the visible mental model and reflux/stages/feed-tray as levers you can feel. All surfaces stayed data-driven (PlantLayout/PlantContent/Tour), so rung 3+ plants remain authoring work, not plumbing.
+- The species table is now genuinely extensible: benzene/toluene proved the append path (indices stable, balances close, ammonia identity byte-identical).
+- Next candidates per the user's standing directives: 3D hero components for each plant's 1-2 key units (flash drum, distillation column T-101, ammonia converter — the data model already isolates the key units per plant), builder-canvas textbook-mode rebuild (lost in the Task 14 rollback), and the Canvas/tourAudio lint cleanup.
+
+---
+Task ID: 18
+Agent: main (Super Z)
+Task: User reported "I can't see the app" — diagnose availability
+
+Work Log:
+- Checked processes: next dev (pid 1075) running on :3000 since Sep13, Caddy proxy on :81 healthy
+- curl localhost:3000/ → HTTP 200 (117ms); all routes 200 (/, /plant/flash, /plant/distillation, /plant/reference, /plant/builder, /api/tts)
+- Opened app in headless browser: title "Ammonia Plant Lab" renders, zero page errors, console clean (HMR connected)
+- Accessibility snapshot confirms full homepage UI: L1 Flash / L2 Distillation / L3 SMR Ammonia learning path cards + AI builder entry — all present
+- Preview gateway (space-z.ai) DNS resolves and responds (tested pattern URL → 404 for unknown bot, i.e. gateway itself up)
+
+Stage Summary:
+- Sandbox 100% healthy; no server-side cause found
+- Most likely: stale tab from previous session (HMR socket dead after session restart) or stale preview URL
+- Advised user: hard refresh (Ctrl/Cmd+Shift+R) or re-open preview link from platform UI
+
+---
+Task ID: 19
+Agent: main (Super Z)
+Task: Planning discussion (no code) — hero restructure, brand generalization, floating AI CTA, per-user projects
+
+Work Log:
+- Analyzed user's reference screenshot: Google Flow project dashboard (dark grid, project cards with thumbs/dates/actions, "+ New project" card inside grid)
+- Audited current state: homepage = "Ammonia Plant Lab" header → text hero → learning path (3 cards) → AI builder card → SavedPlants localStorage strip (max 6, links to builder ?load=slug)
+- Confirmed already shipped since last summary: voice layer (/api/tts + spoken sanitization + tourAudio), music layer (procedural Web Audio lo-fi with ducking), distillation L2 template live
+- Produced full planning discussion covering: brand generalization, hero-as-sell with looping live demo, floating Build CTA mechanics, per-user projects as first-class plants (local-first storage with schema-ready ownerId), state-dependent homepage IA, phased build order
+
+Stage Summary:
+- Plan delivered in chat for user reaction; no code written per explicit request
+- Key proposals: rename away from ammonia; invert page order (projects first when non-empty); unified PlantRecord with source: builtin|user; FAB visible on all pages, ducks during tours; IndexedDB + export/import v1, no accounts
+- Awaiting user decisions on: name choice, storage model, hero demo style, projects-vs-path ordering
+
+---
+Task ID: 20
+Agent: main (Super Z)
+Task: Flowsheet rebrand + hero + floating Build CTA + first-class user projects (all 4 planned phases)
+
+Work Log:
+- Phase 0 — Brand & Hero: renamed app to "Flowsheet / AI-NATIVE PROCESS SIMULATOR" (layout.tsx metadata, homepage header, footer); killed the blue rings on L1/L2 learning cards (C.gas borders + badges → C.bandLine everywhere); built HeroDemo — looping self-playing AI-build demo (prompt typewriter → architect/engineer/critic chips → units settle in → streams wire → solver converges → critic 92/100 → fade & loop; hover-pause; prefers-reduced-motion static); demo plant is a methanol loop (deliberately not ammonia)
+- Phase 0 — BuildFab: fixed bottom-right pill on every page (icon-only circle on mobile), hidden on /plant/builder, one-time pulse via localStorage flag, 'b' keyboard shortcut, ducks (opacity .55, scale .92, no pointer events) while any tour runs
+- Phase 1 — Registry: PlantRecord {id,name,brief,createdAt/updatedAt,schemaVersion=1,ownerId,graph,kpis,verdict,productionTpd,source:'user'}; anonymous ownerId (fs.owner); IndexedDB store (db 'flowsheet', store 'plants', keyPath id, updatedAt index); one-shot legacy migration folds psp.library.v1 (original key preserved); export as name.flowsheet.json + import with validation; safeKpis sanitizer drops partial KPI objects instead of crashing (found via e2e test: SolveCard toFixed crash on malformed kpis)
+- Phase 2 — First-class projects: /plant/p/[id] viewer (BuildCanvas stage + panel: brief, numbers, critic verdict, GENERATED narrated tour with voice+music+ducking via useTourAudio, spotlight follows steps, progress dots); ProjectsGrid Flow-style (live MiniFlow thumbnails via computed serpentine miniLayout, "+ New project" card first, hover actions: rename dialog / edit-in-builder / duplicate / export / delete-with-undo-toast, Import button in header); homepage state-dependent: hero → YOUR PROJECTS (only when non-empty) → learning path; builder saves PlantRecord to IDB with toast "Open" action + header "Open project →" link; ?load= reads IDB then legacy slug fallback; sonner Toaster replaces unused classic toast
+- Phase 3 — tourBus (fs:tour CustomEvent): published by 3 prebuilt workspaces + project viewer, consumed by BuildFab
+- New files: lib/projects/{record,store,tour}.ts, lib/ui/tourBus.ts, components/home/{MiniFlow,HeroDemo,BuildFab,ProjectsGrid}.tsx, app/plant/p/[id]/page.tsx, scripts/{inject-test-plant,set-legacy}.js; removed SavedPlants.tsx
+- Fixes along the way: fixed 10 lint errors incl. pre-existing Canvas.tsx React-Compiler memoization complaints (deps arrays) and set-state-in-effect violations (rAF pattern); tourAudio hydrated ref → state so first tour step speaks; BuildFab pulced typo
+- E2E verified via agent-browser: hero demo animates & loops; blue borders gone (computed rgb(219,216,208)); project grid (inject → appears, rename/duplicate/delete+undo all work); legacy localStorage migration works; viewer renders stage + numbers + critic + generated tour (10 steps, narration reads naturally, Next advances, End restores); FAB ducks during project tour AND reference plant tour, restores after; 'b' shortcut navigates; builder ?load= restores graph; mobile 390px layout + circle FAB clean; fresh-profile error count 0; lint clean
+
+Stage Summary:
+- The app now sells itself at first glance (hero demo), stays reachable (FAB), and remembers your work (first-class local projects with narrated auto-tours)
+- User's own browser: legacy saved builds migrate automatically on next visit; nothing shared between users (per-browser ownerId)
+- Queue remaining: 3D keyComponents visualization (PlantRecord already carries graph; add keyComponents field when 3D lands), soft-delete trash if ever needed, account sync later (schema ready)
+
+---
+Task ID: 21
+Agent: main (Super Z)
+Task: Fix label/line collisions across ALL renderers + professional hero animation + 3D planning
+
+Work Log:
+- Analyzed user's 2 screenshots (flash plant): (a) stream S04's vertical boot drop passing straight through the centered "FLASH DRUM" tag/name below the vessel; (b) "GAS TO RECYCLE" annotation overflowing the sheet's right edge (x=1092 + ~120px text > 1200 canvas). Audited all layouts: same pattern in distillation (S06/S08/S04 drops through RDRUM/COLUMN/REB labels) and ammonia (S12/S14/S17/S26 through V1/A1/V2/SP1 labels); found ammonia S24 starting 36px below V-3's boot (label was bridging the gap visually)
+- NEW src/lib/flowsheet/labels.ts — the drawing-office label system: generous text metrics; Liang-Barsky segment/rect intersection; placeUnitLabels (candidates below-center → below-side → above variants, avoiding stream lines +5px, equipment boxes +7px, sheet edges, title block, zone captions, stream pills, already-placed labels); placeAnnotations (clamp inside sheet by measured text width, vertical nudge off lines/pills); pillRects; unitHitRect (union of box + label for halos/hit areas)
+- Diagram.tsx (PFD renderer, all prebuilts): renders decluttered label positions, sheet-colored (C.band) masks behind tag/name + annotations so unavoidable lines pass BEHIND words; halo + hit rects follow the moved labels; aria-label genericized to "Process flow diagram"
+- Layout touch-ups: flash + distillation product arrows end at x=1030 (was 1080) with annotations at x=1042 → fully inside the sheet; ammonia S24 now starts at the V-3 boot (662,630)
+- NEW src/lib/flowsheet/route.ts — collision-free grid router for computed layouts (builder + thumbnails): corridors (vertical strips between columns) + lanes (horizontal strips between rows + margins); rules: adjacent-column forward = single corridor jog; skip-forward = corridor + row-lane hop; same-column forward (band wrap) = straight drop into top; recycle = corridor down to a staggered lane BELOW both units, rise into target bottom (right-side entry fallback when column occupied); sinks from mid-columns route along a lane to the margin (fixes pre-existing 6px overhang into next column); roundedPath() for soft corners; pairIndex/laneIndex staggering
+- BuildCanvas (AI builder + project viewer): replaced naive beziers (which crossed intermediate unit boxes on skips/recycles) with router output; pills at pointAt(pts,0.5); new streams DRAW THEMSELVES in (pathLength=1 + bd-draw dashoffset animation, bd-pop arrowheads, bd-late pills; dashed utilities skip draw-on to preserve pattern); entered-ids state so classes persist for the 700ms entrance then release
+- MiniFlow: optional `view` prop (hero camera) + `dots` prop (faint dot grid = engineering canvas); units now settle with overshoot (mf-settle); streams draw on (mf-draw; dashed utilities crossfade solid→pattern via mf-dash-in/mf-draw-out); miniLayout() thumbnails now routed by the shared grid router — self-loops skipped as before
+- HeroDemo rewrite (professional choreography, ~15.7s loop): human-cadence typing (per-char times, pauses at spaces/punctuation); agent chips with done sublines; camera drifts with the build (damped-lerp viewBox framing placed units, aspect-locked via boxToAspect, clamped) then pulls back to the full sheet at convergence, snaps back under the end fade; operator console line bottom-left ("▸ placing STEAM REFORMER…", "▸ wiring recycle loop", "✓ converged · 12 passes"); solver pass ticker + progress bar; numbers COUNT UP (512 t/d, critic 92) with easeOut; whole content fades at loop end (no more hard cut); PAUSED state shows "HOVER TO INSPECT"
+- globals.css: bd-draw/bd-pop/bd-late + mf-draw/mf-dash-in/mf-draw-out/mf-settle/mf-pop/mf-label keyframes, all in the prefers-reduced-motion kill list with sensible static end-states
+- NEW scripts/inject-router-test.js — 10-unit stress plant: multi-row column (D1/D2), two skip-forwards, band wrap (depth 7→8), two recycles (cross-band + shallow), sinks from last AND middle column
+- E2E verified (fresh browser, zero page errors on every route): flash/distillation/reference all pass VLM collision audit (every previously-crossing label now clear; annotations inside sheet); router stress test passes with zero box crossings, recycles in lanes, pills clear, "professional engineering diagram" verdict; hero verified at 4 phases (typing+caret, units+camera framing, streams+console line, converged+counting chips+stamp); home projects grid shows router-routed thumbnail; builder idle healthy; mobile 390px + dark mode clean; unit click selection works with moved-label hit areas
+- "pulced is not defined" in dev.log confirmed stale (no source hits; fixed in Task 20; fresh browser = 0 errors)
+
+Stage Summary:
+- The #1 visual complaint is fixed SYSTEMICALLY, not per-plant: prebuilts get decluttered labels + masks + fitted annotations; AI-built plants get a grid router that makes line-through-unit geometrically impossible
+- Hero now tells the build story with real choreography (typing → placing → wiring → solving → counting → verdict) and a drifting camera
+- 3D plan delivered in chat (unit-level cutaways first via react-three-fiber, plant flythrough later, reusing the same graph+router data) — awaiting user go-ahead
+
+---
+Task ID: R (Restoration)
+Agent: main (Super Z)
+Task: Sandbox rollback recovery — restore newest project state, preserve 3D pipeline work
+
+Work Log:
+- INCIDENT: between sessions, the sandbox restarted with the project at /home/z/my-project rolled back to a Sep 12 23:01 snapshot (worklog + src through Task 11 only). The newest state (Tasks 12–21, source mtimes Sep 13–14) survived at /tmp/my-project (a complete copy including flash + distillation plants, audio layer, Flowsheet rebrand, projects system, labels.ts, route.ts, hero). The dev server had been restarted against the stale copy (serving "Ammonia Plant Lab" again).
+- RECOVERY: verified /tmp/my-project as strict superset with identical deps (package.json byte-identical); copied /tmp/my-project/src → /home/z/my-project/src; merged upload/ + scripts/ (union, no clobber); public/models (the 3D GLB) kept; worklog reconstructed — Tasks 17–21 restored verbatim from session context (read from this worklog earlier the same day), Tasks 12–16 consolidated into a single honestly-marked reconstructed entry (verbatim text lost).
+- 3D PIPELINE (done before discovery, unaffected — worked on /home/z/my-project paths that survived): user uploaded GrabCAD "Shell and Tube Heat Exchanger" (SLDASM 27.8MB, SolidWorks 2015+ format — not OLE2, no local parser exists). Converted via convert3d.org through headless browser (agent-browser upload → GLB 48MB, 1.4M verts, PBR materials, real scale 3.39m, BOTH the intact and cutaway twins included). Optimized with gltf-transform: weld → simplify (ratio 0.12, error 0.005) → prune → quantize → meshopt = 885KB final at public/models/shell-and-tube-exchanger.glb (EXT_meshopt_compression + KHR_mesh_quantization, three.js-ready).
+- Restarted dev server after restoration; verified newest app state serves again (Flowsheet brand, all routes).
+
+Stage Summary:
+- Newest state fully restored; /tmp/my-project left untouched as recovery source until next commit
+- LESSON: platform auto-commits (UUID messages) captured only scripts/*.json — the src tree of Tasks 12–21 was never committed to git. Commit src changes promptly at task end.

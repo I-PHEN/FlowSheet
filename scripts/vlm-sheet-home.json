@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes, it shows a flowsheet diagram thumbnail for the \"Steam-Methane Reforming Plant\".\n(2) Yes, the diagram is drawn inside a single bordered rectangle sheet.\n(3) No, there are no rendering glitches on the page.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789285223,
+  "id": "2026091315402198ee98b1e86b41e6",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091315402198ee98b1e86b41e6",
+  "usage": {
+    "completion_tokens": 54,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2087,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2141
+  }
+}
