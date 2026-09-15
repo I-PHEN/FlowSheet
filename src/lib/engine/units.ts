@@ -1,7 +1,8 @@
-import { N_SP } from './species';
+import { N_SP, SPECIES } from './species';
 import type { Moles } from './species';
+import { SP as SP_DATA } from './species';
 import { enthalpyRate, kMix, total, fracs } from './thermo';
-import { prZ, prEnthalpyDep } from './pr';
+import { prZ, prFugacity, prEnthalpyDep } from './pr';
 import { flashPT } from './flash';
 import { solveSmrWgs, solveNh3Eq, solveMethanator } from './reactions';
 import type { FlashResult } from './flash';
@@ -537,6 +538,373 @@ export function converterBed(nIn: Moles, TIn: number, P: number, eta: number): B
     nh3In,
     nh3Out: totOut > 0 ? nOut[6] / totOut : 0,
     reached,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Distillation column — the classic binary design-verification problem
+// (McCabe–Thiele / Lewis–Sorel stage stepping with constant relative
+// volatility from the PR EOS). Given xD, R, N and the feed tray, find xB so
+// that stepping exactly N equilibrium stages lands on the reboiler.
+// ---------------------------------------------------------------------------
+
+export interface DistillColumnResult {
+  /** products, kmol/h */
+  D: number;
+  B: number;
+  /** distillate / bottoms mole fraction of the light key */
+  xD: number;
+  xB: number;
+  /** vapor in equilibrium with the reboiler liquid */
+  yB: number;
+  /** internal flows, kmol/h — rectifying section */
+  V: number;
+  L: number;
+  /** internal flows, kmol/h — stripping section */
+  Vbar: number;
+  Lbar: number;
+  boilupRatio: number;
+  /** temperatures, K */
+  Ttop: number;
+  Tbot: number;
+  TdewTop: number;
+  TdewBot: number;
+  /** condenser / reboiler duty, kJ/h (reboiler closed by overall balance) */
+  QcKJh: number;
+  QrKJh: number;
+  /** minimum reflux ratio at the current feed condition */
+  Rmin: number;
+  /** feed thermal condition (1 = saturated liquid) */
+  q: number;
+  /** relative volatility from the PR EOS at the feed bubble point */
+  alpha: number;
+  /** Fenske minimum stages at total reflux for the achieved split */
+  Nmin: number;
+  /** feed tray (from the top) that gives the leanest bottoms at this N and R */
+  feedStageOptimal: number;
+  /** true when R < Rmin — the column refuses to fake a separation */
+  pinched: boolean;
+}
+
+const spAt = (i: number) => SP_DATA[SPECIES[i]];
+
+/** Wilson K-values for the binary pair — seeds the PR refinement */
+function wilsonKPair(iLight: number, iHeavy: number, T: number, P: number): [number, number] {
+  const k = (s: (typeof SP_DATA)[(typeof SPECIES)[number]]) =>
+    (s.pc / P) * Math.exp(5.373 * (1 + s.omega) * (1 - s.tc / T));
+  return [k(spAt(iLight)), k(spAt(iHeavy))];
+}
+
+/**
+ * PR-refined K-values of the binary pair for a liquid composition x at T, P.
+ * Starts from Wilson and refines fugacities on both phases — the same
+ * machinery the PT flash uses, evaluated directly so the bubble/dew searches
+ * stay cheap.
+ */
+function kPairPR(
+  iLight: number,
+  iHeavy: number,
+  xLight: number,
+  T: number,
+  P: number,
+): [number, number] {
+  const z = new Array(N_SP).fill(0);
+  z[iLight] = xLight;
+  z[iHeavy] = 1 - xLight;
+  let [kL, kH] = wilsonKPair(iLight, iHeavy, T, P);
+  for (let it = 0; it < 12; it++) {
+    const y = new Array(N_SP).fill(0);
+    y[iLight] = kL * xLight;
+    y[iHeavy] = kH * (1 - xLight);
+    const sy = y[iLight] + y[iHeavy];
+    if (sy <= 1e-12) break;
+    y[iLight] /= sy;
+    y[iHeavy] /= sy;
+    const fv = prFugacity(y, T, P, 'vapor');
+    const fl = prFugacity(z, T, P, 'liquid');
+    const kLn = Math.exp(fl.lnPhi[iLight] - fv.lnPhi[iLight]);
+    const kHn = Math.exp(fl.lnPhi[iHeavy] - fv.lnPhi[iHeavy]);
+    const done = Math.abs(kLn / kL - 1) < 1e-10 && Math.abs(kHn / kH - 1) < 1e-10;
+    kL = kLn;
+    kH = kHn;
+    if (done) break;
+  }
+  return [kL, kH];
+}
+
+/** bubble point of the binary at P (ΣK·x = 1), K from PR with Wilson seed */
+function bubbleTPair(iLight: number, iHeavy: number, xLight: number, P: number): number {
+  let lo = 200;
+  let hi = 700;
+  for (let k = 0; k < 60; k++) {
+    const mid = 0.5 * (lo + hi);
+    const [kL, kH] = kPairPR(iLight, iHeavy, xLight, mid, P);
+    // ΣK·x rises with T; bubble is where it crosses 1 from below
+    if (kL * xLight + kH * (1 - xLight) > 1) hi = mid;
+    else lo = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
+/** dew point of the binary at P (Σy/K = 1) */
+function dewTPair(iLight: number, iHeavy: number, yLight: number, P: number): number {
+  let lo = 200;
+  let hi = 700;
+  for (let k = 0; k < 60; k++) {
+    const mid = 0.5 * (lo + hi);
+    const [kL, kH] = kPairPR(iLight, iHeavy, yLight, mid, P);
+    // Σy/K falls with T; dew is where it crosses 1 from above
+    if (yLight / kL + (1 - yLight) / kH > 1) lo = mid;
+    else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
+/** binary helper — build an N_SP flow vector from a total and light fraction */
+function binaryMoles(flow: number, xLight: number, iLight: number, iHeavy: number): Moles {
+  const n = new Array(N_SP).fill(0);
+  n[iLight] = flow * xLight;
+  n[iHeavy] = flow * (1 - xLight);
+  return n;
+}
+
+/** full-mixture molar enthalpy (formation + sensible + PR residual), J/mol */
+function hMol(n: Moles, T: number, P: number, phase: 'vapor' | 'liquid'): number {
+  const t = total(n);
+  if (t <= 0) return 0;
+  return enthalpyRate(n, T) / t + prEnthalpyDep(fracs(n), T, P, phase);
+}
+
+/** mixture Cp of the binary pair at ~350 K, J/(mol·K) */
+function cpPair(iLight: number, iHeavy: number, xLight: number): number {
+  const a = spAt(iLight);
+  const b = spAt(iHeavy);
+  const T = 350;
+  return xLight * (a.cpA + a.cpB * T) + (1 - xLight) * (b.cpA + b.cpB * T);
+}
+
+/**
+ * The design-verification column solve.
+ *
+ * @param nFeed  feed molar flows (only the two key species are used), kmol/h
+ * @param TFeed  feed temperature, K
+ * @param Ptop   column top pressure, Pa
+ * @param Pbot   column bottom pressure, Pa
+ * @param iLight species index of the light key
+ * @param iHeavy species index of the heavy key
+ * @param xD     distillate purity target (mole fraction light key)
+ * @param R      reflux ratio L/D
+ * @param N      equilibrium stages including the reboiler
+ * @param nf     feed tray counted from the top (1 = top tray)
+ */
+export function distillationColumn(
+  nFeed: Moles,
+  TFeed: number,
+  Ptop: number,
+  Pbot: number,
+  iLight: number,
+  iHeavy: number,
+  xD: number,
+  R: number,
+  N: number,
+  nf: number,
+): DistillColumnResult {
+  const F = nFeed[iLight] + nFeed[iHeavy];
+  const zF = F > 0 ? nFeed[iLight] / F : 0.5;
+
+  // --- relative volatility at the feed bubble point (PR, Wilson-seeded) ---
+  const Tbub = bubbleTPair(iLight, iHeavy, zF, Ptop);
+  const Tdew = dewTPair(iLight, iHeavy, zF, Ptop);
+  const [kLb, kHb] = kPairPR(iLight, iHeavy, zF, Tbub, Ptop);
+  const alpha = Math.max(1.05, kLb / kHb);
+  const yEq = (x: number) => (alpha * x) / (1 + (alpha - 1) * x);
+  const xEq = (y: number) => y / Math.max(1e-12, alpha - (alpha - 1) * y);
+
+  // --- feed thermal condition q ---
+  // Between the saturation points: q = 1 − β from the PT flash.
+  // Outside: sensible-heat corrections against the latent heat at Tbub.
+  const fl = flashPT(nFeed, TFeed, Ptop);
+  const lambda = Math.max(
+    5e3,
+    hMol(binaryMoles(1, zF, iLight, iHeavy), Tbub, Ptop, 'vapor') -
+      hMol(binaryMoles(1, zF, iLight, iHeavy), Tbub, Ptop, 'liquid'),
+  ); // J/mol
+  const cpF = cpPair(iLight, iHeavy, zF);
+  let q: number;
+  if (fl.twoPhase) q = 1 - fl.beta;
+  else if (fl.beta === 0) q = 1 + (cpF * Math.max(0, Tbub - TFeed)) / lambda;
+  else q = -(cpF * Math.max(0, TFeed - Tdew)) / lambda;
+
+  // --- minimum reflux from the q-line / equilibrium pinch ---
+  let xP = zF;
+  let yP = yEq(zF);
+  if (Math.abs(q - 1) > 1e-9) {
+    const ql = (x: number) => (q / (q - 1)) * x - zF / (q - 1);
+    const f = (x: number) => ql(x) - yEq(x);
+    // the q-line crosses the equilibrium curve once, but from opposite
+    // directions for q < 1 (slope negative) and q > 1 (slope positive) —
+    // orient the bisection from the sign at the lean end
+    const crossingUp = f(0) < 0;
+    let lo = 0;
+    let hi = 1;
+    for (let k = 0; k < 60; k++) {
+      const mid = 0.5 * (lo + hi);
+      if ((f(mid) > 0) === crossingUp) hi = mid;
+      else lo = mid;
+    }
+    xP = 0.5 * (lo + hi);
+    yP = yEq(xP);
+  }
+  const mMin = (xD - yP) / Math.max(1e-9, xD - xP);
+  const Rmin = Math.max(0.05, mMin / Math.max(1e-9, 1 - mMin));
+
+  // --- the stage stepping: given an xB guess, the liquid left in the
+  //     reboiler after N equilibrium stages (Lewis–Sorel, constant α).
+  //     Infeasible (pinch / reversal / degenerate flows) → NaN. ---
+  const stepToReboiler = (xB: number, nfCand: number): number => {
+    const Dc = (F * (zF - xB)) / (xD - xB);
+    const Bc = F - Dc;
+    if (!(Dc > 1e-9) || !(Bc > 1e-9)) return NaN;
+    const Lc = R * Dc;
+    const Vc = (R + 1) * Dc;
+    const Lbc = Lc + q * F;
+    const Vbc = Vc - (1 - q) * F;
+    if (!(Vbc > 1e-9) || !(Lbc > 1e-9)) return NaN;
+    const mR = R / (R + 1);
+    const bR = xD / (R + 1);
+    const mS = Lbc / Vbc;
+    const bS = -(Bc / Vbc) * xB;
+    let y = xD; // total condenser
+    let x = xD;
+    for (let s = 1; s <= N; s++) {
+      x = xEq(y);
+      if (!Number.isFinite(x) || x < 0 || x > 1) return NaN;
+      if (s === N) break;
+      const yNext = s <= nfCand ? mR * x + bR : mS * x + bS;
+      // operating line crossing equilibrium (or reversing) = pinch
+      if (!(yNext > 1e-9) || yNext >= y - 1e-12) return NaN;
+      y = yNext;
+    }
+    return x;
+  };
+
+  // --- shoot on xB: lean → rich grid scan for the first sign change,
+  //     then bisect. The scan remembers the LAST lean point with g > 0 so
+  //     the bracket always straddles the root (the rich end may also turn
+  //     infeasible — D → 0 — which the bisection treats as "too rich"). ---
+  const solveXB = (nfCand: number): number => {
+    let lo = -1;
+    let hi = -1;
+    // geometric grid, lean (zF·1e-5) → rich (zF): brackets sharp splits
+    // (many stages / high purity) as well as easy ones in 48 probes
+    const G = 48;
+    const xAt = (k: number) => zF * Math.pow(10, -5 + (5 * k) / G);
+    for (let k = 1; k <= G; k++) {
+      const xB = xAt(k);
+      const xN = stepToReboiler(xB, nfCand);
+      if (!Number.isFinite(xN)) {
+        if (lo >= 0) {
+          hi = xB;
+          break;
+        }
+        continue;
+      }
+      if (xN - xB > 0) lo = xB;
+      else if (lo >= 0) {
+        hi = xB;
+        break;
+      }
+    }
+    if (lo < 0 || hi < 0) return NaN;
+    let a = lo;
+    let b = hi;
+    for (let k = 0; k < 70; k++) {
+      const mid = 0.5 * (a + b);
+      const xN = stepToReboiler(mid, nfCand);
+      if (!Number.isFinite(xN) || xN - mid <= 0) b = mid;
+      else a = mid;
+    }
+    return 0.5 * (a + b);
+  };
+
+  const xB = solveXB(nf);
+  const pinched = !Number.isFinite(xB);
+  const xBFinal = pinched ? zF : xB;
+
+  const D = pinched ? 0 : (F * (zF - xBFinal)) / (xD - xBFinal);
+  const B = F - D;
+  const L = R * D;
+  const V = (R + 1) * D;
+  const Lbar = L + q * F;
+  const Vbar = Math.max(0, V - (1 - q) * F);
+  const yB = yEq(xBFinal);
+
+  // --- optimal feed tray: the nf that leans xB the most at this N and R
+  //     (scanned even when the current tray pinches, so the diagnosis can
+  //     point at the right tray) ---
+  let feedStageOptimal = nf;
+  {
+    let best = pinched ? Infinity : xBFinal;
+    for (let cand = 2; cand <= N - 1; cand++) {
+      if (cand === nf) continue;
+      const xbc = solveXB(cand);
+      if (Number.isFinite(xbc) && xbc < best - 1e-12) {
+        best = xbc;
+        feedStageOptimal = cand;
+      }
+    }
+  }
+
+  // --- temperatures from the PR pair saturation points ---
+  const Ttop = bubbleTPair(iLight, iHeavy, xD, Ptop);
+  const Tbot = bubbleTPair(iLight, iHeavy, xBFinal, Pbot);
+  const TdewTop = dewTPair(iLight, iHeavy, xD, Ptop);
+  const TdewBot = dewTPair(iLight, iHeavy, yB, Pbot);
+
+  // --- duties: condenser from the PR-residual enthalpies, reboiler closed
+  //     by the overall energy balance (a cold feed honestly raises Qr) ---
+  const nD = binaryMoles(D, xD, iLight, iHeavy);
+  const nB = binaryMoles(B, xBFinal, iLight, iHeavy);
+  const nV = binaryMoles(V, xD, iLight, iHeavy);
+  const hD = hMol(nD, Ttop, Ptop, 'liquid');
+  const hB = hMol(nB, Tbot, Pbot, 'liquid');
+  const hVtop = hMol(nV, TdewTop, Ptop, 'vapor');
+  const hFeed = fl.twoPhase
+    ? fl.beta * hMol(fl.vapor, TFeed, Ptop, 'vapor') +
+      (1 - fl.beta) * hMol(fl.liquid, TFeed, Ptop, 'liquid')
+    : hMol(nFeed, TFeed, Ptop, fl.beta === 0 ? 'liquid' : 'vapor');
+  const QcKJh = (V * (hVtop - hD)) / 1000; // kmol/h × J/mol = kJ/h
+  const QrKJh = (D * hD + B * hB + QcKJh * 1000 - F * hFeed) / 1000;
+
+  // --- Fenske minimum stages for the achieved split ---
+  const Nmin =
+    xBFinal > 1e-9 && xBFinal < 1 - 1e-9
+      ? Math.log((xD / (1 - xD)) * ((1 - xBFinal) / xBFinal)) / Math.log(alpha)
+      : 0;
+
+  return {
+    D,
+    B,
+    xD,
+    xB: xBFinal,
+    yB,
+    V,
+    L,
+    Vbar,
+    Lbar,
+    boilupRatio: B > 1e-9 ? Vbar / B : 0,
+    Ttop,
+    Tbot,
+    TdewTop,
+    TdewBot,
+    QcKJh,
+    QrKJh,
+    Rmin,
+    q,
+    alpha,
+    Nmin,
+    feedStageOptimal,
+    pinched,
   };
 }
 

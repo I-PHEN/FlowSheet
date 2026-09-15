@@ -13,7 +13,7 @@
 
 import type { PortDef, SpecField, StreamState } from './graph';
 import type { UnitResult } from './types';
-import { AIR_COMP, N_SP, SP } from './species';
+import { AIR_COMP, I, N_SP, SP } from './species';
 import type { Moles } from './species';
 import { enthalpyRate, massFlow, total } from './thermo';
 import {
@@ -22,6 +22,7 @@ import {
   compressorTrain,
   converterBed,
   cooler,
+  distillationColumn,
   flashDrum,
   isenthalpicFlash,
   methanator,
@@ -773,6 +774,246 @@ const loopCirculator: UnitTypeDef = {
 // catalog
 // ---------------------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// teaching templates — flash separation (L1) and distillation (L2). Same
+// UnitTypeDef grammar as the ammonia catalog: typed ports, clamped specs,
+// physics wrappers in units.ts. The graph executor treats them identically.
+// ---------------------------------------------------------------------------
+
+const syngasFeedSource: UnitTypeDef = {
+  type: 'syngas-feed',
+  name: 'Syngas feed',
+  model: () => 'Loop-gas-like feed at battery limit — H2/N2 3:1 with NH3 vapor and inerts',
+  ports: { in: [], out: [{ key: 'out', kind: 'gas' }] },
+  specFields: [
+    { key: 'flow', kind: 'number', min: 200, max: 6000, default: 2000, unit: 'kmol/h', doc: 'total feed gas' },
+    { key: 'yNH3', kind: 'number', min: 0, max: 0.6, default: 0.12, unit: 'mol frac', doc: 'ammonia content' },
+    { key: 'yInerts', kind: 'number', min: 0, max: 0.3, default: 0.06, unit: 'mol frac', doc: 'CH4 + Ar (split 50/50)' },
+    { key: 'T', kind: 'number', min: -40, max: 200, default: 30, unit: '°C' },
+    { key: 'P', kind: 'number', min: 5, max: 250, default: 140, unit: 'bar' },
+  ],
+  solve: ({ specs }) => {
+    const n = zeroN();
+    const flow = num(specs, 'flow');
+    const rest = Math.max(0, 1 - num(specs, 'yNH3') - num(specs, 'yInerts'));
+    n[0] = flow * rest * 0.75; // H2
+    n[1] = flow * rest * 0.25; // N2
+    n[4] = (flow * num(specs, 'yInerts')) / 2; // CH4
+    n[5] = (flow * num(specs, 'yInerts')) / 2; // Ar
+    n[6] = flow * num(specs, 'yNH3'); // NH3
+    return {
+      outlets: { out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n } },
+      result: {
+        name: 'Syngas feed',
+        model: 'Loop-gas-like feed at battery limit — H2/N2 3:1 with NH3 vapor and inerts',
+        metrics: [],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const chillerDef: UnitTypeDef = {
+  type: 'chiller',
+  name: 'Chiller',
+  model: () => 'Refrigerated cooler — sets the flash temperature',
+  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+  specFields: [
+    { key: 'outletT', kind: 'number', min: -60, max: 200, default: -20, unit: '°C', doc: 'drum feed temperature' },
+    { key: 'dp', kind: 'number', min: 0, max: 10, default: 2, unit: 'bar' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const outP = i.P - BAR(num(specs, 'dp'));
+    const c = cooler(i.n, i.T, C(num(specs, 'outletT')), outP);
+    return {
+      outlets: { out: { T: c.T, P: outP, n: c.n } },
+      result: {
+        name: 'Chiller',
+        model: 'Refrigerated cooler — sets the flash temperature',
+        metrics: [{ label: 'Duty', value: `${d1(MW(c.dutyKJh))} MW`, raw: MW(c.dutyKJh) }],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const flashDrumDef: UnitTypeDef = {
+  type: 'flash-drum',
+  name: 'Flash drum',
+  model: () => 'Vertical two-phase separator — PT flash (Peng-Robinson) at the inlet temperature',
+  ports: {
+    in: [{ key: 'in', kind: 'gas' }],
+    out: [
+      { key: 'vapor', kind: 'gas' },
+      { key: 'liquid', kind: 'liquid' },
+    ],
+  },
+  specFields: [{ key: 'dp', kind: 'number', min: 0, max: 10, default: 1, unit: 'bar' }],
+  solve: ({ specs, inlet, warn }) => {
+    const i = inlet('in');
+    const outP = i.P - BAR(num(specs, 'dp'));
+    const f = flashDrum(i.n, i.T, i.T, outP, 6);
+    const liqTot = total(f.liquid);
+    if (liqTot < 1e-6) warn('No liquid forms — everything leaves as vapor (warm drum?)');
+    return {
+      outlets: {
+        vapor: { T: i.T, P: outP, n: f.vapor },
+        liquid: { T: i.T, P: outP, n: f.liquid },
+      },
+      result: {
+        name: 'Flash drum',
+        model: 'Vertical two-phase separator — PT flash (Peng-Robinson) at the inlet temperature',
+        metrics: [
+          { label: 'Liquid product', value: `${d1((massFlow(f.liquid) * 24) / 1000)} t/d` },
+          { label: 'Vapor fraction', value: d2(f.beta) },
+          { label: 'Liquid purity', value: `${(f.liquidPurity * 100).toFixed(1)} % NH3` },
+        ],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const columnFeedSource: UnitTypeDef = {
+  type: 'column-feed',
+  name: 'Binary feed',
+  model: () => 'Benzene–toluene feed at battery limit (the textbook binary pair)',
+  ports: { in: [], out: [{ key: 'out', kind: 'liquid' }] },
+  specFields: [
+    { key: 'flow', kind: 'number', min: 50, max: 2000, default: 500, unit: 'kmol/h', doc: 'total binary feed' },
+    { key: 'zLight', kind: 'number', min: 0.05, max: 0.95, default: 0.45, unit: 'mol frac', doc: 'benzene (light key)' },
+    { key: 'T', kind: 'number', min: 10, max: 180, default: 25, unit: '°C' },
+    { key: 'P', kind: 'number', min: 1, max: 5, default: 1.4, unit: 'bar' },
+  ],
+  solve: ({ specs }) => {
+    const n = zeroN();
+    n[I.C6H6] = num(specs, 'flow') * num(specs, 'zLight');
+    n[I.C7H8] = num(specs, 'flow') * (1 - num(specs, 'zLight'));
+    return {
+      outlets: { out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n } },
+      result: {
+        name: 'Binary feed',
+        model: 'Benzene–toluene feed at battery limit (the textbook binary pair)',
+        metrics: [],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const feedHeaterDef: UnitTypeDef = {
+  type: 'feed-heater',
+  name: 'Feed preheater',
+  model: () => 'Sets the feed thermal condition q entering the column',
+  ports: { in: [{ key: 'in', kind: 'liquid' }], out: [{ key: 'out', kind: 'any' }] },
+  specFields: [
+    { key: 'outletT', kind: 'number', min: 20, max: 200, default: 103, unit: '°C', doc: 'column feed temperature' },
+    { key: 'dp', kind: 'number', min: 0, max: 2, default: 0.1, unit: 'bar' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const outP = i.P - BAR(num(specs, 'dp'));
+    const c = cooler(i.n, i.T, C(num(specs, 'outletT')), outP);
+    return {
+      outlets: { out: { T: c.T, P: outP, n: c.n } },
+      result: {
+        name: 'Feed preheater',
+        model: 'Sets the feed thermal condition q entering the column',
+        metrics: [{ label: 'Duty', value: `${d1(MW(c.dutyKJh))} MW`, raw: MW(c.dutyKJh) }],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const distillationColumnDef: UnitTypeDef = {
+  type: 'distillation-column',
+  name: 'Distillation column',
+  model: (specs) =>
+    `Binary McCabe–Thiele column — ${Math.round(num(specs, 'stages'))} stages, feed tray ${Math.round(num(specs, 'feedStage'))}, total condenser`,
+  ports: {
+    in: [{ key: 'feed', kind: 'any' }],
+    out: [
+      { key: 'distillate', kind: 'liquid' },
+      { key: 'bottoms', kind: 'liquid' },
+    ],
+  },
+  specFields: [
+    { key: 'xD', kind: 'number', min: 0.5, max: 0.9995, default: 0.97, unit: 'mol frac', doc: 'distillate purity (light key)' },
+    { key: 'reflux', kind: 'number', min: 0.2, max: 15, default: 2.5, unit: 'L/D', doc: 'reflux ratio' },
+    { key: 'stages', kind: 'number', min: 4, max: 40, default: 14, unit: 'count', doc: 'equilibrium stages incl. reboiler' },
+    { key: 'feedStage', kind: 'number', min: 2, max: 39, default: 8, unit: 'count', doc: 'feed tray from the top' },
+    { key: 'dp', kind: 'number', min: 0, max: 1, default: 0.15, unit: 'bar', doc: 'top → bottom pressure drop' },
+  ],
+  solve: ({ specs, inlet, warn }) => {
+    const i = inlet('feed');
+    const N = Math.max(4, Math.round(num(specs, 'stages')));
+    const nf = Math.max(2, Math.min(N - 1, Math.round(num(specs, 'feedStage'))));
+    const Ptop = i.P;
+    const col = distillationColumn(
+      i.n,
+      i.T,
+      Ptop,
+      Ptop + BAR(num(specs, 'dp')),
+      I.C6H6,
+      I.C7H8,
+      num(specs, 'xD'),
+      num(specs, 'reflux'),
+      N,
+      nf,
+    );
+    if (col.pinched) {
+      warn(
+        col.Rmin > num(specs, 'reflux')
+          ? `Column pinched — reflux R=${num(specs, 'reflux').toFixed(2)} is below Rmin=${col.Rmin.toFixed(2)}; no honest split is possible`
+          : `Column pinched — no feasible split at this feed tray`,
+      );
+    }
+    if (nf < col.feedStageOptimal) {
+      warn(
+        `Feed tray ${nf} is too high — the feed belongs around tray ${col.feedStageOptimal}`,
+      );
+    } else if (!col.pinched && nf > col.feedStageOptimal) {
+      warn(
+        `Feed tray ${nf} is below the optimal ${col.feedStageOptimal} — separation degrades`,
+      );
+    }
+    const distillate = zeroN();
+    distillate[I.C6H6] = col.D * col.xD;
+    distillate[I.C7H8] = col.D * (1 - col.xD);
+    const bottoms = zeroN();
+    bottoms[I.C6H6] = col.B * col.xB;
+    bottoms[I.C7H8] = col.B * (1 - col.xB);
+    return {
+      outlets: {
+        distillate: { T: col.Ttop, P: Ptop, n: distillate },
+        bottoms: { T: col.Tbot, P: Ptop + BAR(num(specs, 'dp')), n: bottoms },
+      },
+      result: {
+        name: 'Distillation column',
+        model: `Binary McCabe–Thiele column — ${N} stages, feed tray ${nf}, total condenser`,
+        metrics: [
+          { label: 'Distillate D', value: `${d1(col.D)} kmol/h`, raw: col.D },
+          { label: 'Bottoms xB', value: `${(col.xB * 100).toFixed(2)} % benzene` },
+          { label: 'Recovery', value: `${((col.D * col.xD) / Math.max(1e-9, col.D * col.xD + col.B * col.xB) * 100).toFixed(1)} %` },
+          { label: 'Reflux ratio', value: `${d2(num(specs, 'reflux'))} (Rmin ${d2(col.Rmin)})` },
+          { label: 'Stages / Fenske Nmin', value: `${N} / ${col.Nmin.toFixed(1)}` },
+          { label: 'Feed tray', value: `${nf} (optimal ${col.feedStageOptimal})` },
+          { label: 'Thermal condition q', value: d2(col.q) },
+          { label: 'Relative volatility α', value: d2(col.alpha) },
+          { label: 'Condenser duty', value: `${d2(MW(col.QcKJh))} MW`, raw: MW(col.QcKJh) },
+          { label: 'Reboiler duty', value: `${d2(MW(col.QrKJh))} MW`, raw: MW(col.QrKJh) },
+          { label: 'Top T', value: `${d1(col.Ttop - 273.15)} °C` },
+          { label: 'Bottom T', value: `${d1(col.Tbot - 273.15)} °C` },
+        ],
+        warnings: [],
+      },
+    };
+  },
+};
+
 export const UNIT_TYPES: Record<string, UnitTypeDef> = {
   'ng-source': ngSource,
   'steam-source': steamSource,
@@ -796,6 +1037,13 @@ export const UNIT_TYPES: Record<string, UnitTypeDef> = {
   'nh3-separator': nh3Separator,
   'purge-split': purgeSplit,
   'loop-circulator': loopCirculator,
+  // teaching templates (flash L1 + distillation L2)
+  'syngas-feed': syngasFeedSource,
+  chiller: chillerDef,
+  'flash-drum': flashDrumDef,
+  'column-feed': columnFeedSource,
+  'feed-heater': feedHeaterDef,
+  'distillation-column': distillationColumnDef,
 };
 
 export function getUnitType(type: string): UnitTypeDef | undefined {
@@ -823,7 +1071,10 @@ export function resolveSpecs(unit: { type: string; specs: Record<string, number 
 export function tearInit(makeup: Moles): Moles {
   const tear0: Moles = zeroN();
   const f0 = total(makeup) * 5;
-  const y0 = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0]; // H2 N2 CO CO2 CH4 AR NH3 H2O O2
+  // loop-gas guess (H2 N2 CO CO2 CH4 AR NH3 H2O O2) — extended species dilute to zero
+  const y0 = new Array(N_SP).fill(0);
+  const base = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0];
+  for (let i = 0; i < Math.min(base.length, N_SP); i++) y0[i] = base[i];
   for (let i = 0; i < N_SP; i++) tear0[i] = f0 * y0[i];
   return tear0;
 }

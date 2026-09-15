@@ -708,7 +708,9 @@ export function runLegacy(spec: PlantSpec): PlantResult {
   // initial tear: close to expected answer (research Q9 tip)
   const tear0: Moles = zeroN();
   const f0 = makeupTot * 5;
-  const y0 = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0]; // H2 N2 CO CO2 CH4 AR NH3 H2O O2
+  const y0 = new Array(N_SP).fill(0); // H2 N2 CO CO2 CH4 AR NH3 H2O O2 (+ appended species → 0)
+  const base = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0];
+  for (let i = 0; i < Math.min(base.length, N_SP); i++) y0[i] = base[i];
   for (let i = 0; i < N_SP; i++) tear0[i] = f0 * y0[i];
 
   const trace: SolverTraceRow[] = [];
