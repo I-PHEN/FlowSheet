@@ -18,6 +18,7 @@ import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canva
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { setTourActive } from '@/lib/ui/tourBus';
+import { unlockAudio } from '@/lib/audio/tourAudio';
 import { DetailPanel } from './DetailPanel';
 import { OperatePanel } from './OperatePanel';
 import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
@@ -74,6 +75,7 @@ export function Workspace() {
   const spotlight = tour ? tour.tour.steps[tour.idx].ref : null;
 
   const startTour = (t: Tour) => {
+    unlockAudio(); // audio needs a user gesture — this click is it
     setColors(false);
     setSelected(null);
     setTour({ tour: t, idx: 0 });

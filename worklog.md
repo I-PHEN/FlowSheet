@@ -442,3 +442,20 @@ Stage Summary:
 - The app is back to the newest state: Flowsheet brand, looping hero, learning path, first-class projects, label engine, grid router, per-plant sheets — all verified end-to-end and committed.
 - Root cause is platform-level (two rollbacks in two sessions); /tmp is NOT a reliable recovery source. Mitigation: commit after every task.
 - NEXT (queued from user's last order): 3D Component Viewer MVP around the shell-and-tube GLB (public/models/shell-and-tube-exchanger.glb, 885KB, meshopt-compressed, ready) — R3F + drei, lazy bundle, model registry + cube badges on flowsheet units, /plant/<plant>/3d/<unit> routes, full-screen orbit viewer.
+
+---
+Task ID: R3 (Voice & Music Restoration)
+Agent: main (Super Z)
+Task: User asked "where is the voice and music part" + commit everything before the 3D phase — restore the audio UI wiring lost to the second rollback
+
+Work Log:
+- DIAGNOSIS: the audio LIBRARY survived and was committed (cffa765: /api/tts, lib/audio/{music,narration,spoken,tourAudio}.ts; project viewer /plant/p/[id] fully wired), but the audio UI WIRING was lost: TutorPanel.tsx was the stale Sep-1 pre-audio version (TourRunner with no useTourAudio, no voice/music/replay controls, footnote still saying "voice narration arrives in a later phase"), and Workspace.tsx (reference plant, rebuilt in R2) never called unlockAudio(). Flash/Distillation workspaces called unlockAudio but rendered the stale TourRunner, so no plant tour actually narrated.
+- REBUILT TourRunner (TutorPanel.tsx): useTourAudio(tour, idx) hook + VOICE pill (C.gas accent) + MUSIC pill (C.nh3 accent) + replay button (RotateCcw) + state-aware narration status line ("Narrating — music lowers while I speak." / loading / blocked / off). Double-mount (desktop aside + mobile sheet) handled by narrator dedupe, matching the original Task-16 design.
+- Workspace.tsx: unlockAudio() in startTour (user-gesture unlock, same pattern as flash/distillation). TutorHome footnote updated: narration exists, ask-anything tutoring is the future phase.
+- VERIFIED (agent-browser, /plant/reference): tour start → narrator loading→speaking, music running, duck gain exactly 0.30 while speaking, exactly 2 TTS POSTs (step + prefetch, dedupe holds), MUSIC toggle off→stopped / on→running, Next advances narration ("Splitting methane" speaking), Exit tour → narrator idle + music stopped; /plant/flash: TTS 200 + music running; zero page/console errors; VLM 9/10 on the restored panel ("no overlap or clipping", status line correct). Mobile 390px screenshot taken.
+- tsc: only pre-existing errors outside src/ (examples/, scripts/, skills/). eslint clean on both touched files.
+- COMMITTED immediately with this entry (lesson from Tasks R/R2: never leave src uncommitted).
+
+Stage Summary:
+- Voice + music are back on ALL tour surfaces: reference plant, flash, distillation (shared TourRunner), and project viewer (never lost). Music ducks to 0.30 under narration; voice/music prefs persist; replay works.
+- NEXT: 3D Component Viewer MVP — shell-and-tube GLB (public/models/shell-and-tube-exchanger.glb, 885KB, meshopt) via R3F + drei.
