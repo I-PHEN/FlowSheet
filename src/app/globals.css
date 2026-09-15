@@ -46,6 +46,7 @@
 :root {
   /* ── flowsheet tokens · light — "soft gray studio" ──────────────────── */
   --fs-canvas: #F1F0ED;
+  --fs-sheet: #E9E7E1;
   --fs-band: #E9E7E1;
   --fs-band-line: #DBD8D0;
   --fs-paper: #FCFBF9;
@@ -103,6 +104,7 @@
      service hues brightened just enough to read on dark. High contrast,
      not moody — no gray-on-gray. */
   --fs-canvas: #1F1E1C;
+  --fs-sheet: #292824;
   --fs-band: #262523;
   --fs-band-line: #3B3A36;
   --fs-paper: #2A2926;

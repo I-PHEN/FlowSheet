@@ -2,10 +2,12 @@
  * 3D model registry — which flowsheet units have a real 3D model, and where
  * it lives.
  *
- * One model ships today: the shell-and-tube heat exchanger, converted from a
- * GrabCAD SolidWorks assembly and optimized (weld → simplify → meshopt) to
- * 885 KB. It stands in for every `hex` unit on every prebuilt plant — the
- * viewer says so honestly rather than pretending each tag has its own scan.
+ * One model ships today: the shell-and-tube heat exchanger, built in-app as
+ * a procedural three.js model after the photos of the real training unit
+ * (shell, saddles, bolted bonnet, green shell-side / red tube-side nozzles,
+ * and a cutaway that opens the shell on the bundle, baffles and tubesheets).
+ * It stands in for every `hex` unit on every prebuilt plant — the viewer
+ * says so honestly rather than pretending each tag has its own scan.
  *
  * Adding a model later = one entry here plus a kind mapping. Nothing else in
  * the app hardcodes model paths.
@@ -19,8 +21,10 @@ import { DISTILL_UNIT_MAP } from '@/lib/flowsheet/distillationLayout';
 export interface ModelEntry {
   /** stable id, used in URLs and logs */
   id: string;
-  /** public path to the GLB */
-  src: string;
+  /** public path to the GLB (procedural models omit this) */
+  src?: string;
+  /** procedural model to render instead of a GLB */
+  component?: 'shell-and-tube';
   /** display name */
   title: string;
   /** one-paragraph plain-language description shown in the viewer */
@@ -29,20 +33,23 @@ export interface ModelEntry {
   credit: string;
   /** overall bounding size in metres, [x, y, z] */
   dims: [number, number, number];
+  /** the model can be sectioned to show its internals */
+  cutaway?: boolean;
 }
 
 export const SHELL_AND_TUBE: ModelEntry = {
   id: 'shell-and-tube',
-  src: '/models/shell-and-tube-exchanger.glb',
+  component: 'shell-and-tube',
   title: 'Shell-and-tube heat exchanger',
   blurb:
     'The workhorse of every chemical plant. One fluid flows through a bundle of parallel tubes ' +
-    'sealed inside a cylindrical shell; another flows across the outside of those tubes. The two ' +
-    'streams never mix — heat simply moves through the tube walls. Front and rear channel heads ' +
-    'let the tube side be opened and cleaned, and the flanged joints let the whole bundle be ' +
-    'pulled for maintenance.',
-  credit: 'GrabCAD community model (SolidWorks assembly), converted to glTF and simplified',
-  dims: [2.65, 0.77, 3.39],
+    'sealed inside a cylindrical shell; another flows across the outside of those tubes, guided ' +
+    'up and over the segmental baffles. The two streams never mix — heat simply moves through ' +
+    'the tube walls. Green nozzles carry the shell side, red the tube side, and the cutaway ' +
+    'opens the shell exactly like the sectioned twin of the training unit.',
+  credit: 'Modeled in-app after photos of the shell-and-tube training unit',
+  dims: [0.82, 1.08, 3.24],
+  cutaway: true,
 };
 
 /** which unit kinds each model stands in for */

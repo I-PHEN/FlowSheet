@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Yes.** The flowsheet is contained within a single continuous light-gray box with internal section dividers (e.g., \"1 · FEED & REFORMING\"), not three separate cards.\n2) **No.** There are no visible overlap or clipping regressions; all process units, stream lines, and labels are cleanly rendered and legible.\n3) **Yes.** The title block (bottom right: \"AMMONIA SYNTHESIS... SHEET 1 OF 1\") and the legend (bottom left: line styles for FEED, PROCESS GAS, etc.) are present and correctly formatted.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789449645,
+  "id": "202609151320182e8db16981b64ddf",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151320182e8db16981b64ddf",
+  "usage": {
+    "completion_tokens": 128,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1731,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1859
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Units float on the bare canvas** (no single large background sheet or border wrapping the whole flowsheet).\n2) **Yes**, the canvas area is large enough; no units are hanging off its edge.\n3) **No regressions** observed: lines route cleanly around unit boxes without crossing them, and all text (unit labels, stream numbers, side-panel stats) is clearly readable.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789449684,
+  "id": "20260915132119beae0d114fa6400e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915132119beae0d114fa6400e",
+  "usage": {
+    "completion_tokens": 82,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1757,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1839
+  }
+}

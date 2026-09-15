@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Screenshot 1 (Flash Drum)**\nA) **Yes.** The flowsheet is drawn inside a single, large, dark rounded-rect container with a visible border and subtle shadow.\nB) **No.** All labels (F‑101, E‑101, V‑101, stream numbers, product tags), the title block, and the legend are cleanly spaced with no overlap or clipping.\n\n**Screenshot 2 (Distillation Column)**\nA) **Yes.** The flowsheet occupies one coherent sheet box (single rounded rect with fill, border, and shadow).\nB) **No.** Text is fully legible; unit tags, stream numbers, and the title block are well-positioned without any overlap or layout issues.\n\n**Screenshot 3 (AI Builder – Waiting State)**\nA) **Yes.** The “THE SHEET IS WAITING” message is centered inside a single large rounded-rect sheet box with border and shadow.\nB) **No.** The waiting-state text and the surrounding UI elements (sidebar cards, header, input field) show no text overlap, clipping, or layout regression.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789450081,
+  "id": "20260915132755fb3e0bb4ab4a4367",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915132755fb3e0bb4ab4a4367",
+  "usage": {
+    "completion_tokens": 231,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5090,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 5321
+  }
+}

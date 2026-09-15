@@ -18,6 +18,8 @@
 export const C = {
   /** canvas background — light: #F1F0ED warm gray · dark: #1F1E1C warm charcoal */
   canvas: 'var(--fs-canvas)',
+  /** the drawing sheet — the ONE box the whole flowsheet lies on — light: #E9E7E1 · dark: #2C2B27 */
+  sheet: 'var(--fs-sheet)',
   /** section band fill (one step off canvas) — light: #E9E7E1 · dark: #262523 */
   band: 'var(--fs-band)',
   /** section band hairline border — light: #DBD8D0 · dark: #3B3A36 */

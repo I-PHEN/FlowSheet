@@ -21,7 +21,6 @@ import { Box, ChevronDown, X } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PLANTS, modelForKind, resolveUnit, type ModelEntry } from '@/lib/three/registry';
-
 const ModelStage = dynamic(() => import('@/components/three/ModelStage'), {
   ssr: false,
   loading: () => (
@@ -42,6 +41,7 @@ export default function Unit3dPage() {
   const unitId = params?.unit ?? '';
   const resolved = resolveUnit(plantId, unitId);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [cutaway, setCutaway] = useState(false);
 
   // ---- header shell (always present) --------------------------------------
   const header = (
@@ -162,7 +162,7 @@ export default function Unit3dPage() {
             </div>
           }
         >
-          <ModelStage src={model.src} />
+          <ModelStage model={model} cutaway={cutaway && !!model.cutaway} />
         </Suspense>
 
         {/* HUD: stage chip */}
@@ -172,6 +172,43 @@ export default function Unit3dPage() {
         >
           3D COMPONENT MODEL · {node.tag} · REAL SCALE
         </div>
+
+        {/* cutaway toggle — section the model like the training unit's twin */}
+        {model.cutaway && (
+          <div
+            className="absolute right-3 top-3 z-10 flex overflow-hidden rounded-full border font-mono text-[10px] font-extrabold tracking-[0.12em]"
+            style={{ borderColor: C.bandLine, background: C.paperA95 }}
+          >
+            {([
+              [false, 'ASSEMBLED'],
+              [true, 'CUTAWAY'],
+            ] as const).map(([mode, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setCutaway(mode)}
+                aria-pressed={cutaway === mode}
+                className="px-3 py-1.5 transition-colors"
+                style={{
+                  background: cutaway === mode ? C.ink : 'transparent',
+                  color: cutaway === mode ? C.canvas : C.inkSoft,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* cutaway caption */}
+        {cutaway && model.cutaway && (
+          <div
+            className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border px-3.5 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.12em] sm:block"
+            style={{ background: C.paperA95, borderColor: C.bandLine, color: C.inkSoft }}
+          >
+            SECTIONED · TUBE BUNDLE · SEGMENTAL BAFFLES · TUBESHEETS
+          </div>
+        )}
 
         {/* HUD: dimensions chip */}
         <div
@@ -225,7 +262,7 @@ export default function Unit3dPage() {
               className="mt-3 border-t pt-2 font-mono text-[9.5px] leading-relaxed"
               style={{ borderColor: C.bandLine, color: C.inkFaint }}
             >
-              {model.credit} · meshopt-compressed glTF
+              {model.credit}
             </div>
           </aside>
         ) : (

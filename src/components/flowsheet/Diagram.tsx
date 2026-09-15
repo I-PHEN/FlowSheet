@@ -161,16 +161,16 @@ export function Diagram({
   const annotations = placeAnnotations(L);
   const tb = L.titleBlock;
 
-  /** the surface a text block sits on — its mask must match the sheet */
+  /** the surface a text block sits on — its mask must match the sheet.
+   *  One coherent box: everything inside the sheet sits on the sheet fill,
+   *  anything outside it (margin annotations) sits on the canvas. */
   const surfaceFor = (r: { x: number; y: number; w: number; h: number }): string => {
-    const onBand = L.zones.some(
-      (z) =>
-        r.x < z.x + z.w &&
-        r.x + r.w > z.x &&
-        r.y < z.y + z.h &&
-        r.y + r.h > z.y,
-    );
-    return onBand ? C.band : C.canvas;
+    const onSheet =
+      r.x < L.sheet.x + L.sheet.w &&
+      r.x + r.w > L.sheet.x &&
+      r.y < L.sheet.y + L.sheet.h &&
+      r.y + r.h > L.sheet.y;
+    return onSheet ? C.sheet : C.canvas;
   };
 
   return (
@@ -199,6 +199,10 @@ export function Diagram({
         >
           <line x1="0" y1="0" x2="0" y2="7" strokeWidth="1.3" style={{ stroke: C.inkSoft }} />
         </pattern>
+        {/* the sheet lies ON the canvas — a soft shadow gives it that */}
+        <filter id="fsSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
+          <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.20" />
+        </filter>
       </defs>
 
       {/* click-catcher background (deselect on empty canvas) */}
@@ -213,29 +217,22 @@ export function Diagram({
         />
       )}
 
-      {/* the sheet — a drawing is a document */}
+      {/* the sheet — ONE coherent box the whole flowsheet is drawn on */}
       <rect
         x={L.sheet.x}
         y={L.sheet.y}
         width={L.sheet.w}
         height={L.sheet.h}
         rx={6}
-        strokeWidth={1.6}
-        style={{ fill: 'none', stroke: C.bandLine, pointerEvents: 'none' }}
+        strokeWidth={1.8}
+        filter="url(#fsSheetShadow)"
+        style={{ fill: C.sheet, stroke: C.bandLine, pointerEvents: 'none' }}
       />
 
-      {/* section bands */}
+      {/* section captions — zones are regions of the one sheet, not boxes:
+          a caption with a hairline rule under it, like a ruled drawing sheet */}
       {L.zones.map((b) => (
         <g key={b.id} style={{ pointerEvents: 'none' }}>
-          <rect
-            x={b.x}
-            y={b.y}
-            width={b.w}
-            height={b.h}
-            rx={16}
-            strokeWidth={1.4}
-            style={{ fill: C.band, stroke: C.bandLine }}
-          />
           <text
             x={b.x + 20}
             y={b.y + 28}
@@ -246,10 +243,17 @@ export function Diagram({
           >
             {b.label}
           </text>
+          <line
+            x1={b.x + 20}
+            y1={b.y + 40}
+            x2={b.x + b.w - 20}
+            y2={b.y + 40}
+            style={{ stroke: C.bandLine, strokeWidth: 1.2 }}
+          />
         </g>
       ))}
 
-      {/* zone walls */}
+      {/* zone walls — internal rules of the one sheet (hairlines) */}
       {L.zoneDividers.map((d, i) => (
         <line
           key={i}
@@ -257,7 +261,6 @@ export function Diagram({
           y1={d.y1}
           x2={d.x2}
           y2={d.y2}
-          strokeDasharray="3 5"
           style={{ stroke: C.bandLine, strokeWidth: 1.4, pointerEvents: 'none' }}
         />
       ))}

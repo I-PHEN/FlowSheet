@@ -3,20 +3,24 @@
 /**
  * ModelStage — the 3D component viewer.
  *
- * A full-bleed react-three-fiber canvas that loads a GLB from the model
- * registry, centers it on a light engineering grid, frames the camera to its
- * real bounds, and lets the user orbit / zoom with damping. A slow turntable
- * runs until the first interaction. Materials are PBR; reflections come from
- * locally-rendered lightformers (no network fetch, works offline).
+ * A full-bleed react-three-fiber canvas that renders a model from the
+ * registry — a procedural component (built in-app, rests on the ground by
+ * construction) or a GLB (self-positioned on load: its bounding-box bottom
+ * lands exactly at y = 0, so a model can never sink beneath the grid again).
+ * The camera frames the model's real bounds; orbit / zoom with damping; a
+ * slow turntable runs until the first interaction. Materials are PBR;
+ * reflections come from locally-rendered lightformers (no network fetch).
  *
  * Rendered via next/dynamic({ ssr:false }) from the route page — three.js
- * never touches the server bundle, and the ~350 KB viewer chunk only loads
- * when someone actually opens a 3D view.
+ * never touches the server bundle.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
-import { Bounds, Center, ContactShadows, Grid, Lightformer, Environment, OrbitControls, useGLTF } from '@react-three/drei';
+import { Bounds, ContactShadows, Grid, Lightformer, Environment, OrbitControls, useGLTF } from '@react-three/drei';
+import type { ModelEntry } from '@/lib/three/registry';
+import { ShellAndTubeModel } from './models/ShellAndTube';
 
 /** theme-aware palette read from the app's CSS custom properties */
 function useStageTheme() {
@@ -43,11 +47,33 @@ function useStageTheme() {
   return theme;
 }
 
+/**
+ * A GLB, self-positioned the moment it finishes loading: centered in X/Z
+ * with its bounding-box bottom at y = 0, so it rests ON the grid. (Doing
+ * this here — rather than a <Center> in the tree — sidesteps the
+ * measure-before-suspense-resolves bug that left models half-buried.)
+ */
 function GltfModel({ src }: { src: string }) {
-  // (path, useDraco, useMeshopt) — the registry GLB is meshopt-compressed
+  // (path, useDraco, useMeshopt) — registry GLBs are meshopt-compressed
   const { scene } = useGLTF(src, true, true);
   const clone = useMemo(() => scene.clone(true), [scene]);
-  return <primitive object={clone} />;
+  const group = useRef<THREE.Group>(null);
+
+  useLayoutEffect(() => {
+    const g = group.current;
+    if (!g) return;
+    g.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(g);
+    if (box.isEmpty()) return;
+    const c = box.getCenter(new THREE.Vector3());
+    g.position.set(-c.x, -box.min.y, -c.z);
+  }, [clone]);
+
+  return (
+    <group ref={group}>
+      <primitive object={clone} />
+    </group>
+  );
 }
 
 /** turntable that yields the moment the user grabs the model */
@@ -66,7 +92,7 @@ function SpinControls({ spinning }: { spinning: boolean }) {
   );
 }
 
-export default function ModelStage({ src }: { src: string }) {
+export default function ModelStage({ model, cutaway = false }: { model: ModelEntry; cutaway?: boolean }) {
   const theme = useStageTheme();
   const [spinning, setSpinning] = useState(true);
 
@@ -93,11 +119,13 @@ export default function ModelStage({ src }: { src: string }) {
           <Lightformer form="rect" intensity={0.9} position={[5, 1.5, -2]} scale={[6, 2, 1]} target={[0, 0, 0]} />
         </Environment>
 
-        {/* the model, centered with its base on the grid, camera framed to it */}
+        {/* the model, resting on the grid, camera framed to its real bounds */}
         <Bounds fit clip observe margin={1.2}>
-          <Center bottom>
-            <GltfModel src={src} />
-          </Center>
+          {model.component === 'shell-and-tube' ? (
+            <ShellAndTubeModel cutaway={cutaway} />
+          ) : model.src ? (
+            <GltfModel src={model.src} />
+          ) : null}
         </Bounds>
 
         {/* engineering ground: soft shadow + light grid */}
@@ -122,7 +150,7 @@ export default function ModelStage({ src }: { src: string }) {
   );
 }
 
-/** preload the registry model as soon as the module is imported (client) */
+/** preload a registry GLB as soon as the module is imported (client) */
 export function preloadModel(src: string) {
   if (typeof window !== 'undefined') useGLTF.preload(src, true, true);
 }

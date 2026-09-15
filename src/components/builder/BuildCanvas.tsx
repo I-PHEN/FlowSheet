@@ -415,13 +415,38 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
 
   if (!graph || !layout || graph.units.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center" style={{ background: C.canvas }}>
-        <div className="text-center">
-          <div className="font-mono text-[13px] font-bold tracking-widest" style={{ color: C.inkFaint }}>
-            THE CANVAS IS WAITING
-          </div>
-          <div className="mt-2 max-w-[300px] text-[12.5px]" style={{ color: C.inkSoft }}>
-            Units the engineer places will appear here, live, as the build runs.
+      <div className="relative h-full w-full" style={{ background: C.canvas }}>
+        {/* the one coherent box, waiting for the flowsheet to be drawn on it */}
+        <svg
+          viewBox="0 0 900 360"
+          preserveAspectRatio="xMidYMid meet"
+          style={{ display: 'block', width: '100%', height: '100%' }}
+          aria-hidden="true"
+        >
+          <defs>
+            <filter id="bcSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
+              <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.2" />
+            </filter>
+          </defs>
+          <rect
+            x={10}
+            y={10}
+            width={880}
+            height={340}
+            rx={6}
+            strokeWidth={1.8}
+            filter="url(#bcSheetShadow)"
+            style={{ fill: C.sheet, stroke: C.bandLine }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <div className="font-mono text-[13px] font-bold tracking-widest" style={{ color: C.inkFaint }}>
+              THE SHEET IS WAITING
+            </div>
+            <div className="mt-2 max-w-[300px] text-[12.5px]" style={{ color: C.inkSoft }}>
+              Units the engineer places will appear here, live, on one sheet — as the build runs.
+            </div>
           </div>
         </div>
       </div>
@@ -526,6 +551,25 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           if (e.target === e.currentTarget && !movedRef.current) onBackgroundClick?.();
         }}
       >
+        <defs>
+          {/* the sheet lies ON the canvas — a soft shadow gives it that */}
+          <filter id="bcSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
+            <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.2" />
+          </filter>
+        </defs>
+        {/* one coherent sheet — the box the whole flowsheet is drawn on.
+            It grows to wrap every unit the engineer places, so all bands of
+            the plant (however many) lie on the same big thing. */}
+        <rect
+          x={10}
+          y={10}
+          width={W - 20}
+          height={H - 20}
+          rx={6}
+          strokeWidth={1.8}
+          filter="url(#bcSheetShadow)"
+          style={{ fill: C.sheet, stroke: C.bandLine, pointerEvents: 'none' }}
+        />
         {streams.map((it) =>
           it ? (
             <g key={it.s.id} opacity={it.s.implicit ? 0.55 : 1}>
