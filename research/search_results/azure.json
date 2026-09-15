@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://azure.microsoft.com/en-us/pricing/details/speech",
+    "name": "Azure Speech in Foundry Tools pricing",
+    "snippet": "Neural 0.5 million characters free per month Speech Translation (per second billing) Standard 5 audio hours free per month Speech services quotas and limits",
+    "host_name": "azure.microsoft.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://learn.microsoft.com/en-us/answers/questions/1654938/text-to-speech-s0-standard-tier-0-5-million-charac",
+    "name": "Text to speech S0 standard tier - 0.5 Million characters free,",
+    "snippet": "Apr 11, 2024 — The Azure AI Speech service does offer 0.5 million characters free per month for the Neural Text to Speech feature under the Free (F0) tier . Read more",
+    "host_name": "learn.microsoft.com",
+    "rank": 1,
+    "date": "Apr 11, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://learn.microsoft.com/en-my/answers/questions/5566384/azure-ai-speech-what-happens-after-free-tier-t0-ex",
+    "name": "Azure AI Speech - what happens after free tier (T0) exceeds?",
+    "snippet": "Sep 25, 2025 — There is this information about Azure Speech pricing:    \nhttps://azure.microsoft.com/en-us/pricing/details/cognitive-services/speech-services/ \n What ...",
+    "host_name": "learn.microsoft.com",
+    "rank": 2,
+    "date": "Sep 25, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://azure.microsoft.com/en-gb/pricing/details/speech",
+    "name": "Pricing - Azure Speech in Foundry Tools",
+    "snippet": "Text to Speech (per character billing), Neural, 0.5 million characters free per month . Speech Translation (per second billing), Standard, 5 audio hours free per ... Read more",
+    "host_name": "azure.microsoft.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/AZURE/comments/1hko9w5/azure_speech_ai_pay_as_you_go_comes_with_limited",
+    "name": "Azure speech AI pay as you go comes with limited free-usage",
+    "snippet": "I see using AI text to speech in another app is mentioned to be always Free and a monthly limit of “ 0.5 million neural characters per month”. Read more",
+    "host_name": "www.reddit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.azure.cn/en-us/ai-services/speech-service/speech-services-quotas-and-limits",
+    "name": "Quotas and Limits for Azure Speech - Azure AI services",
+    "snippet": "For the Free (F0) pricing tier , see the monthly allowances on the pricing page. Reference for quotas and limits. The following sections provide a quick guide ... Read more",
+    "host_name": "docs.azure.cn",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyberbukit.ticksy.com/article/19027",
+    "name": "Guideline of Microsoft Azure TTS - CyberBukit Support",
+    "snippet": "Microsoft Azure offer a free tier : 5 million characters free per month for standard voice , and 0.5 million characters free per month for neural voice . $4 per 1 ...",
+    "host_name": "cyberbukit.ticksy.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://learn.microsoft.com/en-us/answers/questions/1338662/what-happens-when-i-run-out-of-free-characters-on",
+    "name": "What happens when I run out of free characters on",
+    "snippet": "Jul 28, 2023 — I currently have an Azure Speech resource on the Free tier. According to the pricing page, this means I should have a maximum of 500,000 characters per ...",
+    "host_name": "learn.microsoft.com",
+    "rank": 7,
+    "date": "Jul 28, 2023",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

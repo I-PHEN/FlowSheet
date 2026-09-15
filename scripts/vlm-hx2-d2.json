@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The image displays a 3D model of an **E-101 Waste Heat Boiler**, specifically a **shell-and-tube heat exchanger**. The cylindrical, metallic object **rests on the dark grid ground** via small support feet.\n\nVisible **UI elements** include a header with the component name and navigation arrow, a top-left breadcrumb trail (\"3D COMPONENT MODEL • E-101 • REAL SCALE\"), and a toggle switch in the top-right corner for **\"ASSEMBLED\"** (selected) and **\"CUTAWAY\"** views. An information panel in the bottom-left describes the component's function.\n\nThe **nozzles** on top of the machine are colored **green** and **red**. There is also a smaller red nozzle visible at the bottom front of the vessel.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789450261,
+  "id": "20260915133055cf14bbf69ebe4323",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915133055cf14bbf69ebe4323",
+  "usage": {
+    "completion_tokens": 165,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1718,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1883
+  }
+}

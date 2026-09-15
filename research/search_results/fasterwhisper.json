@@ -1,0 +1,68 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://github.com/SYSTRAN/faster-whisper",
+    "name": "Faster Whisper transcription with CTranslate2",
+    "snippet": "This implementation is up to 4 times faster than openai/ whisper for the same accuracy while using less memory. The efficiency can be further improved with 8-bit ... Read more",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://learn.arm.com/learning-paths/laptops-and-desktops/dgx_spark_voicechatbot/2_setup",
+    "name": "Install faster-whisper for local speech recognition",
+    "snippet": "faster-whisper is a high-performance re-implementation of OpenAI Whisper, designed to significantly reduce transcription latency and memory usage.",
+    "host_name": "learn.arm.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.spheron.network/blog/whisper-v4-asr-gpu-cloud-production-guide",
+    "name": "Deploy Whisper v4 and Production ASR on GPU Cloud",
+    "snippet": "Apr 25, 2026 — At $0.72/hr on-demand with spot at $0.32/hr, fast er -whisper processes at 25-30x real time on a modern GPU, total cost is approximately $1.28 (4 ...",
+    "host_name": "www.spheron.network",
+    "rank": 2,
+    "date": "Apr 25, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://arxiv.org/html/2307.14743",
+    "name": "Turning Whisper into Real-Time Transcription System",
+    "snippet": "Sep 21, 2023 — We show that Whisper-Streaming achieves high quality and 3.3 seconds latency on unsegmented long-form speech transcription test set, and we ... Read more",
+    "host_name": "arxiv.org",
+    "rank": 3,
+    "date": "Sep 21, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.promptquorum.com/power-local-llm/local-whisper-stt-comparison-2026",
+    "name": "Whisper.cpp vs faster-whisper 2026: STT Speed Test",
+    "snippet": "May 14, 2026 — - whisper is 4x faster on GPU with int8. Practical latency is 0.5–2 seconds behind live speech depending on model size. charge per audio minute ...",
+    "host_name": "www.promptquorum.com",
+    "rank": 4,
+    "date": "May 14, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://cerebrium.ai/blog/faster-whisper-transcription-how-to-maximize-performance-for-real-time-audio-to-text",
+    "name": "Faster Whisper — Real-Time Audio Transcription",
+    "snippet": "Jan 1, 2024 — Deploy Faster Whisper for low- latency , real - time audio-to-text. Tuning, batching, and GPU optimization techniques benchmarked at production ...",
+    "host_name": "cerebrium.ai",
+    "rank": 5,
+    "date": "Jan 1, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@GenerationAI/streaming-with-faster-whisper-vs-insanely-fast-whisper-9ecfa4792fd7",
+    "name": "Streaming with Faster-Whisper vs 🤗Insanely Fast Whisper",
+    "snippet": "With flash attention 2 and larger batch size, it may go faster . The transcription quality and more need to be tested shortly. To be continued… Read more",
+    "host_name": "medium.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

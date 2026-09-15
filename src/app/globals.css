@@ -1,0 +1,502 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* ── flowsheet tokens · light — "soft gray studio" ──────────────────── */
+  --fs-canvas: #F1F0ED;
+  --fs-sheet: #E9E7E1;
+  --fs-band: #E9E7E1;
+  --fs-band-line: #DBD8D0;
+  --fs-paper: #FCFBF9;
+  --fs-paper-a95: rgba(252, 251, 249, 0.95);
+  --fs-ink: #26282B;
+  --fs-ink-soft: #5A5D62;
+  --fs-ink-faint: #8B8E93;
+  --fs-halo: #D9D5CB;
+  --fs-tip-shadow: 0 2px 10px rgba(38, 40, 43, 0.10);
+  --fs-card-shadow: 0 6px 28px rgba(38, 40, 43, 0.12);
+  --fs-feed: #7A5E33;
+  --fs-gas: #3A5268;
+  --fs-nh3: #3F6B4F;
+  --fs-utility: #8B8E93;
+  --fs-warn: #8A5A2B;
+
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  /* ── flowsheet tokens · dark — "dark studio textbook" ────────────────── */
+  /* Same grammar as light: warm-neutral canvas, ink is the brightest thing
+     on screen (~14:1), equipment paper lifts off the canvas, four muted
+     service hues brightened just enough to read on dark. High contrast,
+     not moody — no gray-on-gray. */
+  --fs-canvas: #1F1E1C;
+  --fs-sheet: #292824;
+  --fs-band: #262523;
+  --fs-band-line: #3B3A36;
+  --fs-paper: #2A2926;
+  --fs-paper-a95: rgba(42, 41, 38, 0.95);
+  --fs-ink: #EDEBE6;
+  --fs-ink-soft: #A9A79F;
+  --fs-ink-faint: #807E77;
+  --fs-halo: #37352E;
+  --fs-tip-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --fs-card-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+  --fs-feed: #C9A66B;
+  --fs-gas: #8FB2CF;
+  --fs-nh3: #85BD9A;
+  --fs-utility: #96999E;
+  --fs-warn: #E0AC5E;
+
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLOWSHEET UI — theme-aware interaction utilities (light + dark).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* small buttons & chips: fill one step off paper on hover */
+.hover-band {
+  transition: background-color 120ms ease;
+}
+.hover-band:hover {
+  background-color: var(--fs-band);
+}
+
+/* plant cards on the library home: lift with a theme-tinted shadow */
+.card-lift {
+  transition: box-shadow 200ms ease;
+}
+.card-lift:hover {
+  box-shadow: var(--fs-card-shadow);
+}
+
+/* operate-mode levers: native range inputs styled with flowsheet tokens.
+   The filled portion of the track is a gradient set inline via --op-fill
+   (works in both themes; ink thumb on a hairline track). */
+.op-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 3px 0 0;
+  background: transparent;
+  cursor: pointer;
+}
+.op-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--op-fill);
+}
+.op-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--fs-ink);
+  border: 3px solid var(--fs-paper);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.op-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--op-fill);
+}
+.op-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--fs-ink);
+  border: 3px solid var(--fs-paper);
+}
+.op-slider:focus-visible {
+  outline: none;
+}
+.op-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--fs-canvas), 0 0 0 4px var(--fs-ink);
+}
+.op-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--fs-canvas), 0 0 0 4px var(--fs-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-band,
+  .card-lift {
+    transition: none;
+  }
+}
+
+/* watcher poke */
+
+/* ---- AI builder canvas ---- */
+@keyframes bd-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.bd-unit-in {
+  animation: bd-in 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+/* chat messages settling into the session transcript */
+@keyframes bd-msg-kf {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.bd-msg-in {
+  animation: bd-msg-kf 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes bd-pulse-kf {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.bd-pulse {
+  animation: bd-pulse-kf 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-unit-in,
+  .bd-msg-in,
+  .bd-pulse {
+    animation: none;
+  }
+}
+
+/* ---- MiniFlow / hero choreography (Task 21) ---- */
+
+/* equipment settles onto the sheet with a small overshoot */
+@keyframes mf-settle-kf {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mf-settle {
+  animation: mf-settle-kf 520ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* a stream draws itself in (pathLength=1) */
+@keyframes mf-draw-kf {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.mf-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mf-draw-kf 640ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+/* dashed utilities: after the solid draw lands, fade the dash pattern over it,
+   then let the solid draw step aside */
+@keyframes mf-dash-in-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.mf-dash-in {
+  opacity: 0;
+  animation: mf-dash-in-kf 300ms ease 320ms forwards;
+}
+@keyframes mf-draw-out-kf {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.mf-draw-out {
+  animation: mf-draw-out-kf 540ms ease 300ms forwards;
+}
+
+/* arrowheads pop as they land */
+@keyframes mf-pop-kf {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.mf-pop {
+  animation: mf-pop-kf 380ms cubic-bezier(0.2, 0.8, 0.3, 1) 300ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* stream annotations fade in after the wiring */
+@keyframes mf-label-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.mf-label {
+  animation: mf-label-kf 420ms ease 260ms both;
+}
+
+/* count-up chips / stamps arriving */
+@keyframes mf-in-kf {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mf-in {
+  animation: mf-in-kf 320ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* the hero's typing caret */
+@keyframes caret-kf {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.caret {
+  animation: caret-kf 840ms steps(1) infinite;
+}
+
+/* ---- builder canvas: streams draw themselves in (Task 21) ---- */
+.bd-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mf-draw-kf 700ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes bd-pop-kf {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.bd-pop {
+  animation: bd-pop-kf 360ms cubic-bezier(0.2, 0.8, 0.3, 1) 320ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes bd-late-kf {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.bd-late {
+  animation: bd-late-kf 280ms ease 380ms both;
+}
+
+/* one-time pulse for the floating Build button */
+@keyframes fab-pulse-kf {
+  0% {
+    box-shadow: 0 6px 24px rgb(0 0 0 / 18%), 0 0 0 0 rgb(0 0 0 / 35%);
+  }
+  100% {
+    box-shadow: 0 6px 24px rgb(0 0 0 / 18%), 0 0 0 18px rgb(0 0 0 / 0%);
+  }
+}
+.fab-pulse {
+  animation: fab-pulse-kf 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-settle,
+  .mf-pop,
+  .mf-in,
+  .bd-pop,
+  .bd-late {
+    animation: none;
+  }
+  .mf-draw,
+  .bd-draw {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .mf-dash-in {
+    animation: none;
+    opacity: 1;
+  }
+  .mf-draw-out {
+    animation: none;
+    opacity: 0;
+  }
+  .mf-label,
+  .bd-late {
+    animation: none;
+    opacity: 1;
+  }
+  .caret,
+  .fab-pulse {
+    animation: none;
+  }
+}

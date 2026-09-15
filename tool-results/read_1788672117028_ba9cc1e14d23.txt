@@ -1,0 +1,838 @@
+     1→/**
+     2→ * Unit registry — the ammonia catalog: every unit type the flowsheet graph
+     3→ * can be built from. Each type declares typed ports, spec fields with
+     4→ * physical clamps/defaults, and a solve() that wraps the EXISTING physics
+     5→ * in units.ts verbatim (same calls, same formatting — this is what lets
+     6→ * the graph executor reproduce the legacy plant.ts numbers exactly).
+     7→ *
+     8→ * solve() receives inlet StreamStates and returns outlet StreamStates +
+     9→ * the UnitResult payload (name/model/metrics/warnings). Wrappers read
+    10→ * NOTHING outside their own inlets and specs — unit independence is what
+    11→ * makes free composition safe.
+    12→ */
+    13→
+    14→import type { PortDef, SpecField, StreamState } from './graph';
+    15→import type { UnitResult } from './types';
+    16→import { AIR_COMP, N_SP, SP } from './species';
+    17→import type { Moles } from './species';
+    18→import { enthalpyRate, massFlow, total } from './thermo';
+    19→import {
+    20→  adiabaticEqReactor,
+    21→  co2Removal,
+    22→  compressorTrain,
+    23→  converterBed,
+    24→  cooler,
+    25→  flashDrum,
+    26→  isenthalpicFlash,
+    27→  methanator,
+    28→  mixStreams,
+    29→  phaseEnthalpyRate,
+    30→  primaryReformer,
+    31→  secondaryReformer,
+    32→  zeroN,
+    33→} from './units';
+    34→
+    35→// ---------------------------------------------------------------------------
+    36→// helpers (formatting identical to plant.ts — the identity gate depends on it)
+    37→// ---------------------------------------------------------------------------
+    38→
+    39→const C = (celsius: number) => celsius + 273.15;
+    40→const BAR = (b: number) => b * 1e5;
+    41→const MW = (kJh: number) => kJh / 3.6e6;
+    42→const d1 = (x: number) => (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
+    43→const d2 = (x: number) => x.toFixed(2);
+    44→
+    45→export interface SolveCtx {
+    46→  specs: Record<string, number | boolean | number[]>;
+    47→  inlet: (port: string) => StreamState;
+    48→  /** push a SECTION-level warning (mirrors the old fe.warnings list) */
+    49→  warn: (msg: string) => void;
+    50→}
+    51→
+    52→export interface SolveOut {
+    53→  outlets: Record<string, StreamState>;
+    54→  /** UnitResult minus id — the executor stamps the instance id */
+    55→  result: Pick<UnitResult, 'name' | 'model' | 'metrics' | 'warnings'>;
+    56→}
+    57→
+    58→export interface UnitTypeDef {
+    59→  type: string;
+    60→  /** default display name (instances may not override in v1) */
+    61→  name: string;
+    62→  model: (specs: Record<string, number | boolean | number[]>) => string;
+    63→  ports: { in: PortDef[]; out: PortDef[] };
+    64→  specFields: SpecField[];
+    65→  solve: (ctx: SolveCtx) => SolveOut;
+    66→  /**
+    67→   * Present when this unit's outlet T and P are fully spec-determined
+    68→   * (independent of its inlet). The executor tears recycle loops at such
+    69→   * edges: the cut stream's T/P stay exact on every iteration.
+    70→   */
+    71→  fixedOutlet?: (specs: Record<string, number | boolean | number[]>) => { T: number; P: number };
+    72→}
+    73→
+    74→const num = (s: Record<string, number | boolean | number[]>, k: string): number => s[k] as number;
+    75→const arr = (s: Record<string, number | boolean | number[]>, k: string): number[] => s[k] as number[];
+    76→
+    77→// ---------------------------------------------------------------------------
+    78→// sources — feeds are units too, so the controller can manipulate them
+    79→// ---------------------------------------------------------------------------
+    80→
+    81→const ngSource: UnitTypeDef = {
+    82→  type: 'ng-source',
+    83→  name: 'Natural gas feed',
+    84→  model: () => 'Feed definition — pure CH4 at battery limit',
+    85→  ports: { in: [], out: [{ key: 'out', kind: 'gas' }] },
+    86→  specFields: [
+    87→    { key: 'flow', kind: 'number', min: 100, max: 3000, default: 1000, unit: 'kmol/h', doc: 'CH4 feed rate' },
+    88→    { key: 'T', kind: 'number', min: 0, max: 100, default: 40, unit: '°C' },
+    89→    { key: 'P', kind: 'number', min: 10, max: 60, default: 32, unit: 'bar' },
+    90→  ],
+    91→  solve: ({ specs }) => {
+    92→    const n = zeroN();
+    93→    n[4] = num(specs, 'flow');
+    94→    return {
+    95→      outlets: { out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n } },
+    96→      result: { name: 'Natural gas feed', model: 'Feed definition — pure CH4 at battery limit', metrics: [], warnings: [] },
+    97→    };
+    98→  },
+    99→};
+   100→
+   101→const steamSource: UnitTypeDef = {
+   102→  type: 'steam-source',
+   103→  name: 'Process steam',
+   104→  model: () => 'HP process steam at battery limit',
+   105→  ports: { in: [], out: [{ key: 'out', kind: 'gas' }] },
+   106→  specFields: [
+   107→    { key: 'flow', kind: 'number', min: 200, max: 15000, default: 3000, unit: 'kmol/h', doc: 'steam = ngFeed × steam/carbon' },
+   108→    { key: 'T', kind: 'number', min: 150, max: 500, default: 400, unit: '°C' },
+   109→    { key: 'P', kind: 'number', min: 10, max: 60, default: 32, unit: 'bar' },
+   110→  ],
+   111→  solve: ({ specs }) => {
+   112→    const n = zeroN();
+   113→    n[7] = num(specs, 'flow');
+   114→    return {
+   115→      outlets: { out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n } },
+   116→      result: { name: 'Process steam', model: 'HP process steam at battery limit', metrics: [], warnings: [] },
+   117→    };
+   118→  },
+   119→};
+   120→
+   121→const airSource: UnitTypeDef = {
+   122→  type: 'air-source',
+   123→  name: 'Process air',
+   124→  model: () => 'Compressed process air (21/79 O2/N2 + Ar)',
+   125→  ports: { in: [], out: [{ key: 'out', kind: 'gas' }] },
+   126→  specFields: [
+   127→    { key: 'flow', kind: 'number', min: 100, max: 6000, default: 1560, unit: 'kmol/h', doc: 'controller-manipulated in auto mode' },
+   128→    { key: 'T', kind: 'number', min: 20, max: 300, default: 180, unit: '°C' },
+   129→    { key: 'P', kind: 'number', min: 10, max: 60, default: 30.5, unit: 'bar' },
+   130→  ],
+   131→  solve: ({ specs }) => ({
+   132→    outlets: {
+   133→      out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n: AIR_COMP.map((f) => f * num(specs, 'flow')) },
+   134→    },
+   135→    result: { name: 'Process air', model: 'Compressed process air (21/79 O2/N2 + Ar)', metrics: [], warnings: [] },
+   136→  }),
+   137→};
+   138→
+   139→// ---------------------------------------------------------------------------
+   140→// front end
+   141→// ---------------------------------------------------------------------------
+   142→
+   143→const feedMixer: UnitTypeDef = {
+   144→  type: 'feed-mixer',
+   145→  name: 'Feed mixer',
+   146→  model: () => 'Adiabatic mixing of natural gas and process steam',
+   147→  ports: {
+   148→    in: [
+   149→      { key: 'ng', kind: 'gas' },
+   150→      { key: 'steam', kind: 'gas' },
+   151→    ],
+   152→    out: [{ key: 'out', kind: 'gas' }],
+   153→  },
+   154→  specFields: [
+   155→    { key: 'steamCarbon', kind: 'number', min: 2.0, max: 5.0, default: 3.0, unit: 'mol/mol' },
+   156→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 1, unit: 'bar' },
+   157→  ],
+   158→  solve: ({ specs, inlet }) => {
+   159→    const ng = inlet('ng');
+   160→    const st = inlet('steam');
+   161→    const outP = ng.P - BAR(num(specs, 'dp'));
+   162→    const mixed = mixStreams(
+   163→      [
+   164→        { n: ng.n, T: ng.T, P: ng.P },
+   165→        { n: st.n, T: st.T, P: st.P },
+   166→      ],
+   167→      outP,
+   168→    );
+   169→    return {
+   170→      outlets: { out: { T: mixed.T, P: outP, n: mixed.n } },
+   171→      result: {
+   172→        name: 'Feed mixer',
+   173→        model: 'Adiabatic mixing of natural gas and process steam',
+   174→        metrics: [
+   175→          { label: 'Mixed flow', value: `${d1(total(mixed.n))} kmol/h` },
+   176→          { label: 'Steam/carbon', value: d2(num(specs, 'steamCarbon')) },
+   177→          { label: 'Mixer outlet T', value: `${d1(mixed.T - 273.15)} °C` },
+   178→        ],
+   179→        warnings: [],
+   180→      },
+   181→    };
+   182→  },
+   183→};
+   184→
+   185→const primaryReformerDef: UnitTypeDef = {
+   186→  type: 'primary-reformer',
+   187→  name: 'Primary reformer',
+   188→  model: () => 'Fired furnace — SMR + WGS equilibrium at outlet T (K_SR1, K_WGS; ATE on CH4)',
+   189→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   190→  specFields: [
+   191→    { key: 'outletT', kind: 'number', min: 700, max: 900, default: 805, unit: '°C', doc: 'reformer exit temperature' },
+   192→    { key: 'ate', kind: 'number', min: 0, max: 40, default: 10, unit: 'K', doc: 'approach-to-equilibrium on CH4' },
+   193→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 1, unit: 'bar', doc: 'firebox pressure drop (inlet 31 bar → outlet 30 bar)' },
+   194→  ],
+   195→  solve: ({ specs, inlet, warn }) => {
+   196→    const i = inlet('in');
+   197→    const outP = i.P - BAR(num(specs, 'dp'));
+   198→    const prim = primaryReformer(i.n, i.T, C(num(specs, 'outletT')), outP, num(specs, 'ate'), 10);
+   199→    if (!prim.reached) warn('R1: CH4 equilibrium not reachable within bounds');
+   200→    return {
+   201→      outlets: { out: { T: prim.T, P: outP, n: prim.n } },
+   202→      result: {
+   203→        name: 'Primary reformer',
+   204→        model: 'Fired furnace — SMR + WGS equilibrium at outlet T (K_SR1, K_WGS; ATE on CH4)',
+   205→        metrics: [
+   206→          { label: 'Furnace duty', value: `${d1(MW(prim.dutyKJh))} MW`, raw: MW(prim.dutyKJh) },
+   207→          { label: 'Outlet T', value: `${d1(prim.T - 273.15)} °C` },
+   208→          { label: 'CH4 slip (dry)', value: `${(prim.ch4SlipDry * 100).toFixed(2)} %` },
+   209→          { label: 'H2 (dry)', value: `${(prim.h2Dry * 100).toFixed(1)} %` },
+   210→          { label: 'CH4 conversion', value: `${d1((1 - prim.n[4] / Math.max(i.n[4], 1e-9)) * 100)} %` },
+   211→        ],
+   212→        warnings: prim.reached ? [] : ['equilibrium not reached'],
+   213→      },
+   214→    };
+   215→  },
+   216→};
+   217→
+   218→const secondaryReformerDef: UnitTypeDef = {
+   219→  type: 'secondary-reformer',
+   220→  name: 'Secondary reformer',
+   221→  model: () => 'Zone 1 adiabatic H2 combustion → Zone 2 catalytic SMR+WGS equilibrium (research C3)',
+   222→  ports: {
+   223→    in: [
+   224→      { key: 'gas', kind: 'gas' },
+   225→      { key: 'air', kind: 'gas' },
+   226→    ],
+   227→    out: [{ key: 'out', kind: 'gas' }],
+   228→  },
+   229→  specFields: [
+   230→    { key: 'ate', kind: 'number', min: 0, max: 80, default: 30, unit: 'K' },
+   231→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 1.5, unit: 'bar' },
+   232→  ],
+   233→  solve: ({ specs, inlet }) => {
+   234→    const gas = inlet('gas');
+   235→    const air = inlet('air');
+   236→    const outP = gas.P - BAR(num(specs, 'dp'));
+   237→    const sec = secondaryReformer(gas.n, gas.T, air.n, air.T, outP, num(specs, 'ate'), 15);
+   238→    return {
+   239→      outlets: { out: { T: sec.T, P: outP, n: sec.n } },
+   240→      result: {
+   241→        name: 'Secondary reformer',
+   242→        model: 'Zone 1 adiabatic H2 combustion → Zone 2 catalytic SMR+WGS equilibrium (research C3)',
+   243→        metrics: [
+   244→          { label: 'Combustion-zone T', value: `${d1(sec.tCombust - 273.15)} °C`, raw: sec.tCombust },
+   245→          { label: 'Catalytic exit T', value: `${d1(sec.T - 273.15)} °C`, raw: sec.T },
+   246→          { label: 'CH4 slip (dry)', value: `${(sec.ch4SlipDry * 100).toFixed(2)} %` },
+   247→          { label: 'CO (dry)', value: `${(sec.coDry * 100).toFixed(1)} %` },
+   248→          { label: 'O2 remaining', value: `${d2(sec.o2Remaining)} kmol/h` },
+   249→        ],
+   250→        warnings: sec.o2Remaining > 0.5 ? ['residual O2 after combustion zone'] : [],
+   251→      },
+   252→    };
+   253→  },
+   254→};
+   255→
+   256→const whbCooler: UnitTypeDef = {
+   257→  type: 'whb-cooler',
+   258→  name: 'Waste-heat boiler',
+   259→  model: () => 'Cools secondary effluent to HTS inlet (HP steam generation implied)',
+   260→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   261→  specFields: [
+   262→    { key: 'outletT', kind: 'number', min: 250, max: 450, default: 340, unit: '°C', doc: 'HTS inlet temperature' },
+   263→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
+   264→  ],
+   265→  solve: ({ specs, inlet }) => {
+   266→    const i = inlet('in');
+   267→    const outP = i.P - BAR(num(specs, 'dp'));
+   268→    const c = cooler(i.n, i.T, C(num(specs, 'outletT')), outP);
+   269→    return {
+   270→      outlets: { out: { T: c.T, P: outP, n: c.n } },
+   271→      result: {
+   272→        name: 'Waste-heat boiler',
+   273→        model: 'Cools secondary effluent to HTS inlet (HP steam generation implied)',
+   274→        metrics: [{ label: 'Duty', value: `${d1(MW(c.dutyKJh))} MW`, raw: MW(c.dutyKJh) }],
+   275→        warnings: [],
+   276→      },
+   277→    };
+   278→  },
+   279→};
+   280→
+   281→const wgs = (type: string, catalyst: string, coDecimals: number, ateMax: number, ateDefault: number): UnitTypeDef => ({
+   282→  type,
+   283→  name: type === 'wgs-hts' ? 'High-temp shift' : 'Low-temp shift',
+   284→  model: () => `Adiabatic WGS equilibrium on ${catalyst} catalyst (methane reactions frozen)`,
+   285→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   286→  specFields: [
+   287→    { key: 'ate', kind: 'number', min: 0, max: ateMax, default: ateDefault, unit: 'K' },
+   288→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
+   289→  ],
+   290→  solve: ({ specs, inlet }) => {
+   291→    const i = inlet('in');
+   292→    const outP = i.P - BAR(num(specs, 'dp'));
+   293→    const r = adiabaticEqReactor(i.n, i.T, outP, false, 0, num(specs, 'ate'));
+   294→    return {
+   295→      outlets: { out: { T: r.TOut, P: outP, n: r.n } },
+   296→      result: {
+   297→        name: type === 'wgs-hts' ? 'High-temp shift' : 'Low-temp shift',
+   298→        model: `Adiabatic WGS equilibrium on ${catalyst} catalyst (methane reactions frozen)`,
+   299→        metrics: [
+   300→          { label: 'Outlet T', value: `${d1(r.TOut - 273.15)} °C` },
+   301→          { label: 'CO (dry)', value: `${(r.coDry * 100).toFixed(coDecimals)} %` },
+   302→          { label: 'ΔT (adiabatic rise)', value: `${d1(r.TOut - i.T)} K` },
+   303→        ],
+   304→        warnings: [],
+   305→      },
+   306→    };
+   307→  },
+   308→});
+   309→
+   310→const intercooler: UnitTypeDef = {
+   311→  type: 'intercooler',
+   312→  name: 'Shift intercooler',
+   313→  model: () => 'Cools HTS effluent to LTS inlet',
+   314→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   315→  specFields: [
+   316→    { key: 'outletT', kind: 'number', min: 150, max: 300, default: 205, unit: '°C', doc: 'LTS inlet temperature' },
+   317→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
+   318→  ],
+   319→  solve: ({ specs, inlet }) => {
+   320→    const i = inlet('in');
+   321→    const outP = i.P - BAR(num(specs, 'dp'));
+   322→    const c = cooler(i.n, i.T, C(num(specs, 'outletT')), outP);
+   323→    return {
+   324→      outlets: { out: { T: c.T, P: outP, n: c.n } },
+   325→      result: {
+   326→        name: 'Shift intercooler',
+   327→        model: 'Cools HTS effluent to LTS inlet',
+   328→        metrics: [{ label: 'Duty', value: `${d1(MW(c.dutyKJh))} MW`, raw: MW(c.dutyKJh) }],
+   329→        warnings: [],
+   330→      },
+   331→    };
+   332→  },
+   333→};
+   334→
+   335→const koDrum = (type: string, name: string, model: string): UnitTypeDef => ({
+   336→  type,
+   337→  name,
+   338→  model: () => model,
+   339→  ports: {
+   340→    in: [{ key: 'in', kind: 'gas' }],
+   341→    out: [
+   342→      { key: 'vapor', kind: 'gas' },
+   343→      { key: 'liquid', kind: 'liquid' },
+   344→    ],
+   345→  },
+   346→  specFields: [
+   347→    { key: 'flashT', kind: 'number', min: 10, max: 80, default: 40, unit: '°C' },
+   348→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
+   349→  ],
+   350→  solve: ({ specs, inlet }) => {
+   351→    const i = inlet('in');
+   352→    const outP = i.P - BAR(num(specs, 'dp'));
+   353→    const f = flashDrum(i.n, i.T, C(num(specs, 'flashT')), outP, 7);
+   354→    return {
+   355→      outlets: {
+   356→        vapor: { T: C(num(specs, 'flashT')), P: outP, n: f.vapor },
+   357→        liquid: { T: C(num(specs, 'flashT')), P: outP, n: f.liquid },
+   358→      },
+   359→      result: {
+   360→        name,
+   361→        model,
+   362→        metrics: [
+   363→          { label: 'Condensate', value: `${d1(massFlow(f.liquid))} kg/h` },
+   364→          { label: 'Vapor fraction', value: d2(f.beta) },
+   365→        ],
+   366→        warnings: [],
+   367→      },
+   368→    };
+   369→  },
+   370→});
+   371→
+   372→const co2RemovalDef: UnitTypeDef = {
+   373→  type: 'co2-removal',
+   374→  name: 'CO2 removal',
+   375→  model: () => 'aMDEA black box — spec residual ppmvd and H2 co-absorption (research Q5)',
+   376→  ports: {
+   377→    in: [{ key: 'in', kind: 'gas' }],
+   378→    out: [
+   379→      { key: 'gas', kind: 'gas' },
+   380→      { key: 'offgas', kind: 'gas' },
+   381→    ],
+   382→  },
+   383→  specFields: [
+   384→    { key: 'residualPpm', kind: 'number', min: 20, max: 2000, default: 300, unit: 'ppmvd' },
+   385→    { key: 'h2Slip', kind: 'number', min: 0, max: 0.01, default: 0.003, unit: 'fraction' },
+   386→    { key: 'postT', kind: 'number', min: 20, max: 80, default: 45, unit: '°C' },
+   387→    { key: 'offgasT', kind: 'number', min: 20, max: 90, default: 60, unit: '°C' },
+   388→    { key: 'offgasP', kind: 'number', min: 1, max: 5, default: 1.8, unit: 'bar' },
+   389→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 1, unit: 'bar' },
+   390→  ],
+   391→  solve: ({ specs, inlet }) => {
+   392→    const i = inlet('in');
+   393→    const outP = i.P - BAR(num(specs, 'dp'));
+   394→    const r = co2Removal(i.n, num(specs, 'residualPpm'), num(specs, 'h2Slip'));
+   395→    return {
+   396→      outlets: {
+   397→        gas: { T: C(num(specs, 'postT')), P: outP, n: r.gas },
+   398→        offgas: { T: C(num(specs, 'offgasT')), P: BAR(num(specs, 'offgasP')), n: r.offgas },
+   399→      },
+   400→      result: {
+   401→        name: 'CO2 removal',
+   402→        model: 'aMDEA black box — spec residual ppmvd and H2 co-absorption (research Q5)',
+   403→        metrics: [
+   404→          { label: 'CO2 removed', value: `${d1(r.co2Removed)} kmol/h` },
+   405→          { label: 'Residual CO2', value: `${d1(r.residualPpm)} ppmvd` },
+   406→          { label: 'H2 slip', value: `${d1(r.offgas[0])} kmol/h` },
+   407→          { label: 'Regeneration duty', value: `${d1(MW(r.co2Removed * 45e3))} MW (est. 45 MJ/kmol)` },
+   408→        ],
+   409→        warnings: [],
+   410→      },
+   411→    };
+   412→  },
+   413→};
+   414→
+   415→const methanatorDef: UnitTypeDef = {
+   416→  type: 'methanator',
+   417→  name: 'Methanator',
+   418→  model: () => 'Adiabatic CO/CO2 methanation equilibrium — carbon oxides to ppm',
+   419→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   420→  specFields: [
+   421→    { key: 'inletT', kind: 'number', min: 250, max: 360, default: 300, unit: '°C' },
+   422→    { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
+   423→  ],
+   424→  solve: ({ specs, inlet }) => {
+   425→    const i = inlet('in');
+   426→    const outP = i.P - BAR(num(specs, 'dp'));
+   427→    const m = methanator(i.n, C(num(specs, 'inletT')), outP);
+   428→    const oxidesPpm = m.oxidesPpmDry;
+   429→    return {
+   430→      outlets: { out: { T: m.TOut, P: outP, n: m.n } },
+   431→      result: {
+   432→        name: 'Methanator',
+   433→        model: 'Adiabatic CO/CO2 methanation equilibrium — carbon oxides to ppm',
+   434→        metrics: [
+   435→          { label: 'Outlet T', value: `${d1(m.TOut - 273.15)} °C` },
+   436→          { label: 'CO+CO2 out', value: `${d1(oxidesPpm)} ppmvd` },
+   437→          { label: 'ΔT (rise)', value: `${d1(m.TOut - C(num(specs, 'inletT')))} K` },
+   438→        ],
+   439→        warnings: oxidesPpm > 10 ? ['carbon oxides above 10 ppm — synthesis catalyst at risk'] : [],
+   440→      },
+   441→    };
+   442→  },
+   443→};
+   444→
+   445→// ---------------------------------------------------------------------------
+   446→// compression & synthesis loop
+   447→// ---------------------------------------------------------------------------
+   448→
+   449→const syngasCompressor: UnitTypeDef = {
+   450→  type: 'syngas-compressor',
+   451→  name: 'Syngas compressor',
+   452→  model: (specs) => `${num(specs, 'stages')}-stage polytropic train with intercooling (research Q7)`,
+   453→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   454→  specFields: [
+   455→    { key: 'stages', kind: 'number', min: 1, max: 5, default: 3 },
+   456→    { key: 'eta', kind: 'number', min: 0.6, max: 0.85, default: 0.75, doc: 'polytropic efficiency' },
+   457→    { key: 'dischargeP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar' },
+   458→    { key: 'postT', kind: 'number', min: 20, max: 80, default: 40, unit: '°C', doc: 'final intercool temperature' },
+   459→  ],
+   460→  solve: ({ specs, inlet }) => {
+   461→    const i = inlet('in');
+   462→    const outP = BAR(num(specs, 'dischargeP'));
+   463→    const c = compressorTrain(i.n, i.T, i.P, outP, num(specs, 'stages'), num(specs, 'eta'), C(num(specs, 'postT')));
+   464→    return {
+   465→      // the intercooled train is modeled as returning the gas at intercool T
+   466→      // (composition unchanged) — mirrors the legacy wiring exactly
+   467→      outlets: { out: { T: C(num(specs, 'postT')), P: outP, n: i.n } },
+   468→      result: {
+   469→        name: 'Syngas compressor',
+   470→        model: `${num(specs, 'stages')}-stage polytropic train with intercooling (research Q7)`,
+   471→        metrics: [
+   472→          { label: 'Shaft power', value: `${d1(c.powerKW / 1000)} MW`, raw: c.powerKW / 1000 },
+   473→          { label: 'Stage ratio', value: d2(c.stageRatios[0]) },
+   474→          { label: 'Discharge', value: `${d1(c.T - 273.15)} °C / ${num(specs, 'dischargeP')} bar` },
+   475→          { label: 'Intercooling duty', value: `${d1(MW(c.intercoolDutyKJh))} MW` },
+   476→        ],
+   477→        warnings: [],
+   478→      },
+   479→    };
+   480→  },
+   481→};
+   482→
+   483→const loopMixer: UnitTypeDef = {
+   484→  type: 'loop-mixer',
+   485→  name: 'Loop mixer',
+   486→  model: () => 'Make-up added after condensation, after purge (EFMA BAT arrangement)',
+   487→  ports: {
+   488→    in: [
+   489→      { key: 'makeup', kind: 'gas' },
+   490→      { key: 'recycle', kind: 'gas' },
+   491→    ],
+   492→    out: [{ key: 'out', kind: 'gas' }],
+   493→  },
+   494→  specFields: [{ key: 'outletP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar' }],
+   495→  solve: ({ specs, inlet }) => {
+   496→    const mu = inlet('makeup');
+   497→    const rc = inlet('recycle');
+   498→    const outP = BAR(num(specs, 'outletP'));
+   499→    const mix = mixStreams(
+   500→      [
+   501→        { n: mu.n, T: mu.T, P: outP },
+   502→        { n: rc.n, T: rc.T, P: outP },
+   503→      ],
+   504→      outP,
+   505→    );
+   506→    return {
+   507→      outlets: { out: { T: mix.T, P: outP, n: mix.n } },
+   508→      result: {
+   509→        name: 'Loop mixer',
+   510→        model: 'Make-up added after condensation, after purge (EFMA BAT arrangement)',
+   511→        metrics: [
+   512→          { label: 'Converter feed', value: `${d1(total(mix.n))} kmol/h` },
+   513→          { label: 'Recycle multiple', value: d2(total(rc.n) / Math.max(total(mu.n), 1e-9)) },
+   514→          { label: 'Mixed T', value: `${d1(mix.T - 273.15)} °C` },
+   515→        ],
+   516→        warnings: [],
+   517→      },
+   518→    };
+   519→  },
+   520→};
+   521→
+   522→const feedPreheater: UnitTypeDef = {
+   523→  type: 'feed-preheater',
+   524→  name: 'Feed preheater',
+   525→  model: (specs) => `Implied feed/effluent exchange to bed-1 inlet (${num(specs, 'outletT').toFixed(0)} °C)`,
+   526→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   527→  specFields: [
+   528→    { key: 'outletT', kind: 'number', min: 350, max: 450, default: 400, unit: '°C', doc: 'converter bed-1 inlet' },
+   529→    { key: 'outletP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar', doc: 'loop pressure (pass-through)' },
+   530→  ],
+   531→  // outlet T and P are pure spec — this is what makes the synthesis-loop
+   532→  // tear land here with exact T/P on every iteration
+   533→  fixedOutlet: (specs) => ({ T: C(num(specs, 'outletT')), P: BAR(num(specs, 'outletP')) }),
+   534→  solve: ({ specs, inlet }) => {
+   535→    const i = inlet('in');
+   536→    const duty = enthalpyRate(i.n, C(num(specs, 'outletT'))) - enthalpyRate(i.n, i.T);
+   537→    return {
+   538→      outlets: { out: { T: C(num(specs, 'outletT')), P: BAR(num(specs, 'outletP')), n: i.n } },
+   539→      result: {
+   540→        name: 'Feed preheater',
+   541→        model: `Implied feed/effluent exchange to bed-1 inlet (${num(specs, 'outletT').toFixed(0)} °C)`,
+   542→        metrics: [{ label: 'Preheat duty', value: `${d1(MW(duty))} MW` }],
+   543→        warnings: [],
+   544→      },
+   545→    };
+   546→  },
+   547→};
+   548→
+   549→const converterDef: UnitTypeDef = {
+   550→  type: 'converter',
+   551→  name: 'Synthesis converter',
+   552→  model: () => '3 adiabatic beds, fractional approach to G-B equilibrium per bed (research C1)',
+   553→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   554→  specFields: [
+   555→    { key: 'bedTs', kind: 'number[]', elemMin: 350, elemMax: 470, default: [400, 430, 415], unit: '°C', doc: 'bed inlet temps (bed 1 = feed)' },
+   556→    { key: 'approach', kind: 'number[]', elemMin: 0.5, elemMax: 0.99, default: [0.9, 0.9, 0.9], doc: 'fractional approach per bed' },
+   557→    { key: 'dp', kind: 'number', min: 1, max: 8, default: 3, unit: 'bar' },
+   558→  ],
+   559→  solve: ({ specs, inlet }) => {
+   560→    const i = inlet('in');
+   561→    const bedTs = arr(specs, 'bedTs').map((t) => C(t));
+   562→    const appr = arr(specs, 'approach');
+   563→    const feedP = i.P;
+   564→    const beds: Array<{ n: Moles; T: number; xi: number; nh3Out: number; nh3In: number }> = [];
+   565→    let cur = { n: i.n, T: bedTs[0] };
+   566→    let interbedDuty = 0;
+   567→    for (let b = 0; b < 3; b++) {
+   568→      const bed = converterBed(cur.n, cur.T, feedP, appr[b]);
+   569→      beds.push({ n: bed.n, T: bed.TOut, xi: bed.xi, nh3Out: bed.nh3Out, nh3In: bed.nh3In });
+   570→      if (b < 2) {
+   571→        const nextT = Math.min(bed.TOut, bedTs[b + 1]);
+   572→        interbedDuty += enthalpyRate(bed.n, bed.TOut) - enthalpyRate(bed.n, nextT);
+   573→        cur = { n: bed.n, T: nextT };
+   574→      } else {
+   575→        cur = { n: bed.n, T: bed.TOut };
+   576→      }
+   577→    }
+   578→    const nEff = cur.n;
+   579→    const effP = feedP - BAR(num(specs, 'dp'));
+   580→    const totIn = total(i.n);
+   581→    const totOut = total(nEff);
+   582→    const nh3InPct = totIn > 0 ? (i.n[6] / totIn) * 100 : 0;
+   583→    const nh3OutPct = totOut > 0 ? (nEff[6] / totOut) * 100 : 0;
+   584→    const perPass = i.n[1] > 1e-9 ? (1 - nEff[1] / i.n[1]) * 100 : 0;
+   585→    const bedMetrics = beds.flatMap((b, idx) => [
+   586→      { label: `Bed ${idx + 1} NH3 in→out`, value: `${(b.nh3In * 100).toFixed(1)} → ${(b.nh3Out * 100).toFixed(1)} %` },
+   587→      { label: `Bed ${idx + 1} outlet T`, value: `${d1(b.T - 273.15)} °C` },
+   588→    ]);
+   589→    return {
+   590→      outlets: { out: { T: cur.T, P: effP, n: nEff } },
+   591→      result: {
+   592→        name: 'Synthesis converter',
+   593→        model: '3 adiabatic beds, fractional approach to G-B equilibrium per bed (research C1)',
+   594→        metrics: [
+   595→          ...bedMetrics,
+   596→          { label: 'NH3 (converter in→out)', value: `${nh3InPct.toFixed(1)} → ${nh3OutPct.toFixed(1)} %` },
+   597→          { label: 'Per-pass N2 conversion', value: `${d1(perPass)} %`, raw: perPass },
+   598→          { label: 'Interbed duty', value: `${d1(MW(interbedDuty))} MW` },
+   599→        ],
+   600→        warnings: [],
+   601→      },
+   602→    };
+   603→  },
+   604→};
+   605→
+   606→const condensationTrain: UnitTypeDef = {
+   607→  type: 'condensation-train',
+   608→  name: 'Condensation train',
+   609→  model: () => 'Water cooler (35 °C) + refrigerated chiller — PR residual enthalpy for latent heat',
+   610→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   611→  specFields: [
+   612→    { key: 'chillT', kind: 'number', min: -40, max: 30, default: -20, unit: '°C' },
+   613→    { key: 'wcT', kind: 'number', min: 20, max: 45, default: 35, unit: '°C', doc: 'cooling-water temperature' },
+   614→    { key: 'dp', kind: 'number', min: 1, max: 6, default: 2, unit: 'bar' },
+   615→  ],
+   616→  solve: ({ specs, inlet }) => {
+   617→    const i = inlet('in');
+   618→    const condP = i.P - BAR(num(specs, 'dp'));
+   619→    const wc = cooler(i.n, i.T, C(num(specs, 'wcT')), condP);
+   620→    const ch = cooler(wc.n, wc.T, C(num(specs, 'chillT')), condP);
+   621→    // duties are defined against the separator split that terminates the
+   622→    // train (flash duplicated here for the metric — deterministic, same
+   623→    // inputs as the separator unit computes)
+   624→    const sep = flashDrum(ch.n, ch.T, ch.T, condP, 6);
+   625→    const condDuty =
+   626→      phaseEnthalpyRate(i.n, i.T, i.P, 'vapor') -
+   627→      (phaseEnthalpyRate(sep.vapor, ch.T, condP, 'vapor') + phaseEnthalpyRate(sep.liquid, ch.T, condP, 'liquid'));
+   628→    const refrDuty =
+   629→      phaseEnthalpyRate(i.n, C(num(specs, 'wcT')), i.P, 'vapor') -
+   630→      (phaseEnthalpyRate(sep.vapor, ch.T, condP, 'vapor') + phaseEnthalpyRate(sep.liquid, ch.T, condP, 'liquid'));
+   631→    return {
+   632→      outlets: { out: { T: ch.T, P: condP, n: ch.n } },
+   633→      result: {
+   634→        name: 'Condensation train',
+   635→        model: 'Water cooler (35 °C) + refrigerated chiller — PR residual enthalpy for latent heat',
+   636→        metrics: [
+   637→          { label: 'Condensation duty', value: `${d1(MW(condDuty))} MW`, raw: MW(condDuty) },
+   638→          { label: 'Refrigeration duty', value: `${d1(MW(refrDuty))} MW`, raw: MW(refrDuty) },
+   639→          { label: 'Refrig. shaft power', value: `${d1(MW(refrDuty) / 2.4)} MW (COP 2.4)` },
+   640→        ],
+   641→        warnings: [],
+   642→      },
+   643→    };
+   644→  },
+   645→};
+   646→
+   647→const nh3Separator: UnitTypeDef = {
+   648→  type: 'nh3-separator',
+   649→  name: 'Ammonia separator + letdown',
+   650→  model: () => 'PT flash at loop P, then product letdown to 2 bar (degassing)',
+   651→  ports: {
+   652→    in: [
+   653→      { key: 'chilled', kind: 'gas' },
+   654→      { key: 'letdownIn', kind: 'liquid', doc: 'internal self-loop (separator liquid → letdown)' },
+   655→    ],
+   656→    out: [
+   657→      { key: 'gas', kind: 'gas' },
+   658→      { key: 'sepLiquid', kind: 'liquid' },
+   659→      { key: 'product', kind: 'liquid' },
+   660→      { key: 'flash', kind: 'gas', doc: 'letdown flash vapor (implicit — merges into purge)' },
+   661→    ],
+   662→  },
+   663→  specFields: [{ key: 'letdownP', kind: 'number', min: 1, max: 5, default: 2, unit: 'bar' }],
+   664→  solve: ({ specs, inlet }) => {
+   665→    const i = inlet('chilled');
+   666→    const condP = i.P;
+   667→    const sep = flashDrum(i.n, i.T, i.T, condP, 6);
+   668→    const LETDOWN_P = BAR(num(specs, 'letdownP'));
+   669→    const letdown = isenthalpicFlash(sep.liquid, sep.T, condP, LETDOWN_P);
+   670→    const prodTpd = (massFlow(letdown.liquid) * 24) / 1000;
+   671→    const prodKg = massFlow(letdown.liquid);
+   672→    const prodNH3kg = letdown.liquid[6] * SP.NH3.mw;
+   673→    const recovered = i.n[6] > 1e-9 ? letdown.liquid[6] / i.n[6] : 0;
+   674→    const sepMolPurity = total(letdown.liquid) > 0 ? letdown.liquid[6] / total(letdown.liquid) : 0;
+   675→    return {
+   676→      outlets: {
+   677→        gas: { T: sep.T, P: condP, n: sep.vapor },
+   678→        sepLiquid: { T: sep.T, P: condP, n: sep.liquid },
+   679→        product: { T: letdown.T, P: LETDOWN_P, n: letdown.liquid },
+   680→        flash: { T: letdown.T, P: LETDOWN_P, n: letdown.vapor },
+   681→      },
+   682→      result: {
+   683→        name: 'Ammonia separator + letdown',
+   684→        model: 'PT flash at loop P, then product letdown to 2 bar (degassing)',
+   685→        metrics: [
+   686→          { label: 'Product', value: `${d1(prodTpd)} t/d`, raw: prodTpd },
+   687→          {
+   688→            label: 'Purity',
+   689→            value: `${(sepMolPurity * 100).toFixed(2)} mol % / ${((prodNH3kg / Math.max(prodKg, 1e-9)) * 100).toFixed(2)} wt %`,
+   690→          },
+   691→          { label: 'NH3 recovered', value: `${(recovered * 100).toFixed(1)} %` },
+   692→          { label: 'Separator T', value: `${d1(sep.T - 273.15)} °C` },
+   693→          { label: 'Letdown T', value: `${d1(letdown.T - 273.15)} °C / ${num(specs, 'letdownP')} bar` },
+   694→          { label: 'Flashed vapor', value: `${(letdown.flashedFrac * 100).toFixed(1)} % of liquid` },
+   695→        ],
+   696→        warnings: letdown.liquid[6] <= 0 ? ['no ammonia condensation — check separator T'] : [],
+   697→      },
+   698→    };
+   699→  },
+   700→};
+   701→
+   702→const purgeSplit: UnitTypeDef = {
+   703→  type: 'purge-split',
+   704→  name: 'Purge split',
+   705→  model: () => 'Controls loop inert inventory (CH4 + Ar from make-up and air)',
+   706→  ports: {
+   707→    in: [
+   708→      { key: 'gas', kind: 'gas' },
+   709→      { key: 'flash', kind: 'gas', doc: 'letdown flash vapor joining the purge' },
+   710→    ],
+   711→    out: [
+   712→      { key: 'purge', kind: 'gas' },
+   713→      { key: 'recycle', kind: 'gas' },
+   714→    ],
+   715→  },
+   716→  specFields: [{ key: 'purgeFrac', kind: 'number', min: 0.01, max: 0.25, default: 0.028, doc: 'fraction of separator gas' }],
+   717→  solve: ({ specs, inlet }) => {
+   718→    const gas = inlet('gas');
+   719→    const flash = inlet('flash');
+   720→    const frac = num(specs, 'purgeFrac');
+   721→    const purgeN = gas.n.map((v, idx) => v * frac + flash.n[idx]);
+   722→    const recycleN = gas.n.map((v) => v * (1 - frac));
+   723→    return {
+   724→      outlets: {
+   725→        purge: { T: gas.T, P: gas.P, n: purgeN },
+   726→        recycle: { T: gas.T, P: gas.P, n: recycleN },
+   727→      },
+   728→      result: {
+   729→        name: 'Purge split',
+   730→        model: 'Controls loop inert inventory (CH4 + Ar from make-up and air)',
+   731→        metrics: [
+   732→          { label: 'Purge flow', value: `${d1(total(purgeN))} kmol/h` },
+   733→          { label: 'Purge fraction', value: `${(frac * 100).toFixed(1)} %` },
+   734→          { label: 'Purge NH3 loss', value: `${d1((purgeN[6] * SP.NH3.mw * 24) / 1000)} t/d` },
+   735→        ],
+   736→        warnings: [],
+   737→      },
+   738→    };
+   739→  },
+   740→};
+   741→
+   742→const loopCirculator: UnitTypeDef = {
+   743→  type: 'loop-circulator',
+   744→  name: 'Loop circulator',
+   745→  model: () => 'Single-stage centrifugal booster, polytropic',
+   746→  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+   747→  specFields: [
+   748→    { key: 'eta', kind: 'number', min: 0.6, max: 0.85, default: 0.75 },
+   749→    { key: 'dischargeP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar' },
+   750→    { key: 'postT', kind: 'number', min: 20, max: 80, default: 40, unit: '°C' },
+   751→  ],
+   752→  solve: ({ specs, inlet }) => {
+   753→    const i = inlet('in');
+   754→    const outP = BAR(num(specs, 'dischargeP'));
+   755→    const c = compressorTrain(i.n, i.T, i.P, outP, 1, num(specs, 'eta'), C(num(specs, 'postT')));
+   756→    return {
+   757→      outlets: { out: { T: c.T, P: outP, n: c.n } },
+   758→      result: {
+   759→        name: 'Loop circulator',
+   760→        model: 'Single-stage centrifugal booster, polytropic',
+   761→        metrics: [
+   762→          { label: 'Shaft power', value: `${d1(c.powerKW)} kW`, raw: c.powerKW },
+   763→          { label: 'Boost', value: `${(i.P / 1e5).toFixed(1)} → ${num(specs, 'dischargeP').toFixed(1)} bar` },
+   764→          { label: 'Discharge T', value: `${d1(c.T - 273.15)} °C` },
+   765→        ],
+   766→        warnings: [],
+   767→      },
+   768→    };
+   769→  },
+   770→};
+   771→
+   772→// ---------------------------------------------------------------------------
+   773→// catalog
+   774→// ---------------------------------------------------------------------------
+   775→
+   776→export const UNIT_TYPES: Record<string, UnitTypeDef> = {
+   777→  'ng-source': ngSource,
+   778→  'steam-source': steamSource,
+   779→  'air-source': airSource,
+   780→  'feed-mixer': feedMixer,
+   781→  'primary-reformer': primaryReformerDef,
+   782→  'secondary-reformer': secondaryReformerDef,
+   783→  'whb-cooler': whbCooler,
+   784→  'wgs-hts': wgs('wgs-hts', 'Fe-Cr', 2, 50, 20),
+   785→  intercooler,
+   786→  'wgs-lts': wgs('wgs-lts', 'Cu-Zn', 3, 60, 15),
+   787→  'ko-drum-shift': koDrum('ko-drum-shift', 'Knockout drum 1', 'PT flash (Peng-Robinson) — condenses shift steam'),
+   788→  'co2-removal': co2RemovalDef,
+   789→  methanator: methanatorDef,
+   790→  'ko-drum-meth': koDrum('ko-drum-meth', 'Knockout drum 2', 'PT flash (Peng-Robinson) — removes methanation water'),
+   791→  'syngas-compressor': syngasCompressor,
+   792→  'loop-mixer': loopMixer,
+   793→  'feed-preheater': feedPreheater,
+   794→  converter: converterDef,
+   795→  'condensation-train': condensationTrain,
+   796→  'nh3-separator': nh3Separator,
+   797→  'purge-split': purgeSplit,
+   798→  'loop-circulator': loopCirculator,
+   799→};
+   800→
+   801→export function getUnitType(type: string): UnitTypeDef | undefined {
+   802→  return UNIT_TYPES[type];
+   803→}
+   804→
+   805→/** merge a unit's specs over the type defaults */
+   806→export function resolveSpecs(unit: { type: string; specs: Record<string, number | boolean | number[]> }): Record<string, number | boolean | number[]> {
+   807→  const def = getUnitType(unit.type);
+   808→  const out: Record<string, number | boolean | number[]> = {};
+   809→  if (def) for (const f of def.specFields) out[f.key] = f.default;
+   810→  return { ...out, ...unit.specs };
+   811→}
+   812→
+   813→// ---------------------------------------------------------------------------
+   814→// species-level solve knowledge (ammonia) — tear & controller initialization
+   815→// ---------------------------------------------------------------------------
+   816→
+   817→/**
+   818→ * Initial tear guess for the synthesis loop: converter feed ≈ 5× make-up at
+   819→ * a typical loop-gas composition (research Q9 tip). This is the same
+   820→ * initializer the legacy plant.ts used — keeping it identical keeps the
+   821→ * iteration path (and therefore the trace) identical.
+   822→ */
+   823→export function tearInit(makeup: Moles): Moles {
+   824→  const tear0: Moles = zeroN();
+   825→  const f0 = total(makeup) * 5;
+   826→  const y0 = [0.58, 0.195, 0, 0, 0.11, 0.033, 0.025, 0, 0]; // H2 N2 CO CO2 CH4 AR NH3 H2O O2
+   827→  for (let i = 0; i < N_SP; i++) tear0[i] = f0 * y0[i];
+   828→  return tear0;
+   829→}
+   830→
+   831→/** Secant bracket for the air controller (legacy init, verbatim). */
+   832→export function airControllerInit(ngFeed: number): { x0: number; x1: number } {
+   833→  return {
+   834→    x0: Math.max(200, 1.3 * ngFeed),
+   835→    x1: Math.max(300, 1.6 * ngFeed),
+   836→  };
+   837→}
+   838→

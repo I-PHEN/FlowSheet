@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided images:\n\n*   **Image 1 (Ammonia Plant):** Yes, the flowsheet is contained within **one single drawing sheet frame**. It is divided into **three zones** (labeled 1, 2, and 3), and a **title block** is visible in the bottom right corner.\n*   **Image 2 (Flash Separation):** Yes, it is one sheet containing a **sphere** (F-101), a **heat exchanger/chiller** (E-101), and a **vertical drum** (V-101).\n*   **Rendering Glitches:** No rendering glitches are visible; both diagrams appear clean, sharp, and fully rendered.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789344178,
+  "id": "20260914080251f0e8921989264651",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914080251f0e8921989264651",
+  "usage": {
+    "completion_tokens": 147,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 4125,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 4272
+  }
+}

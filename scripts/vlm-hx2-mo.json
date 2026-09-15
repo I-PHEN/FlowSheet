@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes, the page fits the narrow screen without horizontal scrolling, and the toggle and info card are fully usable and readable.\n(2) Yes, the camera angle changed to a different perspective (showing the front cap), and the model remains intact and positioned on the grid.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789450288,
+  "id": "20260915133126220cd6c552714801",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915133126220cd6c552714801",
+  "usage": {
+    "completion_tokens": 59,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 863,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 922
+  }
+}

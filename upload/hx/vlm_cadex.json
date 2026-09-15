@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided, here is a description of the webpage:\n\n**What it shows:**\nThe image displays an **error page** for a service called **\"CAD Exchanger\"**. \n*   **Header:** It features a logo (a stylized green and blue arrow) and the text \"CAD Exchanger\".\n*   **Main Message:** The text reads: **\"Oooops, seems like something went wrong...\"**\n*   **Navigation:** There is a single link labeled **\"Home\"**, likely intended to help the user navigate away from the error.\n\n**Answers to your specific questions:**\n\n*   **Is there a file upload widget?** **No.** Because this is an error page, there is no file upload interface, conversion tool, or form visible.\n*   **What formats are supported?** **Not mentioned.** The error message does not list any supported file formats (like STEP, IGES, STL, etc.).\n*   **Any file size limits or pricing?** **No.** There is no information regarding file size restrictions, subscription costs, or pricing tiers on this specific screen.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789441087,
+  "id": "20260915105757a594649486534706",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915105757a594649486534706",
+  "usage": {
+    "completion_tokens": 234,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 921,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1155
+  }
+}

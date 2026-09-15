@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1. **Single Drawing Sheet:** Yes. The main viewport contains a single, clear flowsheet of the Benzene-Toluene distillation column (T-101) with its associated heat exchangers and vessels.\n2. **Operate Panel & Scorecard:** Yes, the right-hand panel is highly readable. It features interactive levers for **Benzene in feed** (45 mol%) and **Distillate purity target** (97.0 mol%). Below these is a comprehensive **Scorecard** displaying key metrics like Bottoms benzene, Recovery, Product rate, Reflux ratios, and Duties.\n3. **Contrast & Layout:** Excellent. The dark-mode theme uses high-contrast white/light-grey lines against a dark background. Text is crisp, sliders are clearly defined, and there are no overlapping or clipped elements. The layout is clean and professional.\n4. **Quality Score:** **9/10**. A polished, functional, and visually excellent engineering simulation interface.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789344097,
+  "id": "202609140801217769e8786c0d4bba",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609140801217769e8786c0d4bba",
+  "usage": {
+    "completion_tokens": 203,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2116,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2319
+  }
+}

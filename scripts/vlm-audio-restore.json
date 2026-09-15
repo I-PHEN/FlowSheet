@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes, the VOICE and MUSIC toggle pills and a replay button are visible in the tour panel.\n(2) Yes, there is a small italic status line that says: \"Narrating — music lowers while I speak.\"\n(3) No, the panel layout is clean with no visible overlap or clipping.\n(4) 9/10.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789446628,
+  "id": "20260915123025b1d57d471bb84773",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915123025b1d57d471bb84773",
+  "usage": {
+    "completion_tokens": 74,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1757,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1831
+  }
+}

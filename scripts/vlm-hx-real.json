@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The 3D model is a highly faithful representation of the real training unit. \n\n**Matches:**\n*   **Orientation:** The horizontal layout and overall proportions are accurate.\n*   **Components:** The cylindrical shell, dished heads, flanged connections, lifting lugs, and saddle supports are all correctly modeled.\n*   **Nozzles:** The placement of the four nozzles (two top, one bottom, one rear) matches the physical unit.\n*   **Colors:** The use of green for shell-side and red for tube-side nozzles is consistent with the reference photos.\n*   **Internal Details (Cutaway):** The tube bundle, segmental baffles, and tubesheets are accurately depicted in the sectioned view.\n\n**Differences / Areas for Improvement:**\n*   **Nozzle Detail:** The 3D model uses simplified, basic caps for the nozzles, whereas the real unit features more complex, bolted flanges.\n*   **Saddle Design:** The saddles in the model are simplified blocks; the real unit has more detailed, structural steel profiles with visible base plates and stiffeners.\n*   **Surface Texture:** While the metallic finish is good, the model lacks the subtle surface imperfections, weld seams, and specific labeling/stenciling seen on the real industrial hardware.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789450351,
+  "id": "20260915133219395457b53f884270",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260915133219395457b53f884270",
+  "usage": {
+    "completion_tokens": 271,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 4459,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 4730
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided, here are the answers to your questions:\n\n**(1) Is a tooltip visible and what does it show?**\n**Yes**, a tooltip is visible. However, it is **not** showing stream data (like \"S03\", Temperature, Pressure, Flow, or Composition). Instead, it is showing **unit/equipment information** for the Primary Reformer. The content reads:\n*   **Header:** \"Primary reformer\"\n*   **Body:** \"Fired furnace – SMR + WGS equilibrium at outlet T (K_SR1, K_WGS; ATE on CH4)\"\n\n**(2) Is the hovered stream line visually emphasized vs other streams?**\n**No.** The hovered element appears to be the **equipment unit** (the reformer box), not a stream line. Consequently:\n*   The equipment unit has a subtle highlight (slightly lighter background).\n*   There is **no visual emphasis on any stream line** (no thickening, color change, or glow on the connecting lines). All process lines appear with uniform thickness and style.\n\n**(3) Any rendering defects?**\nThere are no obvious graphical glitches or rendering errors (e.g., broken lines, overlapping text, or missing elements). The diagram renders cleanly. However, there is a **functional/UX discrepancy**: the prompt implies the user is hovering over a *stream* to see *stream data*, but the app is actually displaying an *equipment tooltip* while hovering over a *unit*. This suggests the hover target might be slightly off, or the interaction logic prioritizes unit tooltips over stream tooltips in this specific cursor position.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788063067,
+  "id": "202608301210513ec2d6f7ca334cd3",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608301210513ec2d6f7ca334cd3",
+  "usage": {
+    "completion_tokens": 333,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1890,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2223
+  }
+}

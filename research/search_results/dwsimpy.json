@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://sourceforge.net/p/dwsim/discussion/scripting/thread/990d1d2212",
+    "name": "DWSIM - Import external python packages",
+    "snippet": "Oct 29, 2019 — Python.NET integrates an external Python environment with DWSIM so you can use DWSIM objects (flowsheet, unit operations, streams, spreadsheet)",
+    "host_name": "sourceforge.net",
+    "rank": 0,
+    "date": "Oct 29, 2019",
+    "favicon": ""
+  },
+  {
+    "url": "https://dwsim.org/wiki/index.php?title=Dynamic_Simulation_Tutorial_with_DWSIM_and_Python,_Part_1:_Concepts_and_Steady-State_Model",
+    "name": "Dynamic Simulation Tutorial with DWSIM and Python, Part 1",
+    "snippet": "Aug 10, 2020 — On this tutorial, you'll learn how to use advanced DWSIM features to build a dynamic process model, adding and tuning a PID Controller with ...",
+    "host_name": "dwsim.org",
+    "rank": 1,
+    "date": "Aug 10, 2020",
+    "favicon": ""
+  },
+  {
+    "url": "https://dwsim.org",
+    "name": "DWSIM – Open-Source Chemical Process Simulator",
+    "snippet": "DWSIM is a full-featured chemical process simulator . Drive simulations programmatically from Python, C#, VB.NET, headlessly as a simulation backend",
+    "host_name": "dwsim.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/volkan-a/dwsimpy",
+    "name": "DwsimPy Platform",
+    "snippet": "DwsimPy is a headless, platform-independent . It is intended to create, load, manipulate, solve, inspect, and save DWSIM flowsheets without installing or ...",
+    "host_name": "github.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pypi.org/project/dwsimopt",
+    "name": "dwsimopt: DWSIM simulation optimization with Python!",
+    "snippet": "The DWSIM Optimization ( dwsimopt ) is a Python library that automates DWSIM simulations for process optimization. The simulation dlls are embedded in the ... Read more",
+    "host_name": "pypi.org",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dwsim.org/wiki/index.php?title=Dynamic_Simulation_Tutorial_with_DWSIM_and_Python,_Part_2:_Building_the_Dynamic_Model",
+    "name": "Dynamic Simulation Tutorial with DWSIM and Python, Part 2",
+    "snippet": "May 28, 2020 — Creating the Dynamic Model. Go to the Script Manager and add a new script. Name it \"InitVars\". Add the following lines to the top of it ... Read more",
+    "host_name": "dwsim.org",
+    "rank": 5,
+    "date": "May 28, 2020",
+    "favicon": ""
+  },
+  {
+    "url": "https://simulate365.com/landing-pages/simulate365py",
+    "name": "Simulate365Py",
+    "snippet": "Simulate365Py is a standalone python library for accesing DWSIM flowsheets, enabling extraction and sensitivity studies without local installation...",
+    "host_name": "simulate365.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@elliotfekete78/dwsim-property-analysis-in-python-fde86654921b",
+    "name": "DWSIM Property Analysis in Python | by Elliot Fekete",
+    "snippet": "DWSIM Standalone Thermo Library . DWSIM is a free open-source process simulation alternative to Aspen Plus that provides comparable outcomes. I ... Read more",
+    "host_name": "medium.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

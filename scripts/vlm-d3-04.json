@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Score: 9/10**\n\n**Visual Bugs:**\n*   **Clipped Text:** The label for the \"SEP\" unit (Ammonia separator) is truncated on the right edge, cutting off the end of the text.\n*   **Overlapping Element:** The stream label \"525\" and its associated dashed loop line slightly overlap the bottom-right corner of the SEP unit box.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789253857,
+  "id": "20260913065735fad8a85f43444c05",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260913065735fad8a85f43444c05",
+  "usage": {
+    "completion_tokens": 82,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2050,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2132
+  }
+}

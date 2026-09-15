@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Yes**, the flowsheet is drawn inside one single large bordered rectangle (the light gray canvas area), not in three separate boxes.  \n(2) **Yes**, the dashed zone dividers and the zone labels (“1 · FEED & REFORMING”, “2 · SHIFT & PURIFICATION”, “3 · SYNTHESIS LOOP & COMPRESSION”) are clearly visible and readable against the light background of the diagram area.  \n(3) **Yes**, the title block in the bottom‑right is fully readable; it shows “AMMONIA SYNTHESIS”, “PROCESS FLOW DIAGRAM”, and “SHEET 1 OF 1” (with “REV A” below).  \n(4) **No** – there are no obvious contrast or readability problems, and no elements appear to be overlapping or clipped. The diagram, labels, lines, and the side panel are all well‑spaced and legible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789285179,
+  "id": "20260913153933c049d9e52722488e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260913153933c049d9e52722488e",
+  "usage": {
+    "completion_tokens": 192,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2127,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2319
+  }
+}

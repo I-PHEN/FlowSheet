@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Tour Step 1)**\n*   **Sidebar:** Shows a progress bar at the top, the text **\"1 / 13\"**, the tour title **\"The plant, end to end\"**, and a close (X) button. The step content displays the heading **\"Two ingredients\"**, followed by narration text about natural gas and steam blending. At the bottom, there are **\"← Back\"** (disabled/greyed out) and **\"Next →\"** buttons.\n*   **Canvas Viewpoint:** The canvas is zoomed in on the left side of the flowsheet. The **M-101 FEED MIX** unit is large, centered, and surrounded by a light grey highlight halo. The R-102 PRIMARY REFORMER is visible to its right but appears smaller and off-center.\n\n**Image 2 (Tour Step 2)**\n*   **Sidebar:** The progress bar has advanced slightly. The counter now reads **\"2 / 13\"**. The tour title remains **\"The plant, end to end\"**. The step content has updated to the heading **\"Splitting methane\"** with new narration about the primary reformer furnace. The **\"← Back\"** button is now active (black), and the **\"Next →\"** button remains.\n*   **Canvas Viewpoint:** The viewpoint has shifted to the right and zoomed out slightly to reveal more of the process. The **R-102 PRIMARY REFORMER** is now the central focus, large, and surrounded by the highlight halo. The M-101 FEED MIX unit is now smaller and pushed to the far left edge. New units (R-103 SECONDARY REFORMER and E-101 WASTE HEAT BOILER) are now visible to the right.\n\n**Comparison & Movement**\nYes, the canvas viewpoint moved significantly between the two images.\n*   In Image 1, the **FEED MIX** unit is the dominant, centered element.\n*   In Image 2, the camera panned right and adjusted zoom so that the **PRIMARY REFORMER** became the dominant, centered element.\n\n**Defects**\nThere are no obvious functional defects; the UI correctly updates the step count, text content, navigation state (enabling the Back button), and highlights the correct unit for each step. The transition logic appears sound.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788063286,
+  "id": "20260830121441b68776e7b46549e2",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830121441b68776e7b46549e2",
+  "usage": {
+    "completion_tokens": 489,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3746,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 4235
+  }
+}

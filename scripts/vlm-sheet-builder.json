@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here are the precise answers to your questions:\n\n(1) **ONE single large bordered rectangle sheet.** The entire process flow diagram is contained within a single large canvas area.\n(2) **Yes.** Dashed zone divider lines and zone labels ('1 · FEED & REFORMING', '2 · SHIFT & PURIFICATION', '3 · SYNTHESIS LOOP & COMPRESSION') are clearly visible.\n(3) **Yes.** A title block labeled \"AMMONIA SYNTHESIS PROCESS FLOW DIAGRAM\" is visible in the bottom-right corner of the sheet.\n(4) **Yes.** All 22 units (labeled R-101 through R-107, E-101 through E-104, V-101 through V-103, K-101, K-102, M-101, SP-101, C-101) and 29 streams appear to render correctly with no obvious missing elements, overlaps, or clipped content.\n(5) **Yes.** The right-side session/chat panel is intact, showing the plant answer, critic verdict, and conversation history.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789285275,
+  "id": "20260913154109847ec55ae75c4e41",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260913154109847ec55ae75c4e41",
+  "usage": {
+    "completion_tokens": 231,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2142,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2373
+  }
+}

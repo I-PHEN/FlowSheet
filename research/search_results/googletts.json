@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://cloud.google.com/text-to-speech/pricing",
+    "name": "Review pricing for Text-to-Speech",
+    "snippet": "US$0.00006 per character (US$60 per 1 million characters ). Legacy TTS models. Model. Free usage limit. Price after free usage limit is reached. WaveNet voices. Read more",
+    "host_name": "cloud.google.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://speechactors.com/article/google-cloud-pricing-and-plans",
+    "name": "Google Cloud Text-to-Speech Pricing and Plans - Blog",
+    "snippet": "The first 1 million characters for WaveNet voices and 4 million characters for Standard voices are free each month. Neural2 Voices: Free usage: 0 to 1 million ...",
+    "host_name": "speechactors.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://speechify.com/blog/google-text-to-speech-api/?srsltid=AfmBOooLzWt9DYBlaTirSJd3MEH903OYJTO4-jHMAS9j453wW8EB0jAa",
+    "name": "Everything to Know About Google Cloud Text to Speech API",
+    "snippet": "Jul 14, 2026 — Google TTS voice tiers and 2026 pricing ; Standard. $4. 4M chars ; WaveNet. $4. 4M chars ; Neural2. $16. 1M chars ; Chirp 3: HD. $30. 1M chars. Read more",
+    "host_name": "speechify.com",
+    "rank": 2,
+    "date": "Jul 14, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.cloud.google.com/text-to-speech/docs/list-voices-and-types",
+    "name": "Supported voices and languages | Cloud Text-to-Speech",
+    "snippet": "Cloud TTS also provides premium, WaveNet -generated voices. You might find the Wavenet -generated voices to be more warm and human-like than other synthetic ...",
+    "host_name": "docs.cloud.google.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/googlecloud/comments/1q5hoys/contradictory_information_about_google_cloud_tts",
+    "name": "Contradictory information about Google Cloud TTS free",
+    "snippet": "Here , free monthly character limits are listed . You'll notice that WaveNet, Neural2 and Polyglot have limits of 4, 1 and 1 million characters…",
+    "host_name": "www.reddit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://texttolab.com/blog/google-cloud-tts-pricing",
+    "name": "Google Cloud TTS Pricing (2026): 4M Free, Then $4/1M",
+    "snippet": "Jun 10, 2026 — Google Cloud gives you 4 million characters free every month . After that, Standard and WaveNet voices cost $4/1M, Neural2 $16/1M, up to $160/1M ... Read more",
+    "host_name": "texttolab.com",
+    "rank": 5,
+    "date": "Jun 10, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://oneuptime.com/blog/post/2026-02-17-how-to-select-and-configure-voice-types-in-cloud-text-to-speech/view",
+    "name": "How to Select and Configure Voice Types in Cloud Text-to-",
+    "snippet": "Feb 17, 2026 — Standard: $4 per 1 million characters · WaveNet: $4 per 1 million characters · Neural2: $16 per 1 million characters · Studio: $160 per 1 million ... Read more",
+    "host_name": "oneuptime.com",
+    "rank": 6,
+    "date": "Feb 17, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://notevibes.com/alternative/google-cloud-tts",
+    "name": "Best Google Cloud TTS Alternative & Review (2026)",
+    "snippet": "Google Cloud TTS charges per million characters with complex tiering: $4/1M for Standard and WaveNet, $16/1M for Neural2, $30/1M for Chirp 3 HD, $60/1M for ... Read more",
+    "host_name": "notevibes.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

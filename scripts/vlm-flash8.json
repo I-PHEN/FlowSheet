@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Yes.** The full Steam-Methane Reforming (ammonia) flowsheet is rendered on a single sheet. All ~19 units (R-101, R-102, E-101, etc.) and the 3 zone labels (\"1 · FEED & REFORMING\", \"2 · SHIFT & PURIFICATION\", \"3 · SYNTHESIS LOOP & COMPRESSION\") are present, unchanged, and clearly readable.\n\n(2) **Yes.** The right panel correctly displays the tutor home with ammonia-specific tours: \"Walk me through the plant\", \"Follow one hydrogen atom\", \"Why does the plant need a loop?\", and \"What do the colors and numbers mean?\". It is not showing flash tours.\n\n(3) **No.** There are no visible rendering degradations, missing elements, or console-error-level issues. The dark theme is applied consistently, all UI controls (zoom, fit, legend) are functional, and the layout is stable.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789337184,
+  "id": "20260914060618c19117e11dee400d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914060618c19117e11dee400d",
+  "usage": {
+    "completion_tokens": 204,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 970,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 1174
+  }
+}

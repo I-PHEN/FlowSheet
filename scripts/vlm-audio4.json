@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here are the precise answers to your questions:\n\n(1) **Audio Controls:** The visible audio controls are **VOICE** and **MUSIC** (presented as toggle pills). There is also a **settings/gear icon** to the right of these controls.\n\n(2) **Status Line Text:** The small status line under the controls says: **\"Narrating — music lowers while I speak.\"**\n\n(3) **Readability:** **Yes**, the tour step title (\"One stream becomes two\") and the descriptive text (\"The delivery arrives...\") are fully readable and clearly legible.\n\n(4) **Visual Defects:** **No**, there are no visual defects. The text is well-spaced, elements are properly aligned within the panel, and nothing appears clipped or overlapping.\n\n(5) **Flowsheet Canvas Integrity:** The flowsheet canvas looks **partially intact** based on what is visible. It shows a single frame, **2 equipment symbols** (F-101 Syngas Feed and E-101 Chiller), and **1 stream pill** (labeled \"1\"). (Note: While the header mentions \"3 units\" and \"4 streams\", only two units and one stream are currently rendered in the visible viewport of the canvas).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789339805,
+  "id": "202609140649161320daea9d5844c3",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609140649161320daea9d5844c3",
+  "usage": {
+    "completion_tokens": 264,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1782,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2046
+  }
+}

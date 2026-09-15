@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes, there is a KPI scorecard with the rows you mentioned. The displayed values are:\n\n*   **Vapor fraction:** 90.7 %\n*   **NH3 recovery:** 76.0 %\n*   **Liquid purity:** 98.5 %\n*   **Liquid product:** 75.7 t/d\n*   **Gas to recycle:** 1815 kmol/h\n*   **Chiller duty:** -0.82 MW\n\n**Yes**, there is a **'Reset to design point'** button located below the scorecard.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789337115,
+  "id": "20260914060511ec707666fc554bea",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260914060511ec707666fc554bea",
+  "usage": {
+    "completion_tokens": 117,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 953,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1070
+  }
+}

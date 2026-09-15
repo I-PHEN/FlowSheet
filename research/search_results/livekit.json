@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://livekit.com/pricing",
+    "name": "Pricing",
+    "snippet": "Preview the per-minute cost to run an agent on LiveKit Cloud . Our plans include monthly allotments for agent session minutes, inbound calling minutes (for ... Read more",
+    "host_name": "livekit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cekura.ai/blogs/livekit-alternatives",
+    "name": "7 LiveKit Alternatives Worth Switching To in 2026",
+    "snippet": "Jun 15, 2026 — LiveKit is free and open source under the MIT license for self-hosting . LiveKit Cloud offers a free Build tier with 1,000 agent session minutes ...",
+    "host_name": "www.cekura.ai",
+    "rank": 1,
+    "date": "Jun 15, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.forasoft.com/blog/article/livekit-ai-agents-guide",
+    "name": "Build and Deploy LiveKit AI Voice Agents: The 2026 Playbook",
+    "snippet": "Jul 24, 2026 — LiveKit is the open-source WebRTC. LiveKit Agents — the framework went 1.0 in April 2025. Self-hosted server + cloud agents. Fully self-hosted ...",
+    "host_name": "www.forasoft.com",
+    "rank": 2,
+    "date": "Jul 24, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/AI_Agents/comments/1pjuevf/lost_between_livekit_cloud_vs_vapi_vs_retell_for",
+    "name": "Lost between LiveKit Cloud vs Vapi vs Retell for a voice AI",
+    "snippet": "Hey everyone,\n\nI’m building a customer-support voice AI agent (inbound + some outbound, US local numbers, basic RAG, GPT-4o mini + ElevenLabs/Cartesia ...",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://checkthat.ai/brands/livekit/pricing",
+    "name": "LiveKit Pricing 2026: Plans, Costs & Real Examples",
+    "snippet": "Mar 30, 2026 — LiveKit pricing breakdown: Free tier to $500/month Scale , plus usage fees. See real-world costs for AI agents, telehealth, and video apps.",
+    "host_name": "checkthat.ai",
+    "rank": 4,
+    "date": "Mar 30, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.livekit.io/transport/self-hosting",
+    "name": "Self-hosting overview",
+    "snippet": "Self-hosting gives you complete control over your deployment , allowing you to customize configuration, manage your own data, and scale according to your ... Read more",
+    "host_name": "docs.livekit.io",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://livekit.com",
+    "name": "LiveKit: Build voice, video, and physical AI",
+    "snippet": "An open source framework and developer platform for building, testing, deploying, scaling, and observing agents in production.",
+    "host_name": "livekit.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/livekit/agents",
+    "name": "livekit/agents: A framework for building realtime voice AI",
+    "snippet": "Open - source : Fully open - source , allowing you to run the entire stack on your own servers, including LiveKit server, one of the most widely used WebRTC media ... Read more",
+    "host_name": "github.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

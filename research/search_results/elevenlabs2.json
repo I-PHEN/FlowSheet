@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://elevenlabs.io/pricing",
+    "name": "ElevenLabs Pricing for Creators & Businesses of All Sizes",
+    "snippet": "Monthly price and included credits per . Creator $22 (121,000 credits, $11 for the first month ); Pro $99 (600,000 credits); For V2 Flash /Turbo English … ...",
+    "host_name": "elevenlabs.io",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://elevenlabs.io/pricing/api",
+    "name": "ElevenAPI Pricing for creators and businesses of all sizes",
+    "snippet": "Flash / Turbo Text to Speech. Monthly $990 per month … per 1,000 characters ( v2 /v3) or $0.05 ( Flash /Turbo). $0.07 per hour and keyterm prompting $0.05 per hour.",
+    "host_name": "elevenlabs.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://flexprice.io/blog/elevenlabs-pricing-breakdown",
+    "name": "The Complete Guide to ElevenLabs Plans, Overages, and",
+    "snippet": "Aug 13, 2026 — ElevenLabs pricing runs from a free tier up to $990/month ・ as 5 cents per minute, Creator down to $18.33. Flash optimizes for latency and  ...",
+    "host_name": "flexprice.io",
+    "rank": 2,
+    "date": "Aug 13, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cekura.ai/blogs/elevenlabs-pricing",
+    "name": "ElevenLabs Pricing in 2026 Every Plan Tested and Broken",
+    "snippet": "Mar 30, 2026 — Pro: $99/month ... What's included: Everything in Creator, plus 44.1kHz PCM audio output via API, and 500,000 credits/month, around 500 min ... Read more",
+    "host_name": "www.cekura.ai",
+    "rank": 3,
+    "date": "Mar 30, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://elevenlabs.io/docs/overview/models",
+    "name": "Models | ElevenLabs Documentation",
+    "snippet": "With its lower price point for API generations and 75ms latency , Flash v2 . 5 is the cost -effective option for anyone needing fast, reliable speech synthesis ... Read more",
+    "host_name": "elevenlabs.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://bigvu.tv/blog/elevenlabs-pricing-2026-plans-credits-commercial-rights-api-costs",
+    "name": "ElevenLabs Pricing (2026): Plans, Credits, Commercial",
+    "snippet": "Mar 24, 2026 — Creator Plan ($22/month ) Creator includes 100,000 credits. Pro Plan ($99/month) Pro provides 500,000. The Flash and Turbo models are more ...",
+    "host_name": "bigvu.tv",
+    "rank": 5,
+    "date": "Mar 24, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/LovedByCreators/comments/1s3zebv/elevenlabs_review_what_it_actually_costs_once",
+    "name": "ElevenLabs Review: What It Actually Costs Once You're",
+    "snippet": "Creator plan ($22/month billed annually ) consistency drift on longer documents. The Creator plan includes 100,000 credits/month. $0.10 per 1, ...",
+    "host_name": "www.reddit.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://benchlm.ai/elevenlabs/pricing",
+    "name": "ElevenLabs Pricing and Cost Calculator (2026)",
+    "snippet": "Jul 28, 2026 — ElevenLabs monthly plans run from Free with 10,000 credits to Business at $990 with 6 million credits. For API TTS, Starter includes 120,000 ... Read more",
+    "host_name": "benchlm.ai",
+    "rank": 7,
+    "date": "Jul 28, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

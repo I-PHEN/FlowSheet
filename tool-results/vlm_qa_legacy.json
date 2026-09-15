@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes, this screenshot displays a dark-themed process simulator workbench (specifically for an Ammonia plant) featuring a KPI top bar, a central PFD diagram, a right-side inspector panel, and bottom data tabs. There are no visible error states; the solver status indicates \"CONVERGED\" in green, and all interface elements appear to be functioning within normal parameters.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788063373,
+  "id": "2026083012161169bab2d089f545f8",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083012161169bab2d089f545f8",
+  "usage": {
+    "completion_tokens": 78,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1859,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1937
+  }
+}

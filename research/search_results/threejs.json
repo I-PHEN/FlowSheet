@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.babylonjs.com/digitalTwinIot",
+    "name": "Babylon.js Digital Twins and IoT",
+    "snippet": "A fully featured, open-source rendering engine, Babylon.js makes it simple to create Digital Twins applications on the Web. Built on JavaScript, and web ...",
+    "host_name": "www.babylonjs.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.logrocket.com/three-js-vs-babylon-js",
+    "name": "Three.js vs. Babylon.js: Which is better for 3D web",
+    "snippet": "Apr 24, 2025 — Three.js leads with over 1.8 million weekly downloads , compared to Babylon.js, which sees around 11 thousand. 8.1.1) comes in at about 1.4 MB. ...",
+    "host_name": "blog.logrocket.com",
+    "rank": 1,
+    "date": "Apr 24, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/threejs/comments/130c85a/why_do_you_prefer_threejs_to_babylonjs",
+    "name": "Why do you prefer Three.js to Babylon.js? : r/threejs",
+    "snippet": "I do not want to be misunderstood. It is not my concern to praise or defend one library against another. However, I'm planning to start a game project that ...",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://edana.ch/en/2025/10/17/three-js-vs-babylon-js-vs-verge3d-which-to-choose-for-a-successful-3d-project",
+    "name": "Three.js vs Babylon.js vs Verge3D: Which 3D Framework to",
+    "snippet": "Oct 17, 2025 — Three.js stands out for its lightweight footprint, flexibility, and low vendor lock-in ; Babylon.js relies on its full-featured engine, visual ...",
+    "host_name": "edana.ch",
+    "rank": 3,
+    "date": "Oct 17, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.utsubo.com/blog/threejs-vs-babylonjs-vs-playcanvas-comparison",
+    "name": "Three.js Alternatives Compared: Babylon.js vs PlayCanvas",
+    "snippet": "Three.js dominates the ecosystem with 5 million weekly downloads —300x more than Babylon.js or PlayCanvas. The network effects are massive.",
+    "host_name": "www.utsubo.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.spotvirtual.com/blog/why-we-use-babylonjs-instead-of-threejs-in-2022",
+    "name": "Why We Use Babylon.js Instead Of Three.js in 2022",
+    "snippet": "Oct 6, 2022 — Babylon.js seems to position itself more as a full-fledged game engine whereas Three.js positions itself more as just a rendering layer.",
+    "host_name": "www.spotvirtual.com",
+    "rank": 5,
+    "date": "Oct 6, 2022",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/devin-rosario/babylonjs-vs-threejs-the-360deg-technical-comparison-for-production-workloads-2fn6",
+    "name": "Babylon.js vs Three.js: The 360 Technical Comparison for",
+    "snippet": "Nov 17, 2025 — The true difference between Babylon.js and Three.js lies in their architectural philosophy, which governs the rendering pipeline and scene ...",
+    "host_name": "dev.to",
+    "rank": 6,
+    "date": "Nov 17, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://javascript.plainenglish.io/babylon-js-vs-three-js-which-should-you-choose-14faef9f7d78",
+    "name": "Babylon.js vs Three.js: Which Should You Choose?",
+    "snippet": "Nov 17, 2025 — Babylon.js generally wins on initial convenience and reducing boilerplate , which is precisely what a beginner needs. Both are industry ...",
+    "host_name": "javascript.plainenglish.io",
+    "rank": 7,
+    "date": "Nov 17, 2025",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The diagram is presented on **one continuous, scrollable sheet** rather than in separate boxes. The section headers, such as \"1 · FEED & REFORMING\" and \"2 · SHIFT & PURIFICATION,\" function as **internal captions** placed directly onto the canvas to delineate different stages of the process. There are **no visible text overlap or clipping issues**; all labels for equipment (e.g., K-102, E-104), stream numbers, and flow directions are clearly legible and well-spaced within the dark-mode interface.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789450050,
+  "id": "202609151327260539792c8f254859",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151327260539792c8f254859",
+  "usage": {
+    "completion_tokens": 113,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1727,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1840
+  }
+}

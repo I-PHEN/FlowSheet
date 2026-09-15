@@ -1,0 +1,252 @@
+'use client';
+
+/**
+ * Plant workspace — top bar (back · title · mode switch · tutor toggle),
+ * full-bleed flowsheet canvas, right-side panel that swaps between the
+ * tutor home, a running tour, and the selected unit/stream detail.
+ */
+
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { C } from '@/lib/design/tokens';
+import { baseCase, run } from '@/lib/engine';
+import type { PlantSpec } from '@/lib/engine/plant';
+import { REFERENCE_LAYOUT, STREAM_MAP, UNIT_MAP } from '@/lib/flowsheet/layout';
+import { bboxOf } from '@/lib/flowsheet/geom';
+import type { Tour } from '@/lib/content/units';
+import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canvas';
+import type { Focus } from '@/components/flowsheet/Diagram';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { setTourActive } from '@/lib/ui/tourBus';
+import { unlockAudio } from '@/lib/audio/tourAudio';
+import { DetailPanel } from './DetailPanel';
+import { OperatePanel } from './OperatePanel';
+import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
+
+type TourState = { tour: Tour; idx: number } | null;
+type Mode = 'explore' | 'operate';
+
+function refBox(ref: Focus) {
+  if (ref.type === 'unit') {
+    const u = UNIT_MAP[ref.id];
+    return u ? { x: u.x, y: u.y, w: u.w, h: u.h } : null;
+  }
+  const s = STREAM_MAP[ref.id];
+  return s ? bboxOf(s.pts) : null;
+}
+
+export function Workspace() {
+  // mode: explore = the book (design case), operate = the live control room
+  const [mode, setMode] = useState<Mode>('explore');
+  // the live plant specification — base case until a lever moves
+  const [spec, setSpec] = useState<PlantSpec>(() => baseCase());
+  // the whole canvas + every panel + every tooltip reads from this one solve
+  const result = useMemo(() => run(spec), [spec]);
+  const baseKpis = useMemo(() => run(baseCase()).kpis, []);
+  const canvasRef = useRef<CanvasHandle>(null);
+  const [selected, setSelected] = useState<Focus | null>(null);
+  const [tour, setTour] = useState<TourState>(null);
+  const [colors, setColors] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+
+  // publish tour state for the floating Build button (ducks while narrating)
+  useEffect(() => {
+    setTourActive(tour !== null);
+    return () => setTourActive(false);
+  }, [tour]);
+
+  const enterOperate = () => {
+    setMode('operate');
+    setTour(null);
+    setColors(false);
+    setSelected(null);
+    setPanelOpen(true);
+  };
+
+  const enterExplore = () => {
+    // the book mode always shows design conditions — leave the lab, reset
+    setMode('explore');
+    setSpec(baseCase());
+  };
+
+  const patchSpec = (patch: Partial<PlantSpec>) => setSpec((s) => ({ ...s, ...patch }));
+  const resetSpec = () => setSpec(baseCase());
+
+  const spotlight = tour ? tour.tour.steps[tour.idx].ref : null;
+
+  const startTour = (t: Tour) => {
+    unlockAudio(); // audio needs a user gesture — this click is it
+    setColors(false);
+    setSelected(null);
+    setTour({ tour: t, idx: 0 });
+    setPanelOpen(true);
+    const b = refBox(t.steps[0].ref);
+    if (b) canvasRef.current?.panTo(b);
+  };
+
+  const stepTo = (i: number) => {
+    if (!tour) return;
+    const idx = Math.max(0, Math.min(tour.tour.steps.length - 1, i));
+    setTour({ ...tour, idx });
+    const b = refBox(tour.tour.steps[idx].ref);
+    if (b) canvasRef.current?.panTo(b);
+  };
+
+  const select = (f: Focus | null) => {
+    if (f) {
+      // manual selection interrupts a running tour
+      setTour(null);
+      setColors(false);
+      setPanelOpen(true);
+    }
+    setSelected(f);
+  };
+
+  const exitTour = () => {
+    setTour(null);
+    canvasRef.current?.fit();
+  };
+
+  const panelBody = selected ? (
+    <DetailPanel
+      result={result}
+      selected={selected}
+      onSelect={select}
+      onClose={() => setSelected(null)}
+      condLabel={mode === 'operate' ? 'operating point' : 'base case'}
+    />
+  ) : tour ? (
+    <TourRunner tour={tour.tour} idx={tour.idx} onStep={stepTo} onExit={exitTour} />
+  ) : colors ? (
+    <ColorAnswer onBack={() => setColors(false)} />
+  ) : mode === 'operate' ? (
+    <OperatePanel
+      spec={spec}
+      result={result}
+      baseKpis={baseKpis}
+      onChange={patchSpec}
+      onReset={resetSpec}
+    />
+  ) : (
+    <TutorHome onTour={startTour} onColors={() => setColors(true)} />
+  );
+
+  return (
+    <div className="flex h-dvh flex-col" style={{ background: C.canvas }}>
+      {/* top bar */}
+      <header
+        className="flex h-[54px] shrink-0 items-center gap-3 border-b px-3 sm:px-4"
+        style={{ background: C.paper, borderColor: C.bandLine }}
+      >
+        <Link
+          href="/"
+          aria-label="Back to library"
+          className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border text-[14px] font-bold"
+          style={{ borderColor: C.bandLine, color: C.ink }}
+        >
+          ←
+        </Link>
+        <div className="min-w-0">
+          <div className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
+            Steam-Methane Reforming Plant
+          </div>
+          <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
+            Reference plant · 1,000 t/d design · 19 units · 27 streams
+          </div>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* mode switch */}
+          <div
+            className="flex items-center rounded-full border p-0.5"
+            style={{ borderColor: C.bandLine, background: C.canvas }}
+            role="tablist"
+            aria-label="Workspace mode"
+          >
+            <button
+              role="tab"
+              aria-selected={mode === 'explore'}
+              onClick={enterExplore}
+              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              style={
+                mode === 'explore'
+                  ? { background: C.ink, color: C.paper }
+                  : { color: C.inkSoft }
+              }
+            >
+              Explore
+            </button>
+            <button
+              role="tab"
+              aria-selected={mode === 'operate'}
+              onClick={enterOperate}
+              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              style={
+                mode === 'operate'
+                  ? { background: C.ink, color: C.paper }
+                  : { color: C.inkSoft }
+              }
+            >
+              Operate
+            </button>
+          </div>
+
+          <button
+            onClick={() => setPanelOpen((v) => !v)}
+            className="hover-band rounded-full border px-3 py-1.5 text-[12px] font-bold"
+            style={{
+              borderColor: C.bandLine,
+              color: C.ink,
+              background: panelOpen ? C.band : C.paper,
+            }}
+          >
+            Learn
+          </button>
+
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* main */}
+      <main className="relative flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">
+          <FlowsheetCanvas
+            ref={canvasRef}
+            layout={REFERENCE_LAYOUT}
+            result={result}
+            selected={selected}
+            spotlight={spotlight}
+            onSelect={select}
+          />
+        </div>
+
+        {/* desktop panel */}
+        {panelOpen && (
+          <aside
+            className="hidden w-[380px] shrink-0 overflow-y-auto border-l p-5 lg:block"
+            style={{ background: C.paper, borderColor: C.bandLine }}
+          >
+            {panelBody}
+          </aside>
+        )}
+
+        {/* mobile sheet */}
+        {panelOpen && (
+          <aside
+            className="fixed inset-x-0 bottom-0 z-30 max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t p-5 pb-8 shadow-2xl lg:hidden"
+            style={{ background: C.paper, borderColor: C.bandLine }}
+          >
+            {panelBody}
+            <button
+              onClick={() => setPanelOpen(false)}
+              className="absolute right-4 top-4 rounded-md border px-2 py-0.5 text-[12px] font-bold"
+              style={{ borderColor: C.bandLine, color: C.inkSoft }}
+            >
+              ✕
+            </button>
+          </aside>
+        )}
+      </main>
+    </div>
+  );
+}

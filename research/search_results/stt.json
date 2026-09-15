@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.assemblyai.com/blog/assemblyai-vs-deepgram",
+    "name": "AssemblyAI vs Deepgram: Accuracy & Speed Compared",
+    "snippet": "Jul 8, 2026 — Compare AssemblyAI Universal-3 Pro vs Deepgram Nova - 3 on speech-to-text accuracy , latency , prompting features, and pricing to choose the ...",
+    "host_name": "www.assemblyai.com",
+    "rank": 0,
+    "date": "Jul 8, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://deepgram.com/learn/best-speech-to-text-apis-2026",
+    "name": "Best Speech-to-Text APIs in 2026",
+    "snippet": "Feb 4, 2026 — Deepgram Nova-3 achieves 5.26% batch WER, representing 94.74% accuracy . Competitive pricing ($0.0043/minute for batch, $0.0077/minute for ...",
+    "host_name": "deepgram.com",
+    "rank": 1,
+    "date": "Feb 4, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/speechtech/comments/1kd9abp/i_benchmarked_12_speechtotext_apis_under_various",
+    "name": "I benchmarked 12+ speech-to-text APIs under various real-",
+    "snippet": "Deepgram Nova didn't rank higher in your real-time streaming tests , that's the one most voice agent builders default to for latency. Whisper- ...",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.coval.ai/blog/best-speech-to-text-providers-in-2026-independent-benchmarks-and-how-to-choose",
+    "name": "Best STT Providers 2026: Independent Benchmarks & How",
+    "snippet": "Jun 4, 2026 — Per-hour pricing varies by ~30× across the market: Carte sia Ink-Whisper at $0.13/hr at the low end, AssemblyAI Universal-3 Pro Streaming at $0. ...",
+    "host_name": "www.coval.ai",
+    "rank": 3,
+    "date": "Jun 4, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://vexascribe.com/compare/best-transcription-api-for-developers",
+    "name": "Best Transcription API 2026: 13 Speech-to-Text",
+    "snippet": "Aug 19, 2026 — Whisper-1 wins on price (matched at $0.006/min but Whisper is portable — you can self-host the open model), on 99-language coverage (Nova-3 ... Read more",
+    "host_name": "vexascribe.com",
+    "rank": 4,
+    "date": "Aug 19, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.gladia.io/blog/assemblyai-vs-deepgram",
+    "name": "AssemblyAI vs Deepgram: Best Speech-to-Text API [2026]",
+    "snippet": "Jan 14, 2026 — AssemblyAI vs Deepgram : Compare accuracy , latency & pricing — or ... Streaming rates for Nova - 3 start at $0.46/hr for monolingual and $0.55 ... Read more",
+    "host_name": "www.gladia.io",
+    "rank": 5,
+    "date": "Jan 14, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.codesota.com/guides/speech-recognition",
+    "name": "Whisper vs Gemini vs AssemblyAI vs Deepgram",
+    "snippet": "Deepgram Nova - 3 has the lowest streaming latency at ~450ms median. Deepgram Nova - 3 at $0.0218/min ($1.31/hr) offers the best price-to-performance ratio.",
+    "host_name": "www.codesota.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.assemblyai.com/blog/best-api-models-for-real-time-speech-recognition-and-transcription",
+    "name": "Top APIs and models for real-time speech recognition",
+    "snippet": "Jul 15, 2026 — priced at $0.45/hr base, We cover cloud APIs from AssemblyAI , Deepgram , Google, AWS, and others, plus open-source options like WhisperX.",
+    "host_name": "www.assemblyai.com",
+    "rank": 7,
+    "date": "Jul 15, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

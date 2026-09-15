@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided image of the process flow diagram web app, here are the precise answers to your questions:\n\n(1) **One single large rectangle.** The entire plant is drawn inside one continuous, light-gray bordered sheet. It is not split across multiple separate panels or boxes.\n\n(2) **Yes.** There are faint, dashed vertical and horizontal divider lines inside the sheet that separate the diagram into distinct areas. **Yes**, there are zone labels in the top-left corner of each section, specifically: **\"1 · FEED & REFORMING\"**, **\"2 · SHIFT & PURIFICATION\"**, and **\"3 · SYNTHESIS LOOP & COMPRESSION\"**.\n\n(3) **Yes.** There is a title block in the bottom-right corner of the sheet. The text it contains is:\n*   **AMMONIA SYNTHESIS**\n*   **PROCESS FLOW DIAGRAM**\n*   (Below that, in smaller text) **SHEET 1 OF 1 · REV A**\n\n(4) **Yes.** Process streams and lines visually cross from one section to another continuously. For example, stream 15 crosses the horizontal dashed line between the top and bottom sections, and the large recycle loop at the bottom spans across the vertical dashed divider without being cut or interrupted by the panel borders.\n\n(5) **No significant visual glitches.** The layout is clean; there is no overlapping text, no clipped elements, and the lines do not touch or obscure the text labels. All elements appear properly spaced and aligned within the single-sheet format.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789285167,
+  "id": "20260913153916469cf3ca34d9471c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260913153916469cf3ca34d9471c",
+  "usage": {
+    "completion_tokens": 321,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2168,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2489
+  }
+}

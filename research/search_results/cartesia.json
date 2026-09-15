@@ -1,0 +1,68 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.cartesia.ai",
+    "name": "Cartesia vs OpenAI TTS",
+    "snippet": "3-200 per mins Latency . TTS - $15 per 1M characters Pro - $5 per month with 100K credits TTS HD - $30 per 1M characters Startup - $49 per month with 1.25M ...",
+    "host_name": "www.cartesia.ai",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.eesel.ai",
+    "name": "Cartesia Sonic 3 pricing: Plans, costs, and limits (2026)",
+    "snippet": "Oct 29, 2025 — A full breakdown of Cartesia Sonic 3 pricing ; Free, $0 / month, 20K credits, $1, Personal use, 1 agent slot, Discord support. ; Pro, $5 / month ... Read more",
+    "host_name": "www.eesel.ai",
+    "rank": 1,
+    "date": "Oct 29, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://texttolab.com",
+    "name": "Cartesia Pricing 2026: Sonic 3 API Costs From Free to $299",
+    "snippet": "May 13, 2026 — Cartesia charges 1 credit per character across 5 plans — Free (20K) to Scale ($299/mo, 8M). Sonic 3's signature 40ms latency. The per-character ...",
+    "host_name": "texttolab.com",
+    "rank": 2,
+    "date": "May 13, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.cloudtalk.io",
+    "name": "Cartesia Pricing & Plans: Full Guide for 2026",
+    "snippet": "Jul 29, 2026 — Cartesia TTS (Sonic) costs 1 credit per character of input text on all plans. Credits are included in each plan: 20K (Free), 100K (Pro), 1.25M ( ... Read more",
+    "host_name": "www.cloudtalk.io",
+    "rank": 3,
+    "date": "Jul 29, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://softcery.com",
+    "name": "Free AI Voice Agent Cost & Latency Calculator 2026",
+    "snippet": "Roughly $4 to $200 per 1 million characters in 2026. Premium real-time models ( Cartesia Sonic 3 ~$35/M effective, Cartesia ( Sonic 3, Sonic . Sonic 3 is the 2026 ...",
+    "host_name": "softcery.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://skywork.ai",
+    "name": "Cartesia AI: The Ultimate Guide to Real-Time Voice",
+    "snippet": "Oct 10, 2025 — At a reported cost of just $0.13/hour, Pricing Plans (as of Oct 2025 ) Free $0 20,000 Core models, personal use Pro $5 100,000 Instant Voice ...",
+    "host_name": "skywork.ai",
+    "rank": 5,
+    "date": "Oct 10, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://aialleyway.com",
+    "name": "Cartesia review: the fastest AI voice, made for agents",
+    "snippet": "Aug 19, 2026 — Cartesia's Sonic model is the lowest-latency AI voice going: a ... costs exactly 1 credit per character . Speech-to-text runs 3 credits ... Read more",
+    "host_name": "aialleyway.com",
+    "rank": 6,
+    "date": "Aug 19, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

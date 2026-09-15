@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the 3D cutaway view of the shell-and-tube heat exchanger (E-101) provided:\n\n1. **Is the shell sectioned open at the top, revealing internals?**  \n   **Yes.** The model is in \"CUTAWAY\" mode, with a large section of the cylindrical shell removed at the top to expose the internal components.\n\n2. **Can you see the TUBE BUNDLE (many parallel tubes)?**  \n   **Yes.** The bundle of parallel tubes running longitudinally through the shell is clearly visible through the cutaway opening.\n\n3. **Can you see SEGMENTAL BAFFLES (discs with a chord cut, alternating)?**  \n   **Yes.** The alternating segmental baffles (the disc-like plates with a cutout) are visible inside the shell, positioned perpendicular to the tube bundle to direct flow.\n\n4. **Tubesheets at the ends?**  \n   **Yes.** The tubesheets (the thick plates holding the tube ends) are visible at both ends of the unit, particularly noticeable as the flanged/rounded end caps where the tubes terminate.\n\n5. **Does the model still rest on the ground via its saddles?**  \n   **Yes.** The heat exchanger is supported by saddle supports (base plates) that are resting on the grid floor.\n\n6. **Any glitches — missing faces, see-through holes, floating parts?**  \n   **No apparent glitches.** The model appears solid and well-constructed. All faces seem intact, there are no unintended see-through holes, and all internal components (tubes, baffles) appear properly attached and grounded. The geometry looks clean and consistent with a professional CAD or 3D training model.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789449564,
+  "id": "2026091513191796802e21d3b045cf",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091513191796802e21d3b045cf",
+  "usage": {
+    "completion_tokens": 361,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1787,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2148
+  }
+}

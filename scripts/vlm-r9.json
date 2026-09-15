@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Image 1: Yes. The 'YOUR PROJECTS' section is present, containing the 'Router Stress Test' card with the flowsheet thumbnail, stats (10 UNITS · 15 STREAMS · 512 T/D), and a 'CRITIC 92' badge. The 'New project' dashed card is also visible to its left.\nImage 2: Yes. The layout stacks vertically without horizontal overflow. The hero text and buttons are at the top, followed by the AI builder widget, and there is a round black floating action button ('Build with AI') in the bottom-right corner.\nImage 3: No. The image displays a light theme with a light gray canvas and dark text; it does not show a dark mode implementation.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789446032,
+  "id": "202609151220265591732f962e4482",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609151220265591732f962e4482",
+  "usage": {
+    "completion_tokens": 153,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3853,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 4006
+  }
+}
