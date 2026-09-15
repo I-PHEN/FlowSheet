@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.reddit.com/r/AI_Agents/comments/1m87noa/cost_comparison_on_voice_agents",
+    "name": "Cost comparison on Voice Agents : r/AI_Agents",
+    "snippet": "Retell does get expensive fast but their quality is solid. AI calls are around $0.25/min, and they also have fixed monthly plans starting at $ ...",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.retellai.com/blog/how-much-should-you-spend-on-an-ai-voice-agent",
+    "name": "How Much Should You Spend on AI Voice Agents?",
+    "snippet": "Bland AI Pricing: Charges $0.09 per minute for connected calls. · Vapi Pricing: Generally offers competitive rates starting around $0.05 per minute . · Vocode ... Read more",
+    "host_name": "www.retellai.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.linkedin.com/pulse/best-voice-ai-agent-vapi-vs-retell-tough-tongue-2026-sewarkar-at6fc",
+    "name": "Best Voice AI Agent: Vapi vs Retell AI vs Tough Tongue AI",
+    "snippet": "Vapi's hosting cost starts at $0.05 per minute , effective rates typically land between $0.18 and $0.33 per minute. Pay-as-you-go pricing ...",
+    "host_name": "www.linkedin.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://telnyx.com/resources/vapi-pricing",
+    "name": "VAPI pricing: per-minute rates, tiers, fees, discounts",
+    "snippet": "May 20, 2026 — Retell AI prices voice agents at $0.07+ per minute , while Telnyx prices Voice AI orchestration at $0.05/min on a single platform, with STT and ...",
+    "host_name": "telnyx.com",
+    "rank": 3,
+    "date": "May 20, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.forasoft.com/blog/article/vapi-vs-retell-vs-custom",
+    "name": "Vapi vs Retell AI vs Custom: When Managed Stops Scaling",
+    "snippet": "Jul 13, 2026 — Vapi's “$0.05/min” is a hosting fee on top of the models you bring ; Retell's “$0.07/min” is a $0.055/min voice-infra floor plus LLM, TTS, and ... Read more",
+    "host_name": "www.forasoft.com",
+    "rank": 4,
+    "date": "Jul 13, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://synthflow.ai/blog/vapi-ai-pricing",
+    "name": "Decoding Vapi AI Pricing and Plans in 2025",
+    "snippet": "Jun 9, 2025 — With Vapi AI : Plan: Startup at $800 per month (includes 7,500 minutes ) Overage: 2,500 minutes 400 Hosting: 10,000 minutes × $0.05 = $500 AI ...",
+    "host_name": "synthflow.ai",
+    "rank": 5,
+    "date": "Jun 9, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.famulor.io/blog/retell-ai-vs-vapi-2026-which-platform-is-actually-better",
+    "name": "Retell AI vs Vapi (2026): Which Wins?",
+    "snippet": "Apr 2, 2026 — Vapi is generally cheaper per minute due to a lower platform fee. Additional costs are the same. Retell often feels more natural due to lower ...",
+    "host_name": "www.famulor.io",
+    "rank": 6,
+    "date": "Apr 2, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.callmissed.com/blog/ai-voice-agent-vendor-comparison-choosing-best",
+    "name": "AI Voice Agent Vendor Comparison: Choosing the Best",
+    "snippet": "Jul 5, 2026 — Vapi: Imposes a fixed platform fee of $0.05/minute on top of your underlying usage, bringing realistic production costs to $0.10–$0.30/minute ... Read more",
+    "host_name": "www.callmissed.com",
+    "rank": 7,
+    "date": "Jul 5, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://www.reddit.com/r/webdev/comments/1pvrpk1/til_the_web_speech_api_exists_and_its_way_more",
+    "name": "TIL the Web Speech API exists and it's way more useful",
+    "snippet": "It's supported in Chrome and Safari. Latency is basically instant . Voices, rate, pitch, and language are configurable. Works entirely client- ... Read more",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://vocafuse.com/blog/web-speech-api-vs-cloud-apis",
+    "name": "Web Speech API: Complete Guide & When to Upgrade",
+    "snippet": "Nov 25, 2025 — Key Limitations of Web Speech API​ · 1. Browser Support Gaps ​ · 2. Limited Customization​ · 3. No Backend Control​ · 4. Reliability Issues​ · 5. Read more",
+    "host_name": "vocafuse.com",
+    "rank": 1,
+    "date": "Nov 25, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.assemblyai.com/blog/speech-recognition-javascript-web-speech-api",
+    "name": "Speech recognition in the browser using Web Speech API",
+    "snippet": "Jun 9, 2026 — The Web Speech API is free but limited to basic transcription with no uptime guarantees, no data processing agreement, and inconsistent ...",
+    "host_name": "www.assemblyai.com",
+    "rank": 2,
+    "date": "Jun 9, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://anotherwrapper.com/blog/speech-recognition-api-free",
+    "name": "Top Speech Recognition API Free Options in 2025",
+    "snippet": "Jun 6, 2025 — the Web Speech API does have some limitations . Accuracy can also vary between browsers, and the API lacks offline functionality. Customization ...",
+    "host_name": "anotherwrapper.com",
+    "rank": 3,
+    "date": "Jun 6, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/41563175/is-there-web-speech-api-limitation",
+    "name": "Is there Web Speech API Limitation?",
+    "snippet": "I'm using W3C Browser Web Speech API. I search everywhere but I can't find it answer. Is there any limitation for usage? Demonstration: https://www.google.com/i ...",
+    "host_name": "stackoverflow.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API",
+    "name": "Web Speech API - MDN Web Docs - Mozilla",
+    "snippet": "Aug 19, 2026 — The Web Speech API enables you to incorporate voice data into web apps. The Web Speech API has two parts: SpeechSynthesis (Text-to- Speech ), ...",
+    "host_name": "developer.mozilla.org",
+    "rank": 5,
+    "date": "Aug 19, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://h5p.org/node/1557513",
+    "name": "What is the alternative for the Web Speech API?",
+    "snippet": "Mar 7, 2026 — Since Chrome 139 (August 2025 ), however, Chrome has been moving towards on-device speech recognition . In the latest release, Chrome 160 ... Read more",
+    "host_name": "h5p.org",
+    "rank": 6,
+    "date": "Mar 7, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/WebAudio/web-speech-api/blob/main/explainers/on-device-speech-recognition.md",
+    "name": "On-Device Speech Recognition for the Web Speech API",
+    "snippet": "Latency issues: Users may experience delays due to network communication. Offline limitations : Speech recognition does not work without an internet connection. Read more",
+    "host_name": "github.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

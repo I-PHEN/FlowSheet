@@ -1,0 +1,77 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://community.openai.com/t/api-model-whisper-real-cost/469816",
+    "name": "API model whisper - Real cost",
+    "snippet": "Nov 4, 2023 — Estimated cost: 233.34 $. So the cost is not 0.006 $ / minute but the real cost should be 0.010 $ per minute . use whisper model with openai php ...",
+    "host_name": "community.openai.com",
+    "rank": 0,
+    "date": "Nov 4, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://costgoat.com/pricing/openai-transcription",
+    "name": "OpenAI Transcription & Whisper API Pricing Calculator",
+    "snippet": "Per-Minute Pricing (Recommended). Simple per-minute billing: Whisper & GPT-4o Transcribe at $0.006/minute ($0.36/hour), GPT-4o Mini at $0.003/minute ($0.18/hour) ... Read more",
+    "host_name": "costgoat.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.openai.com/t/audio-model-pricing-is-unclear/1149806",
+    "name": "Audio Model Pricing is Unclear - Documentation",
+    "snippet": "Mar 22, 2025 — According to the documentation, Whisper is $0.006/minute while TTS is $15.00 for 1M characters. It would be nice if there was an estimated cost ... Read more",
+    "host_name": "community.openai.com",
+    "rank": 2,
+    "date": "Mar 22, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://invertedstone.com/calculators/whisper-pricing",
+    "name": "OpenAI Whisper Pricing Calculator",
+    "snippet": "OpenAI audio API costs for GPT-4o Transcribe, ($0.003/min), Whisper, Transcription Price: $0.006/minute Minutes of Audio ($0.006/min) TTS Standard: $15/1M ...",
+    "host_name": "invertedstone.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://vatis.tech/blog/openai-whisper-in-house-transcription-is-it-worth-the-cost",
+    "name": "OpenAI Whisper In-House Transcription: Is It Worth the Cost?",
+    "snippet": "Oct 17, 2024 — The OpenAI Whisper API costs $0.006 per minute of audio (about $0.36 per hour). For 500 hours/month that's roughly $180/month. OpenAI's newer ... Read more",
+    "host_name": "vatis.tech",
+    "rank": 4,
+    "date": "Oct 17, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://brasstranscripts.com/blog/openai-whisper-api-pricing-2025-self-hosted-vs-managed",
+    "name": "Whisper API Pricing (2026) — $0.006/min vs Self‑Host Costs",
+    "snippet": "Jan 22, 2026 — OpenAI Whisper API pricing shows $ 0.006 per minute ($0.36/hour) for managed transcription—one of the most competitive rates in the market. Read more",
+    "host_name": "brasstranscripts.com",
+    "rank": 5,
+    "date": "Jan 22, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.openai.com/api/docs/pricing",
+    "name": "Pricing | OpenAI API",
+    "snippet": "Transcription models ; gpt-4o-transcribe, Transcription, $2.50, $10.00, $0.006 / minute ; gpt-4o-mini-transcribe, Transcription, $1.25, $5.00, $0.003 / minute ... Read more",
+    "host_name": "developers.openai.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.gladia.io/blog/openai-whisper-vs-google-speech-to-text-vs-amazon-transcribe",
+    "name": "OpenAI Whisper vs Google STT vs Amazon Transcribe",
+    "snippet": "Apr 15, 2026 — OpenAI Whisper API remains the lowest commercial per - minute rate at $0.006/ minute and $0.003/ minute for gpt - 4o -mini- transcribe .",
+    "host_name": "www.gladia.io",
+    "rank": 7,
+    "date": "Apr 15, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

@@ -1,0 +1,32 @@
+🚀 Initializing Z-AI SDK...
+🚀 Invoking function: web_search...
+[
+  {
+    "url": "https://community.openai.com",
+    "name": "Realtime API pricing questions: text input and audio tokens",
+    "snippet": "Nov 21, 2025 — 150 spoken words per min at 0.75 tokens per word gives you around 200 tokens per minute . Varies a lot by language, cadence, technical nature of ...",
+    "host_name": "community.openai.com",
+    "rank": 0,
+    "date": "Nov 21, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://openai.com",
+    "name": "Introducing the Realtime API",
+    "snippet": "Oct 1, 2024 — Audio input is priced at $100 per 1M tokens and output is $200 per 1M tokens . This equates to approximately $0.06 per minute of audio input and ... Read more",
+    "host_name": "openai.com",
+    "rank": 1,
+    "date": "Oct 1, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.forasoft.com",
+    "name": "OpenAI Realtime API Pricing: The Real Cost Per Minute",
+    "snippet": "Jul 13, 2026 — gpt-realtime-2.1 costs $32 per 1M audio-input tokens and $64 per 1M audio-output tokens. Output audio is the floor.",
+    "host_name": "www.forasoft.com",
+    "rank": 2,
+    "date": "Jul 13, 2026",
+    "favicon": ""
+  }
+]
+🎉 Function invocation completed!

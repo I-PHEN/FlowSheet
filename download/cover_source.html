@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ammonia Plant Builder Agent — Pre-Build Research and Enhancement Plan</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-bg: #f4f5f5;
+    --c-accent: #1f6c92;
+    --c-text: #131515;
+    --c-muted: #747b7e;
+    --c-mid: #32454e;
+    --c-surface: #e8eaeb;
+  }
+  @page { size: 794px 1123px; margin: 0; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--c-bg);
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+  .cover {
+    position: relative;
+    width: 794px;
+    height: 1123px;
+    background: var(--c-bg);
+  }
+  /* ── Layer 1: background grid (clipped) ─────────────────────────── */
+  .layer1 {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 1;
+  }
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(to right, rgba(50,69,78,0.045) 0px, rgba(50,69,78,0.045) 1px, transparent 1px, transparent 66px),
+      repeating-linear-gradient(to bottom, rgba(50,69,78,0.045) 0px, rgba(50,69,78,0.045) 1px, transparent 1px, transparent 66px);
+  }
+  /* ── Layer 2: structure — ultra-thick left anchor line ──────────── */
+  .layer2 {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+  }
+  .anchor-line {
+    position: absolute;
+    left: 95px;
+    top: 112px;
+    width: 8px;
+    height: 899px;
+    background: var(--c-accent);
+  }
+  /* ── Layer 3: content (left edge = 95 + 8 + 75 = 178px, 2U gap) ── */
+  .layer3 {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+  }
+  .kicker {
+    position: absolute;
+    left: 178px;
+    top: 170px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--c-mid);
+    opacity: 0.62;
+    max-width: 540px;
+  }
+  .title-l1 {
+    position: absolute;
+    left: 178px;
+    top: 320px;
+    font-size: 62px;
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--c-text);
+    max-width: 545px;
+    letter-spacing: -1px;
+    white-space: nowrap;
+  }
+  .title-l2 {
+    position: absolute;
+    left: 178px;
+    top: 400px;
+    font-size: 62px;
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--c-accent);
+    max-width: 545px;
+    letter-spacing: -1px;
+    white-space: nowrap;
+  }
+  .summary {
+    position: absolute;
+    left: 178px;
+    top: 566px;
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.62;
+    color: var(--c-text);
+    opacity: 0.85;
+    max-width: 470px;
+  }
+  .meta {
+    position: absolute;
+    left: 178px;
+    top: 848px;
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.55;
+    color: var(--c-mid);
+    max-width: 540px;
+  }
+  .meta .sub {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--c-muted);
+    margin-top: 6px;
+  }
+  .footer {
+    position: absolute;
+    left: 178px;
+    top: 1006px;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--c-mid);
+    opacity: 0.6;
+    max-width: 560px;
+  }
+</style>
+</head>
+<body>
+  <div class="cover">
+    <div class="layer1">
+      <div class="grid"></div>
+    </div>
+    <div class="layer2">
+      <div class="anchor-line"></div>
+    </div>
+    <div class="layer3">
+      <div class="kicker">Pre-Build Research Dossier</div>
+      <div class="title-l1">Ammonia Plant</div>
+      <div class="title-l2">Builder Agent</div>
+      <div class="summary">
+        A stress test of the architecture, a map of the competitive white space, a hardened
+        engineering core with verified correlations and validation sources, and a staged
+        roadmap from solid MVP to an extremely interactive plant trainer.
+      </div>
+      <div class="meta">
+        Prepared for Daemon &middot; KNUST Chemical Engineering
+        <div class="sub">Research pass &middot; August 2026 &middot; Scope: ammonia only</div>
+      </div>
+      <div class="footer">Corrections &middot; Landscape &middot; Engine &middot; Interactivity &middot; Stack &middot; Risks &middot; Roadmap</div>
+    </div>
+  </div>
+</body>
+</html>
