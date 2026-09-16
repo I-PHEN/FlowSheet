@@ -14,8 +14,9 @@
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { Kpis } from '@/lib/engine/types';
 import type { CriticVerdict, SavedPlant } from '@/lib/agent/protocol';
+import type { Tour } from '@/lib/content/units';
 
-export const PLANT_SCHEMA_VERSION = 1;
+export const PLANT_SCHEMA_VERSION = 2;
 
 /** anonymous browser owner id (localStorage) — the per-user isolation key */
 export const OWNER_KEY = 'fs.owner';
@@ -33,6 +34,10 @@ export interface PlantRecord {
   verdict: CriticVerdict | null;
   productionTpd: number | null;
   source: 'user';
+  /** v2: which plant family built this (drives badges + KPI labels) */
+  family?: string;
+  /** v2: the docent's authored tour (falls back to the auto-tour when absent) */
+  tour?: Tour | null;
 }
 
 /** collision-safe-enough local id: time-ordered + random tail */
@@ -78,6 +83,35 @@ export function recordFromSaved(sp: SavedPlant, ownerId: string): PlantRecord {
     productionTpd: sp.productionTpd ?? null,
     source: 'user',
   };
+}
+
+/** v1 records predate families + tours — they read as ammonia + auto-tour */
+export function effectiveFamily(rec: PlantRecord): string {
+  return rec.family ?? rec.graph.family ?? 'ammonia';
+}
+
+/** the tour a viewer should play: the docent's if present, else the auto-tour */
+export function recordTour(rec: PlantRecord, auto: Tour): Tour {
+  if (rec.tour && Array.isArray(rec.tour.steps) && rec.tour.steps.length >= 3) {
+    return rec.tour;
+  }
+  return auto;
+}
+
+/** import sanitization for the v2 optional fields */
+export function safeTour(t: unknown): Tour | null {
+  if (!t || typeof t !== 'object') return null;
+  const o = t as Record<string, unknown>;
+  if (!Array.isArray(o.steps) || o.steps.length < 3) return null;
+  const ok = o.steps.every(
+    (s) =>
+      !!s &&
+      typeof s === 'object' &&
+      typeof (s as { title?: unknown }).title === 'string' &&
+      typeof (s as { text?: unknown }).text === 'string' &&
+      !!(s as { ref?: unknown }).ref,
+  );
+  return ok ? (t as Tour) : null;
 }
 
 /** shape-check an unknown JSON blob (import file / legacy store) */
@@ -136,5 +170,7 @@ export function recordFromImport(json: unknown): PlantRecord | null {
     verdict,
     productionTpd: typeof o.productionTpd === 'number' ? o.productionTpd : (kpis?.productionTpd ?? null),
     source: 'user',
+    family: typeof o.family === 'string' ? o.family : undefined,
+    tour: safeTour(o.tour),
   };
 }

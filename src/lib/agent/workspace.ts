@@ -20,6 +20,7 @@ import { executeGraph } from '../engine/executor';
 import type { PlantResult, StreamClass } from '../engine/types';
 import { SPECIES, SP } from '../engine/species';
 import { total } from '../engine/thermo';
+import { getFamily } from '../families';
 import type { ToolCall, ToolResult, SolveSummary } from './protocol';
 import { graphDigest } from './catalog';
 
@@ -319,8 +320,13 @@ export class AgentWorkspace {
       const result = executeGraph(this.graph);
       this.lastResult = result;
       const summary = this.solveSummary()!;
+      const product = getFamily(this.graph.family).productSpecies;
+      const headline =
+        result.kpis.familyKpis && result.kpis.familyKpis.length > 0
+          ? result.kpis.familyKpis.slice(0, 3).map((k) => k.value).join(', ')
+          : `production ${result.kpis.productionTpd.toFixed(1)} t/d, purity ${(result.kpis.productPurityWt * 100).toFixed(1)} wt %, per-pass ${(result.kpis.perPassConv * 100).toFixed(1)} %`;
       return ok(
-        `solved: converged=${result.converged}, ${result.iterations} loop iterations, ${result.solveMs.toFixed(0)} ms — production ${result.kpis.productionTpd.toFixed(1)} t/d, purity ${(result.kpis.productPurityWt * 100).toFixed(1)} wt %, per-pass ${(result.kpis.perPassConv * 100).toFixed(1)} %`,
+        `solved: converged=${result.converged}, ${result.iterations} loop iterations, ${result.solveMs.toFixed(0)} ms — ${product}: ${headline}`,
         { ...summary },
       );
     } catch (e) {

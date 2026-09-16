@@ -20,6 +20,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
 import type { PlantRecord } from '@/lib/projects/record';
 import { generateTour } from '@/lib/projects/tour';
+import { effectiveFamily, recordTour } from '@/lib/projects/record';
+import { getFamily } from '@/lib/families';
 import { useTourAudio, unlockAudio } from '@/lib/audio/tourAudio';
 import { setTourActive } from '@/lib/ui/tourBus';
 
@@ -42,7 +44,11 @@ export default function ProjectPage() {
     };
   }, [id]);
 
-  const tour = useMemo(() => (rec && rec !== 'missing' ? generateTour(rec) : null), [rec]);
+  const autoTour = useMemo(() => (rec && rec !== 'missing' ? generateTour(rec) : null), [rec]);
+  const tour = useMemo(
+    () => (rec && rec !== 'missing' && autoTour ? recordTour(rec, autoTour) : null),
+    [rec, autoTour],
+  );
 
   // narrated audio for the running tour (voice + music + ducking)
   const audio = useTourAudio(tour ?? DUMMY_TOUR, tourIdx ?? 0);
@@ -107,6 +113,8 @@ export default function ProjectPage() {
   const streamCount = rec.graph.streams.filter((s) => !s.implicit).length;
   const step = tourIdx !== null && tour ? tour.steps[tourIdx] : null;
   const k = rec.kpis;
+  const family = getFamily(effectiveFamily(rec));
+  const authoredTour = !!rec.tour && Array.isArray(rec.tour.steps) && rec.tour.steps.length >= 3;
 
   return (
     <div className="flex h-dvh flex-col" style={{ background: C.canvas }}>
@@ -125,8 +133,17 @@ export default function ProjectPage() {
           ←
         </Link>
         <div className="min-w-0">
-          <div className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
-            {rec.name}
+          <div className="flex items-center gap-2">
+            <span
+              className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
+              style={{ borderColor: C.nh3, color: C.nh3 }}
+              title={`${family.name} family — ${family.route}`}
+            >
+              {family.name.toUpperCase()} · {family.productSpecies}
+            </span>
+            <span className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
+              {rec.name}
+            </span>
           </div>
           <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
             {unitCount} units · {streamCount} streams · saved{' '}
@@ -206,19 +223,30 @@ export default function ProjectPage() {
               THE NUMBERS
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <Stat
-                label="PRODUCTION"
-                value={k ? `${Math.round(k.productionTpd).toLocaleString()} t/d` : '—'}
-              />
-              <Stat
-                label="PRODUCT PURITY"
-                value={k ? `${(k.productPurityWt * 100).toFixed(1)} wt%` : '—'}
-              />
-              <Stat
-                label="PER-PASS CONVERSION"
-                value={k ? `${(k.perPassConv * 100).toFixed(1)}%` : '—'}
-              />
-              <Stat label="UNITS · STREAMS" value={`${unitCount} · ${streamCount}`} />
+              {k && k.familyKpis && k.familyKpis.length > 0 ? (
+                <>
+                  {k.familyKpis.slice(0, 3).map((fk) => (
+                    <Stat key={fk.label} label={fk.label.toUpperCase()} value={fk.value} />
+                  ))}
+                  <Stat label="UNITS · STREAMS" value={`${unitCount} · ${streamCount}`} />
+                </>
+              ) : (
+                <>
+                  <Stat
+                    label="PRODUCTION"
+                    value={k ? `${Math.round(k.productionTpd).toLocaleString()} t/d` : '—'}
+                  />
+                  <Stat
+                    label="PRODUCT PURITY"
+                    value={k ? `${(k.productPurityWt * 100).toFixed(1)} wt%` : '—'}
+                  />
+                  <Stat
+                    label="PER-PASS CONVERSION"
+                    value={k ? `${(k.perPassConv * 100).toFixed(1)}%` : '—'}
+                  />
+                  <Stat label="UNITS · STREAMS" value={`${unitCount} · ${streamCount}`} />
+                </>
+              )}
             </div>
             {k && (
               <div
@@ -266,14 +294,15 @@ export default function ProjectPage() {
           {/* the tour */}
           <div className="p-4">
             <div className="font-mono text-[9.5px] font-bold tracking-[0.16em]" style={{ color: C.inkFaint }}>
-              GUIDED TOUR · GENERATED FROM YOUR BUILD
+              {authoredTour ? 'GUIDED TOUR · WRITTEN BY THE DOCENT FOR THIS PLANT' : 'GUIDED TOUR · GENERATED FROM YOUR BUILD'}
             </div>
 
             {tourIdx === null || !tour ? (
               <>
                 <p className="mt-2 text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
-                  A narrated walk down the process path — intro, unit by unit, the numbers.
-                  Voice and a soft instrumental bed, just like the prebuilt plants.
+                  {authoredTour
+                    ? `The docent agent wrote this tour from the solved ${family.name.toLowerCase()} plant — every number was computed, not invented. Voice and a soft instrumental bed.`
+                    : 'A narrated walk down the process path — intro, unit by unit, the numbers. Voice and a soft instrumental bed, just like the prebuilt plants.'}
                 </p>
                 <button
                   type="button"

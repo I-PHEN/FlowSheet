@@ -97,6 +97,10 @@ export interface FlowGraph {
   units: GraphUnit[];
   streams: StreamEdge[];
   controllers: GraphController[];
+  /** plant family this graph belongs to ('ammonia' | 'methanol' | 'hydrogen').
+   *  Drives the family KPI hook + tear initializer in the executor; defaults
+   *  to 'ammonia' when absent (legacy graphs are ammonia graphs). */
+  family?: string;
 }
 
 /** a validation finding — the strings the agent reads to self-correct */

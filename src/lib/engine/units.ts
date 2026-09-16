@@ -4,7 +4,7 @@ import { SP as SP_DATA } from './species';
 import { enthalpyRate, kMix, total, fracs } from './thermo';
 import { prZ, prFugacity, prEnthalpyDep } from './pr';
 import { flashPT } from './flash';
-import { solveSmrWgs, solveNh3Eq, solveMethanator } from './reactions';
+import { solveSmrWgs, solveNh3Eq, solveMethanator, solveMeohEq, composeMeoh } from './reactions';
 import type { FlashResult } from './flash';
 
 /**
@@ -538,6 +538,46 @@ export function converterBed(nIn: Moles, TIn: number, P: number, eta: number): B
     nh3In,
     nh3Out: totOut > 0 ? nOut[6] / totOut : 0,
     reached,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Methanol converter bed — adiabatic equilibrium over Cu/ZnO/Al2O3, the
+// mirror of converterBed above (same secant-on-outlet-T fixed point, same
+// fractional-approach handling), with the two parallel MeOH extents.
+// ---------------------------------------------------------------------------
+
+export interface MeohBedResult {
+  n: Moles;
+  TOut: number;
+  xi1: number; // actual CO-route extent
+  xi2: number; // actual CO2-route extent
+  coIn: number; // mol % (CO + CO2) in
+  coOut: number; // mol % (CO + CO2) out
+  reached: boolean;
+}
+
+export function meohBed(nIn: Moles, TIn: number, P: number, eta: number): MeohBedResult {
+  const totIn = total(nIn);
+  const carbonIn = nIn[2] + nIn[3]; // CO + CO2
+  const solveAt = (T: number) => {
+    const eq = solveMeohEq(nIn, T, P);
+    const x1 = eta * eq.xi1;
+    const x2 = eta * eq.xi2;
+    return { T: adiabaticT(nIn, TIn, composeMeoh(nIn, x1, x2)), x1, x2, reached: eq.reached };
+  };
+  const T = secantFixedT((Tg) => solveAt(Tg).T, TIn + 25, 1e-6, 20);
+  const rf = solveAt(T);
+  const nOut = composeMeoh(nIn, rf.x1, rf.x2);
+  const totOut = total(nOut);
+  return {
+    n: nOut,
+    TOut: T,
+    xi1: rf.x1,
+    xi2: rf.x2,
+    coIn: totIn > 0 ? (carbonIn / totIn) * 100 : 0,
+    coOut: totOut > 0 ? ((nOut[2] + nOut[3]) / totOut) * 100 : 0,
+    reached: rf.reached,
   };
 }
 

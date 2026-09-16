@@ -201,8 +201,9 @@ export default function Home() {
 
         {/* ---- the standing invitation ---- */}
         <p className="mx-auto mt-12 max-w-[560px] text-center text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
-          Or skip the curriculum entirely — open the builder, describe the plant in your head,
-          and the agents will engineer it in front of you.
+          Or skip the curriculum entirely — open the builder, describe the plant in your head — ammonia,
+          methanol or hydrogen — and the agents will engineer it, solve it, and write its guided tour in
+          front of you.
         </p>
       </main>
 

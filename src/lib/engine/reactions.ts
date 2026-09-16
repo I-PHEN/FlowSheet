@@ -371,4 +371,122 @@ export function solveNh3Eq(nIn: Moles, T: number, P: number): Nh3EqResult {
   return { xi, n: compose(xi), reached: true };
 }
 
+// ---------------------------------------------------------------------------
+// Methanol synthesis equilibrium (species #3 — the methanol family)
+// ---------------------------------------------------------------------------
+//
+// Two parallel reactions over Cu/ZnO/Al2O3:
+//   r1:  CO  + 2 H2 ⇌ CH3OH          ΔH°298 −90.5 kJ/mol, ΔS°298 −219.0 J/mol·K
+//   r2:  CO2 + 3 H2 ⇌ CH3OH + H2O    ΔH°298 −49.3 kJ/mol, ΔS°298 −177.0 J/mol·K
+//
+// Kp from ΔG°(T) with constant-ΔCp correction (textbook method; ΔCp from the
+// Cp(T) fits in species.ts): ln K = −ΔG°(T)/(R·T), bar basis (Δn = −2).
+// Anchor check at 523 K (250 °C): K1 ≈ 2.4e−3 bar⁻², K2 ≈ 2.4e−5 bar⁻² —
+// within a factor ~2 of the Graaf-era correlations, which is teaching-grade
+// (the per-pass conversion story it tells matches industrial practice).
+
+/** r1: CO + 2 H2 ⇌ CH3OH — K1 = p_MeOH / (p_CO · p_H2²) [bar⁻²] */
+export function kpMeOH1(T: number): number {
+  const dCp = -30.0;
+  const dH = -90500 + dCp * (T - 298.15);
+  const dS = -219.0 + dCp * Math.log(T / 298.15);
+  return Math.exp(-(dH - T * dS) / (RG * T));
+}
+
+/** r2: CO2 + 3 H2 ⇌ CH3OH + H2O — K2 = (p_MeOH · p_H2O) / (p_CO2 · p_H2³) [bar⁻²] */
+export function kpMeOH2(T: number): number {
+  const dCp = -41.0;
+  const dH = -49300 + dCp * (T - 298.15);
+  const dS = -177.0 + dCp * Math.log(T / 298.15);
+  return Math.exp(-(dH - T * dS) / (RG * T));
+}
+
+export interface MeohEqResult {
+  /** extent of r1 (CO route), kmol/h */
+  xi1: number;
+  /** extent of r2 (CO2 route), kmol/h */
+  xi2: number;
+  n: Moles;
+  reached: boolean;
+}
+
+/** apply both extents (indexes: CO 2, CO2 3, H2 0, H2O 7, CH3OH 11) */
+export function composeMeoh(nIn: Moles, xi1: number, xi2: number): Moles {
+  const n = nIn.slice();
+  n[2] -= xi1;
+  n[0] -= 2 * xi1;
+  n[11] += xi1;
+  n[3] -= xi2;
+  n[0] -= 3 * xi2;
+  n[11] += xi2;
+  n[7] += xi2;
+  return n;
+}
+
+/**
+ * Simultaneous r1 + r2 equilibrium at T [K], P [Pa] — alternating bisection
+ * on the two extents (each Q is monotone in its own extent, and the coupling
+ * through H2 is weak), failure-free by construction like the NH3 solver.
+ */
+export function solveMeohEq(nIn: Moles, T: number, P: number): MeohEqResult {
+  const P_bar = P / 1e5;
+  const K1 = kpMeOH1(T);
+  const K2 = kpMeOH2(T);
+
+  const xi1Max = Math.max(0, Math.min(nIn[2], nIn[0] / 2));
+  const xi2Max = Math.max(0, Math.min(nIn[3], nIn[0] / 3));
+
+  const q = (x1: number, x2: number): [number, number] => {
+    const n = composeMeoh(nIn, x1, x2);
+    let tot = 0;
+    for (let i = 0; i < N_SP; i++) tot += Math.max(n[i], 0);
+    if (tot <= 0 || P_bar <= 0) return [0, 0];
+    const p = (i: number) => (Math.max(n[i], 0) / tot) * P_bar;
+    const pH2 = Math.max(p(0), 1e-300);
+    const q1 = p(11) / (Math.max(p(2), 1e-300) * pH2 * pH2);
+    const q2 = (p(11) * p(7)) / (Math.max(p(3), 1e-300) * pH2 * pH2 * pH2);
+    return [q1, q2];
+  };
+
+  if (xi1Max <= 0 && xi2Max <= 0) return { xi1: 0, xi2: 0, n: nIn.slice(), reached: true };
+
+  // alternating bisection: inner solves ξ1 at fixed ξ2 (Q1 ↓ in ξ1), then ξ2
+  // at fixed ξ1 (Q2 ↓ in ξ2); both are bracketed [0, max]
+  let x2 = 0;
+  let x1 = 0;
+  let reached = true;
+  const bisect = (
+    f: (v: number) => number,
+    K: number,
+    hiMax: number,
+  ): { v: number; hitBound: boolean } => {
+    const hi = Math.max(hiMax * (1 - 1e-10), 0);
+    if (hi <= 0 || f(hi) < K) return { v: hi, hitBound: true }; // eq beyond reachable extent
+    let a = 0;
+    let b = hi;
+    if (f(0) >= K) return { v: 0, hitBound: false }; // already past eq at zero extent
+    for (let k = 0; k < 60; k++) {
+      const mid = 0.5 * (a + b);
+      if (f(mid) < K) a = mid;
+      else b = mid;
+    }
+    return { v: 0.5 * (a + b), hitBound: false };
+  };
+
+  for (let outer = 0; outer < 30; outer++) {
+    const r1 = bisect((v) => q(v, x2)[0], K1, xi1Max);
+    if (r1.hitBound) reached = false;
+    x1 = r1.v;
+    const r2 = bisect((v) => q(x1, v)[1], K2, xi2Max);
+    if (r2.hitBound) reached = false;
+    const x2New = r2.v;
+    if (Math.abs(x2New - x2) < 1e-9) {
+      x2 = x2New;
+      break;
+    }
+    x2 = x2New;
+  }
+  return { xi1: x1, xi2: x2, n: composeMeoh(nIn, x1, x2), reached };
+}
+
 export { RG };

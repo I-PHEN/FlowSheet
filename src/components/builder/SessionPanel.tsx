@@ -27,7 +27,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { BuildPhase, CriticVerdict, SolveSummary } from '@/lib/agent/protocol';
-import { PRESET_BRIEFS } from '@/lib/agent/protocol';
+import { FAMILIES } from '@/lib/families';
 import { C } from '@/lib/design/tokens';
 
 // ── the log model (page-owned, derived from BuildEvents) ─────────────────────
@@ -37,7 +37,7 @@ export interface LogEntry {
   kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note';
   phase?: BuildPhase;
   label?: string;
-  role?: 'architect' | 'engineer' | 'critic' | 'system';
+  role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
   text?: string;
   tool?: string;
   ok?: boolean;
@@ -51,6 +51,7 @@ export const PHASE_LABEL: Record<BuildPhase, string> = {
   engineer: 'Engineer building',
   solver: 'Solver verifying',
   critic: 'Critic reviewing',
+  docent: 'Docent writing tour',
   done: 'Done',
 };
 
@@ -59,6 +60,7 @@ export const PHASE_COLOR: Record<BuildPhase, string> = {
   engineer: C.gas,
   solver: C.inkSoft,
   critic: C.nh3,
+  docent: C.utility,
   done: C.nh3,
 };
 
@@ -66,6 +68,7 @@ const ROLE_LABEL: Record<string, string> = {
   architect: 'ARCHITECT',
   engineer: 'ENGINEER',
   critic: 'CRITIC',
+  docent: 'DOCENT',
   system: 'SYSTEM',
 };
 
@@ -73,6 +76,7 @@ const ROLE_COLOR: Record<string, string> = {
   architect: C.feed,
   engineer: C.gas,
   critic: C.nh3,
+  docent: C.utility,
   system: C.inkFaint,
 };
 
@@ -83,7 +87,7 @@ type ToolLine = { key: number; tool: string; ok: boolean; seq: number; text: str
 type Block =
   | { kind: 'user'; key: number; text: string }
   | { kind: 'phase'; key: number; phase: BuildPhase; label: string }
-  | { kind: 'message'; key: number; role: 'architect' | 'engineer' | 'critic' | 'system'; text: string }
+  | { kind: 'message'; key: number; role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string }
   | { kind: 'activity'; key: number; lines: ToolLine[] }
   | { kind: 'solve'; key: number; solve: SolveSummary }
   | { kind: 'verdict'; key: number; verdict: CriticVerdict }
@@ -149,7 +153,7 @@ function PhaseRow({ phase, label }: { phase: BuildPhase; label: string }) {
   );
 }
 
-function AgentMessage({ role, text }: { role: 'architect' | 'engineer' | 'critic' | 'system'; text: string }) {
+function AgentMessage({ role, text }: { role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string }) {
   return (
     <div className="bd-msg-in">
       <div className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: ROLE_COLOR[role] }}>
@@ -249,17 +253,20 @@ function ActivityCluster({ lines, live }: { lines: ToolLine[]; live: boolean }) 
   );
 }
 
-/** the solver's answer, as a compact result card */
+/** the solver's answer, as a compact result card (family-aware rows) */
 function SolveCard({ solve }: { solve: SolveSummary }) {
   const k = solve.kpis;
-  const rows = [
-    { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d` },
-    { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %` },
-    { label: 'Per-pass', value: `${(k.perPassConv * 100).toFixed(1)} %` },
-    { label: 'H2/N2', value: k.h2n2Ratio.toFixed(3) },
-    { label: 'Loop inerts', value: `${(k.loopInerts * 100).toFixed(1)} %` },
-    { label: 'Spec. energy', value: `${k.specificEnergyGJt.toFixed(2)} GJ/t` },
-  ];
+  const rows =
+    k.familyKpis && k.familyKpis.length > 0
+      ? k.familyKpis.map((fk) => ({ label: fk.label, value: fk.value }))
+      : [
+          { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d` },
+          { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %` },
+          { label: 'Per-pass', value: `${(k.perPassConv * 100).toFixed(1)} %` },
+          { label: 'H2/N2', value: k.h2n2Ratio.toFixed(3) },
+          { label: 'Loop inerts', value: `${(k.loopInerts * 100).toFixed(1)} %` },
+          { label: 'Spec. energy', value: `${k.specificEnergyGJt.toFixed(2)} GJ/t` },
+        ];
   return (
     <div className="bd-msg-in rounded-xl border px-3 py-2.5" style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}>
       <div className="flex items-center gap-2">
@@ -485,45 +492,58 @@ export function SessionPanel({
             What would you like to build?
           </h3>
           <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-            Describe an ammonia plant in plain words. An architect plans it, an engineer wires it, the solver
-            verifies it, and a critic scores it — the flowsheet assembles live on the canvas.
+            Describe a plant in plain words — ammonia, methanol or hydrogen. The router picks the family, an
+            architect plans it, an engineer wires it, the solver verifies it, a critic scores it — and the
+            docent writes your guided tour. The flowsheet assembles live on the canvas.
           </p>
-          <div className="mt-4 flex flex-col gap-2">
-            {PRESET_BRIEFS.map((p, i) => {
-              const Icon = CARD_ICONS[i % CARD_ICONS.length];
-              return (
-                <button
-                  key={p.label}
-                  onClick={() => {
-                    onBriefChange(p.text);
-                    taRef.current?.focus();
-                  }}
-                  className="card-lift group flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left"
-                  style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}
-                >
-                  <span
-                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
-                    style={{ borderColor: 'var(--fs-band-line)', color: CARD_HUES[i % CARD_HUES.length] }}
-                  >
-                    <Icon size={16} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-bold" style={{ color: C.ink }}>
-                      {p.label}
-                    </span>
-                    <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-                      {p.text}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    size={15}
-                    className="mt-1 shrink-0 transition-transform group-hover:translate-x-0.5"
-                    style={{ color: C.inkFaint }}
-                  />
-                </button>
-              );
-            })}
-          </div>
+          {FAMILIES.map((fam) => (
+            <div key={fam.id} className="mt-4">
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.nh3 }}>
+                  {fam.name.toUpperCase()}
+                </span>
+                <span className="truncate text-[10.5px]" style={{ color: C.inkFaint }}>
+                  {fam.route} · product {fam.productSpecies}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {fam.presets.map((p, i) => {
+                  const Icon = CARD_ICONS[i % CARD_ICONS.length];
+                  return (
+                    <button
+                      key={p.label}
+                      onClick={() => {
+                        onBriefChange(p.text);
+                        taRef.current?.focus();
+                      }}
+                      className="card-lift group flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left"
+                      style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}
+                    >
+                      <span
+                        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
+                        style={{ borderColor: 'var(--fs-band-line)', color: CARD_HUES[i % CARD_HUES.length] }}
+                      >
+                        <Icon size={16} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-bold" style={{ color: C.ink }}>
+                          {p.label}
+                        </span>
+                        <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+                          {p.text}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        size={15}
+                        className="mt-1 shrink-0 transition-transform group-hover:translate-x-0.5"
+                        style={{ color: C.inkFaint }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           <p className="mt-auto pt-5 text-[11px] leading-relaxed" style={{ color: C.inkFaint }}>
             The engineer works through the engine&apos;s tool surface — every unit it places appears on the canvas
             the moment it is wired.
