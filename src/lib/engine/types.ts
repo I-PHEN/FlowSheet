@@ -95,6 +95,14 @@ export interface Kpis {
   coSlipLTS: number;
   /** total carbon oxides after methanator, ppmv */
   oxidesAfterMeth: number;
+
+  // ---- plant-family extension (v3): one solver, many products ------------
+  /** which family computed these KPIs ('ammonia' | 'methanol' | 'hydrogen') */
+  family?: string;
+  /** product species name for display ('NH3' | 'CH3OH' | 'H2') */
+  productSpecies?: string;
+  /** family-defined headline KPIs, rendered generically by every panel */
+  familyKpis?: Array<{ label: string; value: string; raw?: number }>;
 }
 
 export interface PlantResult {

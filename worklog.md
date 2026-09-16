@@ -520,3 +520,24 @@ Work Log:
 
 Stage Summary:
 - Repo published clean: full working tree, README, fresh timestamp, zero screenshots, zero secrets. Local `history-backup` branch retains the granular history if ever needed.
+
+---
+Task ID: 25 (plant families + agent-authored tours — v3)
+Agent: main (Super Z)
+Task: Generalize the builder from ammonia-only to PLANT FAMILIES (ammonia / methanol / hydrogen — the "any plant" plan), and add the Docent: a fifth agent that writes the narrated guided tour from the SOLVED plant. Educational scope: students build intuition across different plants.
+
+Work Log:
+- ENGINE: appended CH3OH (species #3, index 11 — append-only convention), two parallel MeOH equilibria (CO + 2H2 and CO2 + 3H2 routes, constant-ΔCp Kp, alternating-bisection solver), meohBed (adiabatic fixed-point mirror of converterBed).
+- ENGINE UNITS: 'meoh-converter' (3-bed Cu/ZnO), 'meoh-separator' (flash + letdown, ports mirror nh3-separator), 'psa' (recovery/purity split, pro-rata impurity slip); widened shared ranges backward-compatibly (whb-cooler outletT→30, feed-preheater 150-450 / 40 bar, loop-mixer + compressor dischargeP min 40).
+- FAMILIES MODULE (src/lib/families/): PlantFamily interface (stages, presentation, primer, conventions fn, presets, tourFocus, referenceGraph, computeKpis, makeupStreamIds, tearGuess) + ammonia (KPI block moved VERBATIM from executor), methanol (14 units, 19 streams, no controller — purge carries the H2 excess), hydrogen (11 units, once-through, PSA, no loop). FlowGraph gains optional family field.
+- EXECUTOR: family hooks — computeKpis + tearGuess + makeupStreamIds replace the ammonia-pinned block; identity gate PASSED byte-for-byte (17 iters, 19 KPI fields, 28 streams, warnings) via scripts/verify-families.ts against a captured pre-refactor baseline.
+- KPI RESILIENCE: structural stream resolution FIRST (equipment-anchored: the stream entering the meoh-converter, leaving the psa product port…), S-id conventions as fallback — after a real build showed the engineer renaming S10/S11 in a duplicate-stream cleanup, zeroing id-only KPI reads and misleading the critic into a phantom "broken loop". All three families structurally resolved; ammonia identity still byte-identical (both paths resolve to the same streams on the reference).
+- AGENT: ROUTER step 0 (keyword fast-path → LLM classify → ammonia default) emitting a 'family' event; all role prompts family-scoped (primer + conventions injected); CRITIC anchored to the family's own canonical route (never demands another family's sections, never flags primer units); DOCENT phase after critic (only on non-fail verdicts) writes the tour from solved facts + graph digest, deterministically sanitized (refs must exist, 40-700 char texts, 3-9 steps) with auto-tour fallback; 'tour' event; solve summaries product-aware; deleted dead blueprint.ts (unused since v2).
+- UI: SessionPanel presets grouped by family (AMMONIA/METHANOL/HYDROGEN headers), docent phase + role styling, family-aware PLANT ANSWER card; builder page family badge + Take-the-tour flow (saves + navigates); project viewer prefers the authored tour (recordTour), family badge, family KPI Stat grid, docent tour copy; PlantRecord schema v2 (+family, +tour, safeTour import sanitization, effectiveFamily v1 fallback); home invitation copy updated.
+- VERIFIED (agent-browser + real LLM builds): methanol brief → router METHANOL → architect 13-unit plan → engineer built + solved (converged, 25-29 loop iterations, 1033-1854 t/d crude) → critic verdict → docent wrote "The Methanol Plant: From Natural Gas to Product" (9 stops) → Take-the-tour flow. Injected a complete solved methanol record (+docent tour) into IndexedDB: viewer shows METHANOL·CH3OH badge, family KPIs (333 t/d, 83.9 wt %, per-pass), docent tour section; tour PLAYS — step narration via /api/tts (3× 200 + prefetch), step dots jump, clean end; dark mode verified programmatically (mean brightness 44 vs 236 light); mobile 390px portrait OK; VLM QA on viewer (clean layout, badge, KPIs, verdict). A mid-session LLM 429 rate-limit window degraded one build honestly (error surfaced, no crash, no tour on fail) — the critic-prompt gap it exposed (demanding ammonia sections in a methanol plant) was fixed.
+- Gates: tsc clean, eslint clean, verify-families ALL PASS (incl. ammonia identity), dev.log clean, zero page errors.
+
+Stage Summary:
+- The builder is now multi-family: one router, one engineer, one solver, one critic, one docent — three plant families, with the family as pure data (add a family = one module + one registry entry).
+- Every agent-built plant ships with a narrated guided tour written by the docent from the solver's real numbers; the deterministic auto-tour remains the fallback.
+- 3D remains the next phase (registry already kind-based — families light it up for free).

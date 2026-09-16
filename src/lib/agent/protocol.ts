@@ -12,9 +12,10 @@
 
 import type { FlowGraph } from '../engine/graph';
 import type { Kpis } from '../engine/types';
+import type { Tour } from '../content/units';
 
-/** the three LLM roles + the deterministic solver phase */
-export type BuildPhase = 'architect' | 'engineer' | 'solver' | 'critic' | 'done';
+/** the LLM roles + the deterministic solver phase (+ the tour-writing docent) */
+export type BuildPhase = 'architect' | 'engineer' | 'solver' | 'critic' | 'docent' | 'done';
 
 export interface SolveSummary {
   kpis: Kpis;
@@ -53,12 +54,16 @@ export interface ToolResult {
 
 export type BuildEvent =
   | { type: 'phase'; phase: BuildPhase; label: string }
-  | { type: 'message'; role: 'architect' | 'engineer' | 'critic' | 'system'; text: string }
+  | { type: 'message'; role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string }
   | { type: 'tool'; seq: number; name: string; args: Record<string, unknown>; ok: boolean; summary: string }
   /** full graph snapshot — emitted after every successful mutation */
   | { type: 'graph'; graph: FlowGraph }
   | { type: 'solve'; seq: number; solve: SolveSummary }
   | { type: 'verdict'; verdict: CriticVerdict }
+  /** the router picked the plant family for this brief */
+  | { type: 'family'; family: string; label: string; reason: string }
+  /** the docent wrote a guided tour for the finished plant */
+  | { type: 'tour'; tour: Tour }
   | { type: 'done'; success: boolean; graph: FlowGraph | null; unitCount: number; streamCount: number }
   | { type: 'error'; message: string };
 
@@ -86,6 +91,9 @@ export interface ArchitectPlan {
   notes: string[];
 }
 
+/** legacy localStorage library key (pre-IndexedDB records, still migrated) */
+export const LIBRARY_KEY = 'psp.library.v1';
+
 /** localStorage library record (client) */
 export interface SavedPlant {
   slug: string;
@@ -97,21 +105,3 @@ export interface SavedPlant {
   verdict: CriticVerdict | null;
   productionTpd: number | null;
 }
-
-export const LIBRARY_KEY = 'psp.library.v1';
-
-/** suggested briefs shown on the builder page */
-export const PRESET_BRIEFS: { label: string; text: string }[] = [
-  {
-    label: 'Reference plant',
-    text: 'Build the standard SMR ammonia plant: natural gas + steam reforming, secondary reforming with process air, two-stage water-gas shift, CO2 removal, methanation, then a high-pressure synthesis loop with make-up compression, converter, refrigerated condensation, separator, purge and recycle. Target roughly 800 t/day of liquid ammonia at the reference conditions.',
-  },
-  {
-    label: 'Modest plant',
-    text: 'Build a compact SMR ammonia plant for a teaching module: full front end (reforming, shift, CO2 removal, methanation) with a small synthesis loop, natural gas feed around 500 kmol/h, moderate loop pressure. Name key streams clearly so students can follow the hydrogen path.',
-  },
-  {
-    label: 'Energy-lean loop',
-    text: 'Build the standard SMR ammonia plant, but design the synthesis loop for low energy: deep chilling in the condensation train, a tight purge, and an efficient circulator. Keep the front end at reference conditions; report the specific energy result.',
-  },
-];

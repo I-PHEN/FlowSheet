@@ -30,6 +30,7 @@ export const SPECIES = [
   'O2',
   'C6H6',
   'C7H8',
+  'CH3OH',
 ] as const;
 
 export type Species = (typeof SPECIES)[number];
@@ -47,6 +48,7 @@ export const I: Record<Species, number> = {
   O2: 8,
   C6H6: 9,
   C7H8: 10,
+  CH3OH: 11,
 };
 
 interface SpeciesData {
@@ -81,6 +83,11 @@ export const SP: Record<Species, SpeciesData> = {
   // 350–400 K window where the fit is within ~1–3 % of NIST Shomate.
   C6H6: { mw: 78.114, tc: 562.05, pc: 48.95e5, omega: 0.212, cpA: -4.08, cpB: 0.28825, hf: 82.93e3 },
   C7H8: { mw: 92.141, tc: 591.75, pc: 41.08e5, omega: 0.257, cpA: 12.45, cpB: 0.30450, hf: 50.17e3 },
+  // methanol (species #3 arrival — the methanol family) — Smith, Van Ness &
+  // Abbott for Tc/Pc/omega; ΔHf° gas from standard tables; Cp = a + b·T
+  // anchored at 300 K (44.0) and 700 K (78.3) J/(mol·K) — teaching-grade
+  // within ±3 % of NIST Shomate over the 273–700 K converter band
+  CH3OH: { mw: 32.04, tc: 512.6, pc: 80.9e5, omega: 0.565, cpA: 18.3, cpB: 0.0858, hf: -201.0e3 },
 };
 
 export const N_SP = SPECIES.length;
@@ -107,6 +114,7 @@ const ATOMS_BY_SPECIES: Record<Species, number[]> = {
   O2: atomRow(0, 0, 2, 0, 0),
   C6H6: atomRow(6, 6, 0, 0, 0),
   C7H8: atomRow(7, 8, 0, 0, 0),
+  CH3OH: atomRow(1, 4, 1, 0, 0),
 };
 export const ATOMS = ['C', 'H', 'O', 'N', 'Ar'] as const;
 export const ATOM_MATRIX: number[][] = ATOMS.map((_, e) => SPECIES.map((s) => ATOMS_BY_SPECIES[s][e]));

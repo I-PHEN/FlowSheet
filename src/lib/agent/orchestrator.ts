@@ -2,8 +2,10 @@
  * Build orchestrator — the deterministic multi-agent pipeline.
  *
  * Sequence (fixed; the LLM only ever proposes, code disposes):
- *   1. ARCHITECT  — one role call: reads the brief, returns a JSON plan
- *      (guidance only — nothing is applied directly).
+ *   0. ROUTER     — one small role call: which plant family is this brief?
+ *      (keyword fast-path first; LLM fallback; ammonia is the default.)
+ *   1. ARCHITECT  — one role call, family-scoped: reads the brief, returns a
+ *      JSON plan (guidance only — nothing is applied directly).
  *   2. ENGINEER   — agentic tool loop: each turn the model proposes a JSON
  *      action batch, the workspace executes deterministically, results
  *      (including validator messages) are fed back verbatim for
@@ -12,13 +14,16 @@
  *      regardless of what the engineer claimed.
  *   4. CRITIC     — one role call over measured facts + graph digest →
  *      verdict card.
- *   5. DONE       — success flag + final graph.
+ *   5. DOCENT     — if the plant solved: one role call that writes the
+ *      narrated guided tour from the solved numbers; deterministically
+ *      validated (refs must exist, lengths sane) before it is emitted.
+ *   6. DONE       — success flag + final graph.
  *
  * Guardrails everywhere: turn/action budgets, clamps, plain-English
  * failures. The only throw path is the top-level catch → error event.
  */
 
-import type { BuildEvent, CriticVerdict, EngineerStep, SolveSummary, ToolCall } from './protocol';
+import type { BuildEvent, CriticVerdict, SolveSummary } from './protocol';
 import { AgentWorkspace } from './workspace';
 import { graphDigest } from './catalog';
 import type { Llm } from './llm';
@@ -28,13 +33,21 @@ import {
   architectUser,
   criticSystem,
   criticUser,
+  docentSystem,
+  docentUser,
   engineerFinalNudge,
   engineerResults,
   engineerSystem,
   engineerUser,
+  routerSystem,
+  routerUser,
 } from './prompts';
 import type { LlmMessage } from './llm';
 import { validateGraph } from '../engine/validate';
+import { FAMILIES, getFamily, isFamilyId } from '../families';
+import type { PlantFamily } from '../families/types';
+import type { FlowGraph } from '../engine/graph';
+import type { Tour, TourStep } from '../content/units';
 
 const MAX_ENGINEER_TURNS = 24;
 const MAX_ACTIONS_PER_TURN = 12;
@@ -68,10 +81,25 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
   };
 
   try {
+    // ------------------------------------------------ 0. router — the family
+    const family = await routeFamily(trimmedBrief, llm);
+    ws.graph.family = family.id; // every snapshot + the saved plant carry it
+    emit({
+      type: 'family',
+      family: family.id,
+      label: `${family.name} — ${family.route}`,
+      reason: family.routerReason,
+    });
+    emit({
+      type: 'message',
+      role: 'system',
+      text: `Router: this is a ${family.name.toUpperCase()} brief — loading the ${family.name.toLowerCase()} family (units, conventions, and the ${family.productSpecies} KPI reader).`,
+    });
+
     // ---------------------------------------------------------- 1. architect
-    emit({ type: 'phase', phase: 'architect', label: 'Architect — reading the brief and planning the flowsheet' });
+    emit({ type: 'phase', phase: 'architect', label: `Architect — planning the ${family.name.toLowerCase()} flowsheet` });
     const plan = await chatJson(llm, [
-      { role: 'assistant', content: architectSystem() },
+      { role: 'assistant', content: architectSystem(family) },
       { role: 'user', content: architectUser(trimmedBrief) },
     ], 'architect');
     const units = Array.isArray(plan.units) ? plan.units : [];
@@ -88,7 +116,7 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
     // ---------------------------------------------------------- 2. engineer
     emit({ type: 'phase', phase: 'engineer', label: 'Engineer — building the plant with tools' });
     const convo: LlmMessage[] = [
-      { role: 'assistant', content: engineerSystem() },
+      { role: 'assistant', content: engineerSystem(family) },
       { role: 'user', content: engineerUser(trimmedBrief, planJson) },
     ];
 
@@ -220,24 +248,11 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
 
     // ---------------------------------------------------------- 4. critic
     emit({ type: 'phase', phase: 'critic', label: 'Critic — reviewing the plant against the brief' });
-    const facts = solveSummary
-      ? [
-          `solved: yes (converged: ${solveSummary.converged}, ${solveSummary.iterations} loop iterations, ${solveSummary.solveMs.toFixed(0)} ms)`,
-          `production: ${solveSummary.kpis.productionTpd.toFixed(1)} t/d liquid ammonia`,
-          `product purity: ${(solveSummary.kpis.productPurityWt * 100).toFixed(2)} wt %`,
-          `per-pass conversion: ${(solveSummary.kpis.perPassConv * 100).toFixed(1)} %`,
-          `overall conversion: ${(solveSummary.kpis.overallConv * 100).toFixed(1)} %`,
-          `make-up H2/N2: ${solveSummary.kpis.h2n2Ratio.toFixed(3)}`,
-          `loop inerts: ${(solveSummary.kpis.loopInerts * 100).toFixed(1)} %`,
-          `specific energy: ${solveSummary.kpis.specificEnergyGJt.toFixed(2)} GJ/t NH3`,
-          `worst element-balance error: ${solveSummary.balanceWorstRelErr.toExponential(2)}`,
-          solveSummary.warnings.length > 0 ? `warnings: ${solveSummary.warnings.join('; ')}` : 'warnings: none',
-        ].join('\n')
-      : 'solved: NO — the flowsheet did not pass validation or failed to solve';
+    const facts = solveFacts(solveSummary);
     let verdict: CriticVerdict;
     try {
       const verdictRaw = await chatJson(llm, [
-        { role: 'assistant', content: criticSystem() },
+        { role: 'assistant', content: criticSystem(family) },
         { role: 'user', content: criticUser(trimmedBrief, facts, graphDigest(ws.graph)) },
       ], 'critic');
       verdict = sanitizeVerdict(verdictRaw, solvedOk);
@@ -249,7 +264,28 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
     }
     emit({ type: 'verdict', verdict });
 
-    // ---------------------------------------------------------- 5. done
+    // ------------------------------------------------ 5. docent — the tour
+    let tour: Tour | null = null;
+    if (solvedOk && finalValidate.ok && verdict.verdict !== 'fail') {
+      emit({ type: 'phase', phase: 'docent', label: 'Docent — writing your guided tour' });
+      try {
+        const tourRaw = await chatJson(llm, [
+          { role: 'assistant', content: docentSystem(family) },
+          { role: 'user', content: docentUser(trimmedBrief, facts, graphDigest(ws.graph), family.name) },
+        ], 'docent');
+        tour = sanitizeTour(tourRaw, ws.graph, family);
+        if (tour) {
+          emit({ type: 'message', role: 'docent', text: `Tour written: “${tour.title}” — ${tour.steps.length} stops, ready to play with voice and music once you save the plant.` });
+          emit({ type: 'tour', tour });
+        } else {
+          emit({ type: 'message', role: 'docent', text: 'The docent could not produce a valid tour — the automatic tour will be used instead.' });
+        }
+      } catch (docentErr) {
+        emit({ type: 'message', role: 'system', text: `Docent unavailable (${(docentErr as Error).message}) — the automatic tour will be used instead.` });
+      }
+    }
+
+    // ---------------------------------------------------------- 6. done
     const success = solvedOk && finalValidate.ok && verdict.verdict !== 'fail';
     emit({
       type: 'done',
@@ -262,6 +298,104 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
     emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
     emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
   }
+}
+
+// ---------------------------------------------------------------------------
+// family routing
+// ---------------------------------------------------------------------------
+
+/** high-confidence keyword fast path — zero LLM cost for obvious briefs */
+const FAMILY_KEYWORDS: Array<{ family: string; words: string[] }> = [
+  { family: 'methanol', words: ['methanol', 'ch3oh', 'wood alcohol', 'wood-alcohol'] },
+  { family: 'hydrogen', words: ['hydrogen plant', 'h2 plant', 'psa', 'fuel-cell hydrogen', 'green hydrogen', 'blue hydrogen', 'hydrogen production'] },
+  { family: 'ammonia', words: ['ammonia', 'haber', 'haber-bosch', 'nh3', 'nitrogen fixation', 'urea feed'] },
+];
+
+async function routeFamily(brief: string, llm: Llm): Promise<PlantFamily & { routerReason: string }> {
+  // 1. keyword fast path (first family with a hit wins; methanol/hydrogen
+  //    checked before ammonia so “ammonia or methanol” style briefs lean specific)
+  const lower = brief.toLowerCase();
+  for (const { family, words } of FAMILY_KEYWORDS) {
+    const hit = words.find((w) => lower.includes(w));
+    if (hit) {
+      return Object.assign(Object.create(getFamily(family)), { routerReason: `brief says “${hit}”` });
+    }
+  }
+  // 2. LLM classification (robust to paraphrase)
+  try {
+    const raw = await chatJson(llm, [
+      { role: 'assistant', content: routerSystem(FAMILIES) },
+      { role: 'user', content: routerUser(brief) },
+    ], 'router');
+    const id = typeof raw.family === 'string' ? raw.family : '';
+    const reason = typeof raw.reason === 'string' && raw.reason.trim() ? raw.reason.trim() : 'classified by the router';
+    if (isFamilyId(id)) return Object.assign(Object.create(getFamily(id)), { routerReason: reason });
+  } catch {
+    // router LLM unavailable — fall through to the default
+  }
+  return Object.assign(Object.create(getFamily('ammonia')), { routerReason: 'defaulted to ammonia (ambiguous brief)' });
+}
+
+/** the deterministic solve facts, family-aware (used by critic + docent) */
+function solveFacts(s: SolveSummary | null): string {
+  if (!s) return 'solved: NO — the flowsheet did not pass validation or failed to solve';
+  const lines = [
+    `solved: yes (converged: ${s.converged}, ${s.iterations} loop iterations, ${s.solveMs.toFixed(0)} ms)`,
+  ];
+  if (s.kpis.familyKpis && s.kpis.familyKpis.length > 0) {
+    for (const k of s.kpis.familyKpis) lines.push(`${k.label.toLowerCase()}: ${k.value}`);
+  } else {
+    lines.push(
+      `production: ${s.kpis.productionTpd.toFixed(1)} t/d`,
+      `product purity: ${(s.kpis.productPurityWt * 100).toFixed(2)} wt %`,
+    );
+  }
+  lines.push(
+    `overall conversion: ${(s.kpis.overallConv * 100).toFixed(1)} %`,
+    `worst element-balance error: ${s.balanceWorstRelErr.toExponential(2)}`,
+    s.warnings.length > 0 ? `warnings: ${s.warnings.join('; ')}` : 'warnings: none',
+  );
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// docent output sanitization — the LLM writes prose, CODE validates structure
+// ---------------------------------------------------------------------------
+
+const T = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+export function sanitizeTour(raw: Record<string, unknown>, graph: FlowGraph, family: PlantFamily): Tour | null {
+  const unitIds = new Set(graph.units.map((u) => u.id));
+  const streamIds = new Set(graph.streams.filter((s) => !s.implicit).map((s) => s.id));
+  const rawSteps = Array.isArray(raw.steps) ? raw.steps : [];
+  const steps: TourStep[] = [];
+
+  for (const rs of rawSteps.slice(0, 10)) {
+    if (rs === null || typeof rs !== 'object') continue;
+    const s = rs as Record<string, unknown>;
+    const refType = T(s.refType) === 'stream' || T(s.type) === 'stream' ? 'stream' : 'unit';
+    const refId = T(s.refId) || T(s.id);
+    if (!refId) continue;
+    if (refType === 'unit' && !unitIds.has(refId)) continue;
+    if (refType === 'stream' && !streamIds.has(refId)) continue;
+    const title = T(s.title).slice(0, 80);
+    const text = T(s.text);
+    if (text.length < 40 || text.length > 700) continue;
+    steps.push({ ref: { type: refType, id: refId }, title: title || refId, text: text.slice(0, 700) });
+    if (steps.length >= 9) break;
+  }
+
+  if (steps.length < 3) return null;
+
+  const title =
+    T(raw.title).slice(0, 90) ||
+    `A walk through the ${family.name.toLowerCase()} plant`;
+  return {
+    id: `docent-${family.id}-${graph.units.length}`,
+    chip: 'Walk my plant',
+    title,
+    steps,
+  };
 }
 
 function sanitizeVerdict(raw: Record<string, unknown>, solved: boolean): CriticVerdict {

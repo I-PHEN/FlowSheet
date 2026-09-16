@@ -18,6 +18,7 @@ import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { BuildEvent, BuildPhase, CriticVerdict, SavedPlant, SolveSummary } from '@/lib/agent/protocol';
+import type { Tour } from '@/lib/content/units';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { SessionPanel, PHASE_COLOR, PHASE_LABEL, type LogEntry } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -48,6 +49,8 @@ export default function BuilderPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [family, setFamily] = useState<{ id: string; label: string } | null>(null);
+  const [tour, setTour] = useState<Tour | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
@@ -139,6 +142,14 @@ export default function BuilderPage() {
         setVerdict(ev.verdict);
         addEntry({ kind: 'verdict', verdict: ev.verdict });
         break;
+      case 'family':
+        setFamily({ id: ev.family, label: ev.label });
+        addEntry({ kind: 'note', text: `Router → ${ev.label}${ev.reason ? ` (${ev.reason})` : ''}` });
+        break;
+      case 'tour':
+        setTour(ev.tour);
+        addEntry({ kind: 'note', text: `Guided tour written — “${ev.tour.title}”, ${ev.tour.steps.length} stops. Save the plant to play it with voice and music.` });
+        break;
       case 'error':
         addEntry({ kind: 'error', text: ev.message });
         break;
@@ -165,6 +176,9 @@ export default function BuilderPage() {
     setDoneOk(null);
     setSelected(null);
     setSaved(false);
+    setSavedId(null);
+    setFamily(null);
+    setTour(null);
     setChatOpen(true);
     const ac = new AbortController();
     abortRef.current = ac;
@@ -225,13 +239,15 @@ export default function BuilderPage() {
     setSelected(null);
     setSaved(false);
     setSavedId(null);
+    setFamily(null);
+    setTour(null);
     setChatOpen(true);
   }
 
   // save as a first-class project (IndexedDB, this browser) — one click to
   // reopen it any time from the home grid
-  async function saveProject() {
-    if (!graph) return;
+  async function saveProject(): Promise<PlantRecord | null> {
+    if (!graph) return null;
     const now = new Date().toISOString();
     const rec: PlantRecord = {
       id: newPlantId(),
@@ -246,6 +262,8 @@ export default function BuilderPage() {
       verdict,
       productionTpd: solve?.kpis.productionTpd ?? null,
       source: 'user',
+      family: family?.id ?? graph.family,
+      tour,
     };
     try {
       await putPlant(rec);
@@ -259,9 +277,23 @@ export default function BuilderPage() {
           },
         },
       });
+      return rec;
     } catch {
       addEntry({ kind: 'error', text: 'Could not save in this browser (storage unavailable).' });
+      return null;
     }
+  }
+
+  // save (if needed) and jump to the project page where the tour player
+  // lives — voice, music, spotlight, step controls
+  async function takeTour() {
+    if (!graph) return;
+    let id = savedId;
+    if (!id) {
+      const rec = await saveProject();
+      id = rec?.id ?? null;
+    }
+    if (id) window.location.href = `/plant/p/${id}`;
   }
 
   const running = status === 'running';
@@ -276,14 +308,35 @@ export default function BuilderPage() {
           ←
         </Link>
         <div className="min-w-0">
-          <div className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
-            AI Plant Builder
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
+              AI Plant Builder
+            </span>
+            {family && (
+              <span
+                className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
+                style={{ borderColor: C.nh3, color: C.nh3 }}
+                title={family.label}
+              >
+                {family.label.split(' — ')[0].toUpperCase()} FAMILY
+              </span>
+            )}
           </div>
           <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
             {unitCount > 0 ? `${unitCount} units · ${streamCount} streams` : 'describe the plant — the agents build it'}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {status === 'finished' && tour && graph && (
+            <button
+              onClick={() => void takeTour()}
+              className="hidden items-center rounded-full px-3.5 py-1.5 text-[11.5px] font-bold sm:flex"
+              style={{ background: C.ink, color: C.canvas }}
+              title="Save the plant and play the docent's guided tour — voice and music"
+            >
+              ▶ Take the tour
+            </button>
+          )}
           {phase && status !== 'idle' && (
             <span
               className="flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] font-bold"
