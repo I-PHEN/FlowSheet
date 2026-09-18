@@ -30,6 +30,10 @@ export const SPECIES = [
   'O2',
   'C6H6',
   'C7H8',
+  'CH3OH',
+  'H2S',
+  'SO2',
+  'S2',
 ] as const;
 
 export type Species = (typeof SPECIES)[number];
@@ -47,6 +51,10 @@ export const I: Record<Species, number> = {
   O2: 8,
   C6H6: 9,
   C7H8: 10,
+  CH3OH: 11,
+  H2S: 12,
+  SO2: 13,
+  S2: 14,
 };
 
 interface SpeciesData {
@@ -81,6 +89,21 @@ export const SP: Record<Species, SpeciesData> = {
   // 350–400 K window where the fit is within ~1–3 % of NIST Shomate.
   C6H6: { mw: 78.114, tc: 562.05, pc: 48.95e5, omega: 0.212, cpA: -4.08, cpB: 0.28825, hf: 82.93e3 },
   C7H8: { mw: 92.141, tc: 591.75, pc: 41.08e5, omega: 0.257, cpA: 12.45, cpB: 0.30450, hf: 50.17e3 },
+  // methanol (species #3 arrival — the methanol family) — Smith, Van Ness &
+  // Abbott for Tc/Pc/omega; ΔHf° gas from standard tables; Cp = a + b·T
+  // anchored at 300 K (44.0) and 700 K (78.3) J/(mol·K) — teaching-grade
+  // within ±3 % of NIST Shomate over the 273–700 K converter band
+  CH3OH: { mw: 32.04, tc: 512.6, pc: 80.9e5, omega: 0.565, cpA: 18.3, cpB: 0.0858, hf: -201.0e3 },
+  // sulphur family (species #4 arrival — the Claus plant): H2S and SO2 from
+  // Smith, Van Ness & Abbott (Tc/Pc/omega) and standard tables (ΔHf° gas);
+  // Cp = a + b·T anchored at 300 K / 700 K textbook values (H2S 34.2 → 44.6,
+  // SO2 39.9 → 52.4 J/(mol·K)), ±2–3 % over the 300–800 K band. S2 is the
+  // high-temperature vapour allotrope: Tc/Pc are teaching estimates (S2 is
+  // the dominant flame species above ~900 K); ΔHf°(S2, gas) = +128.6 kJ/mol
+  // relative to rhombic sulphur, Cp anchored 32.5 → 36.7 J/(mol·K).
+  H2S: { mw: 34.081, tc: 373.4, pc: 89.63e5, omega: 0.094, cpA: 26.4, cpB: 0.026, hf: -20.6e3 },
+  SO2: { mw: 64.066, tc: 430.75, pc: 78.85e5, omega: 0.245, cpA: 30.5, cpB: 0.03125, hf: -296.83e3 },
+  S2: { mw: 64.13, tc: 1313, pc: 20e5, omega: 0.0, cpA: 29.35, cpB: 0.0105, hf: 128.6e3 },
 };
 
 export const N_SP = SPECIES.length;
@@ -91,10 +114,11 @@ export const RG = 8.314462618;
 /** CH4 lower heating value, kJ/kmol (802.6 kJ/mol × 1000) */
 export const LHV_CH4 = 802.6e3;
 
-// Atom matrix for element balances: [C, H, O, N, Ar] per species.
-// Rows are built per-species so appended species (benzene, toluene) cannot be
-// forgotten — a missing column would break the executor's element balance.
-const atomRow = (c: number, h: number, o: number, n2: number, ar: number) => [c, h, o, n2, ar];
+// Atom matrix for element balances: [C, H, O, N, Ar, S] per species.
+// Rows are built per-species so appended species (benzene, toluene, the
+// methanol + sulphur arrivals) cannot be forgotten — a missing column would
+// break the executor's element balance.
+const atomRow = (c: number, h: number, o: number, n2: number, ar: number, s = 0) => [c, h, o, n2, ar, s];
 const ATOMS_BY_SPECIES: Record<Species, number[]> = {
   H2: atomRow(0, 2, 0, 0, 0),
   N2: atomRow(0, 0, 0, 2, 0),
@@ -107,8 +131,12 @@ const ATOMS_BY_SPECIES: Record<Species, number[]> = {
   O2: atomRow(0, 0, 2, 0, 0),
   C6H6: atomRow(6, 6, 0, 0, 0),
   C7H8: atomRow(7, 8, 0, 0, 0),
+  CH3OH: atomRow(1, 4, 1, 0, 0),
+  H2S: atomRow(0, 2, 0, 0, 0, 1),
+  SO2: atomRow(0, 0, 2, 0, 0, 1),
+  S2: atomRow(0, 0, 0, 0, 0, 2),
 };
-export const ATOMS = ['C', 'H', 'O', 'N', 'Ar'] as const;
+export const ATOMS = ['C', 'H', 'O', 'N', 'Ar', 'S'] as const;
 export const ATOM_MATRIX: number[][] = ATOMS.map((_, e) => SPECIES.map((s) => ATOMS_BY_SPECIES[s][e]));
 
 /** Dry air molar composition (CO2 carried for completeness) — N_SP wide so

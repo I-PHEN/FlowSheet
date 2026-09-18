@@ -371,4 +371,230 @@ export function solveNh3Eq(nIn: Moles, T: number, P: number): Nh3EqResult {
   return { xi, n: compose(xi), reached: true };
 }
 
+// ---------------------------------------------------------------------------
+// Methanol synthesis — two parallel equilibria over Cu/ZnO/Al2O3
+//   r1:  CO  + 2 H2 ⇌ CH3OH           ΔH°298 −90.5 kJ/mol, ΔS°298 −219.0 J/mol·K
+//   r2:  CO2 + 3 H2 ⇌ CH3OH + H2O    ΔH°298 −49.3 kJ/mol, ΔS°298 −177.0 J/mol·K
+//
+// Kp from ΔG°(T) with constant-ΔCp correction (textbook method; ΔCp from the
+// Cp(T) fits in species.ts): ln K = −ΔG°(T)/(R·T), bar basis (Δn = −2).
+// Anchor check at 523 K (250 °C): K1 ≈ 2.4e−3 bar⁻², K2 ≈ 2.4e−5 bar⁻² —
+// within a factor ~2 of the Graaf-era correlations, which is teaching-grade
+// (the per-pass conversion story it tells matches industrial practice).
+// ---------------------------------------------------------------------------
+
+/** r1: CO + 2 H2 ⇌ CH3OH — K1 = p_MeOH / (p_CO · p_H2²) [bar⁻²] */
+export function kpMeOH1(T: number): number {
+  const dCp = -30.0;
+  const dH = -90500 + dCp * (T - 298.15);
+  const dS = -219.0 + dCp * Math.log(T / 298.15);
+  return Math.exp(-(dH - T * dS) / (RG * T));
+}
+
+/** r2: CO2 + 3 H2 ⇌ CH3OH + H2O — K2 = (p_MeOH · p_H2O) / (p_CO2 · p_H2³) [bar⁻²] */
+export function kpMeOH2(T: number): number {
+  const dCp = -41.0;
+  const dH = -49300 + dCp * (T - 298.15);
+  const dS = -177.0 + dCp * Math.log(T / 298.15);
+  return Math.exp(-(dH - T * dS) / (RG * T));
+}
+
+export interface MeohEqResult {
+  /** extent of r1 (CO route), kmol/h */
+  xi1: number;
+  /** extent of r2 (CO2 route), kmol/h */
+  xi2: number;
+  n: Moles;
+  reached: boolean;
+}
+
+/** apply both extents (indexes: CO 2, CO2 3, H2 0, H2O 7, CH3OH 11) */
+export function composeMeoh(nIn: Moles, xi1: number, xi2: number): Moles {
+  const n = nIn.slice();
+  n[2] -= xi1;
+  n[0] -= 2 * xi1;
+  n[11] += xi1;
+  n[3] -= xi2;
+  n[0] -= 3 * xi2;
+  n[11] += xi2;
+  n[7] += xi2;
+  return n;
+}
+
+/**
+ * Simultaneous r1 + r2 equilibrium at T [K], P [Pa] — alternating bisection
+ * on the two extents (each Q is monotone in its own extent, and the coupling
+ * through H2 is weak), failure-free by construction like the NH3 solver.
+ */
+export function solveMeohEq(nIn: Moles, T: number, P: number): MeohEqResult {
+  const P_bar = P / 1e5;
+  const K1 = kpMeOH1(T);
+  const K2 = kpMeOH2(T);
+
+  const xi1Max = Math.max(0, Math.min(nIn[2], nIn[0] / 2));
+  const xi2Max = Math.max(0, Math.min(nIn[3], nIn[0] / 3));
+
+  const q = (x1: number, x2: number): [number, number] => {
+    const n = composeMeoh(nIn, x1, x2);
+    let tot = 0;
+    for (let i = 0; i < N_SP; i++) tot += Math.max(n[i], 0);
+    if (tot <= 0 || P_bar <= 0) return [0, 0];
+    const p = (i: number) => (Math.max(n[i], 0) / tot) * P_bar;
+    const pH2 = Math.max(p(0), 1e-300);
+    const q1 = p(11) / (Math.max(p(2), 1e-300) * pH2 * pH2);
+    const q2 = (p(11) * p(7)) / (Math.max(p(3), 1e-300) * pH2 * pH2 * pH2);
+    return [q1, q2];
+  };
+
+  if (xi1Max <= 0 && xi2Max <= 0) return { xi1: 0, xi2: 0, n: nIn.slice(), reached: true };
+
+  // alternating bisection: inner solves ξ1 at fixed ξ2 (Q1 ↓ in ξ1), then ξ2
+  // at fixed ξ1 (Q2 ↓ in ξ2); both are bracketed [0, max]
+  let x2 = 0;
+  let x1 = 0;
+  let reached = true;
+  const bisect = (
+    f: (v: number) => number,
+    K: number,
+    hiMax: number,
+  ): { v: number; hitBound: boolean } => {
+    const hi = Math.max(hiMax * (1 - 1e-10), 0);
+    if (hi <= 0 || f(hi) < K) return { v: hi, hitBound: true }; // eq beyond reachable extent
+    let a = 0;
+    let b = hi;
+    if (f(0) >= K) return { v: 0, hitBound: false }; // already past eq at zero extent
+    for (let k = 0; k < 60; k++) {
+      const mid = 0.5 * (a + b);
+      if (f(mid) < K) a = mid;
+      else b = mid;
+    }
+    return { v: 0.5 * (a + b), hitBound: false };
+  };
+
+  for (let outer = 0; outer < 30; outer++) {
+    const r1 = bisect((v) => q(v, x2)[0], K1, xi1Max);
+    if (r1.hitBound) reached = false;
+    x1 = r1.v;
+    const r2 = bisect((v) => q(x1, v)[1], K2, xi2Max);
+    if (r2.hitBound) reached = false;
+    const x2New = r2.v;
+    if (Math.abs(x2New - x2) < 1e-9) {
+      x2 = x2New;
+      break;
+    }
+    x2 = x2New;
+  }
+  return { xi1: x1, xi2: x2, n: composeMeoh(nIn, x1, x2), reached };
+}
+
+// ---------------------------------------------------------------------------
+// Sulphur family (species #4) — the Claus chemistry
+//
+// The Claus process has two equilibria and one near-complete oxidation:
+//
+//   burn:  H2S + 1.5 O2 → SO2 + H2O        ΔH°298 −519 kJ/mol (goes to
+//                                          completion on the available O2 —
+//                                          the burner is air-controlled so
+//                                          exactly ⅓ of the H2S burns)
+//   claus: 4 H2S + 2 SO2 ⇌ 3 S2 + 4 H2O    the S-atom-balanced form of the
+//                                          textbook 2H2S + SO2 ⇌ 3S + 2H2O
+//
+// THERMAL stage (burner, 1000–1400 K): the TRUE S2-referenced equilibrium —
+// mildly endothermic with S2 as the carrier (ΔH°298 = +94.5 kJ per the
+// doubled reaction), so hot flames make S2. Constant-ΔCp Kp anchored on the
+// 298.15 K formation data in species.ts (ΔH° +94.5 kJ, ΔS° +120.3 J/K) with
+// ΔCp ≈ −60 J/K over the flame band → Kp(1300 K) ≈ 2 bar, giving ~45–55 %
+// of the total sulphur in the thermal stage (real plants: 60–70 % with flame
+// cracking helping; teaching-grade, the TOTAL recovery lands in the real
+// 92–97 % window — verified in scripts/verify-sulphur.ts).
+//
+// CATALYTIC stage (alumina beds, 480–620 K): an EFFECTIVE equilibrium, the
+// S8/S6-referenced literature constant expressed on the S2 carrier. Below
+// ~700 K the S2↔S8 association (ΔH ≈ −275 kJ per 3S2→S6) drags the gas-phase
+// composition far past the bare-S2 equilibrium, so the effective Kp is huge
+// and strongly exothermic in T: ln K = 1.97 + 10530/T [bar] → Kp(500 K) ≈
+// 1e10, Kp(600 K) ≈ 3e8, matching published converter equilibrium
+// conversions (~85 % per pass at 600 K, ~93 % at 500 K).
+//
+// Solver: single-extent bisection, the same monotone bracketed pattern as the
+// NH3/MeOH solvers — failure-free by construction.
+// ---------------------------------------------------------------------------
+
+/** burn step: H2S + 1.5 O2 → SO2 + H2O on the available O2 (O2-limiting).
+ *  Returns the post-combustion composition and the H2S burned. */
+export function burnH2S(nIn: Moles): { n: Moles; h2sBurned: number; o2Left: number } {
+  const n = nIn.slice();
+  const canBurn = Math.min(n[12], n[8] / 1.5);
+  n[12] -= canBurn;
+  n[8] -= 1.5 * canBurn;
+  n[13] += canBurn;
+  n[7] += canBurn;
+  return { n, h2sBurned: canBurn, o2Left: n[8] };
+}
+
+/** apply the Claus extent ξ (indexes: H2S 12, SO2 13, S2 14, H2O 7) */
+export function composeClaus(nIn: Moles, xi: number): Moles {
+  const n = nIn.slice();
+  n[12] -= 4 * xi;
+  n[13] -= 2 * xi;
+  n[14] += 3 * xi;
+  n[7] += 4 * xi;
+  return n;
+}
+
+/** thermal-stage Kp: 4H2S + 2SO2 ⇌ 3S2 + 4H2O, TRUE S2 thermodynamics [bar] */
+export function kpClausThermal(T: number): number {
+  const dCp = -60.0;
+  const dH = 94540 + dCp * (T - 298.15); // J/mol
+  const dS = 120.3 + dCp * Math.log(T / 298.15); // J/mol·K
+  return Math.exp(-(dH - T * dS) / (RG * T));
+}
+
+/** catalytic-stage Kp: the S8-referenced literature equilibrium expressed on
+ *  the S2 carrier — ln K = 1.97 + 10530/T [bar] (see block comment above). */
+export function kpClausCat(T: number): number {
+  return Math.exp(1.97 + 10530 / T);
+}
+
+export interface ClausEqResult {
+  /** extent of 4H2S + 2SO2 ⇌ 3S2 + 4H2O, kmol/h */
+  xi: number;
+  /** xi / xiMax — fraction of the convertible H2S reacted */
+  frac: number;
+  n: Moles;
+  reached: boolean;
+}
+
+/** Claus equilibrium at T [K], P [Pa] with the given Kp [bar] — bisection on
+ *  the extent. Q rises strictly with ξ (reactants fall, products rise) from
+ *  Q(0) ≈ 0 toward Q → ∞ at the extent limit (the limiting reactant
+ *  vanishes), so the crossing always exists and plain bisection is exact. */
+export function solveClausEq(nIn: Moles, T: number, P: number, Kp: number): ClausEqResult {
+  const P_bar = Math.max(P / 1e5, 1e-6);
+  const xiMax = Math.max(0, Math.min(nIn[12] / 4, nIn[13] / 2));
+  if (xiMax <= 1e-12) return { xi: 0, frac: 0, n: nIn.slice(), reached: true };
+
+  const q = (x: number): number => {
+    const n = composeClaus(nIn, x);
+    let tot = 0;
+    for (let i = 0; i < N_SP; i++) tot += Math.max(n[i], 0);
+    if (tot <= 0) return 0;
+    const p = (i: number) => (Math.max(n[i], 0) / tot) * P_bar;
+    return (Math.pow(Math.max(p(14), 1e-300), 3) * Math.pow(Math.max(p(7), 1e-300), 4)) /
+      (Math.pow(Math.max(p(12), 1e-300), 4) * Math.pow(Math.max(p(13), 1e-300), 2));
+  };
+
+  if (q(0) >= Kp) return { xi: 0, frac: 0, n: nIn.slice(), reached: true };
+  // bisection on the unique crossing; q(hi) is enormous by construction
+  let a = 0;
+  let b = xiMax;
+  for (let k = 0; k < 60; k++) {
+    const mid = 0.5 * (a + b);
+    if (q(mid) < Kp) a = mid;
+    else b = mid;
+  }
+  const xi = 0.5 * (a + b);
+  return { xi, frac: xi / xiMax, n: composeClaus(nIn, xi), reached: true };
+}
+
 export { RG };

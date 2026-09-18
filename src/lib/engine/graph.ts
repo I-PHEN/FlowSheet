@@ -93,10 +93,22 @@ export interface GraphController {
   auto: boolean;
 }
 
+/** the plant's declared product — the general family's KPI reader uses it */
+export interface ProductDeclaration {
+  /** stream id carrying the product out of the plant */
+  stream: string;
+  /** species name from the engine table (e.g. 'H2', 'CH3OH', 'S2') */
+  species: string;
+}
+
 export interface FlowGraph {
   units: GraphUnit[];
   streams: StreamEdge[];
   controllers: GraphController[];
+  /** which plant family this graph belongs to ('ammonia' | ... | 'general') */
+  family?: string;
+  /** optional product declaration (general family KPIs + saved plants) */
+  product?: ProductDeclaration;
 }
 
 /** a validation finding — the strings the agent reads to self-correct */

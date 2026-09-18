@@ -15,13 +15,14 @@
  */
 
 import type { FlowGraph, StreamEdge, StreamState } from './graph';
-import { getUnitType, resolveSpecs, tearInit, airControllerInit } from './registry';
+import { getUnitType, resolveSpecs, airControllerInit } from './registry';
 import { makeResid, solveSecant, solveTearLoop } from './converge';
 import type { UnitResult, PlantResult, Kpis, ElementBalance, Stream } from './types';
-import { ATOMS, ATOM_MATRIX, LHV_CH4, N_SP, SP } from './species';
+import { ATOMS, ATOM_MATRIX, N_SP } from './species';
 import type { Moles } from './species';
-import { massFlow, total } from './thermo';
+import { total } from './thermo';
 import { zeroN } from './units';
+import { getFamily } from '../families';
 
 const C = (celsius: number) => celsius + 273.15;
 
@@ -259,13 +260,24 @@ export function executeGraph(graph: FlowGraph): PlantResult {
   let iterations = 0;
   let trace: PlantResult['solverTrace'] = [];
 
+  // family hooks: which streams feed the loop, and the loop-gas first guess
+  const family = getFamily(graph.family);
+
   if (cut && scc.size > 0) {
     const upstreamType = typeOf(cut.from.unit);
     if (!upstreamType.fixedOutlet) throw new Error('tear edge upstream has no fixedOutlet');
     const cutTP = upstreamType.fixedOutlet(specs[cut.from.unit]);
 
-    const makeup = states['S16']?.n ?? states['S18']?.n ?? zeroN();
-    const tear0 = tearInit(makeup);
+    // family convention ids first; generic fallback: the first stream leaving
+    // any source unit (families without loop conventions still converge)
+    let makeup: Moles | undefined = family.makeupStreamIds
+      .map((id) => states[id]?.n)
+      .find((n) => n !== undefined);
+    if (!makeup) {
+      const srcEdge = graph.streams.find((s) => isSource(s.from.unit) && states[s.id]);
+      makeup = srcEdge ? states[srcEdge.id].n : zeroN();
+    }
+    const tear0 = family.tearGuess(makeup);
     const resid = makeResid(makeup);
 
     let loopWarns: string[] = [];
@@ -330,75 +342,11 @@ export function executeGraph(graph: FlowGraph): PlantResult {
   if (!converged) warnings.push('Synthesis loop did not converge — results are the last iteration');
   warnings.push(...feWarns, ...lateWarns);
 
-  // --- KPIs (ammonia reference ids; defensive for modified graphs) ---
-  const S = (id: string): StreamState | undefined => states[id];
-  const U = (id: string): UnitResult | undefined => unitRecs[id];
-  const nFeed = S('S20')?.n ?? zeroN();
-  const nEff = S('S21')?.n ?? zeroN();
-  const product = S('S24')?.n ?? zeroN();
-  const purge = S('S26')?.n ?? zeroN();
-  const recycle = S('S27')?.n ?? zeroN();
-  const makeup = S('S16')?.n ?? zeroN();
-  const makeupTot = total(makeup);
-  const feedTot = total(nFeed);
-  const ngFeed = (specs['SRC_NG']?.flow as number | undefined) ?? 0;
-  const chillT = (specs['E2']?.chillT as number | undefined) ?? -20;
-
-  const inerts = feedTot > 0 ? (nFeed[4] + nFeed[5]) / feedTot : 0;
-  const h2n2 = nFeed[1] > 1e-9 ? nFeed[0] / nFeed[1] : 0;
-  const perPass = nFeed[1] > 1e-9 ? 1 - nEff[1] / nFeed[1] : 0;
-  const overall = makeup[1] > 1e-9 ? 1 - purge[1] / makeup[1] : 0;
-  const prodKg = massFlow(product);
-  const prodTpd = (prodKg * 24) / 1000;
-  const prodNH3kg = product[6] * SP.NH3.mw;
-  const reformerDuty = U('R1')?.metrics[0]?.raw ?? 0;
-  const wcDuty = U('E2')?.metrics[0]?.raw ?? 0;
-  const chDuty = U('E2')?.metrics[1]?.raw ?? 0;
-  const powerKW = (U('C1')?.metrics[0]?.raw ?? 0) * 1000 + (U('C2')?.metrics[0]?.raw ?? 0) + (chDuty / 2.4) * 1000;
-  const feedGJd = (ngFeed * LHV_CH4 * 24) / 1e6;
-  const fuelGJd = (reformerDuty * 3.6e6 * 24) / 1e6 / 0.92;
-  const powerGJd = (powerKW * 24 * 3.6) / 1000;
-  const specEnergy = prodTpd > 1e-9 ? (feedGJd + fuelGJd + powerGJd) / prodTpd : 0;
-  const oxidesPpm = (() => {
-    const s = S('S15');
-    if (!s) return 0;
-    const dry = total(s.n) - s.n[7];
-    return dry > 0 ? ((s.n[2] + s.n[3]) / dry) * 1e6 : 0;
-  })();
-
-  const kpis: Kpis = {
-    productionTpd: prodTpd,
-    productPurityMol: prodKg > 0 ? product[6] / total(product) : 0,
-    productPurityWt: prodKg > 0 ? prodNH3kg / prodKg : 0,
-    perPassConv: perPass,
-    overallConv: overall,
-    loopInerts: inerts,
-    h2n2Ratio: h2n2,
-    makeupFlow: makeupTot,
-    recycleMultiple: makeupTot > 1e-9 ? total(recycle) / makeupTot : 0,
-    purgeFrac: (specs['SP1']?.purgeFrac as number | undefined) ?? 0,
-    reformerDutyMW: reformerDuty,
-    refrigerationDutyMW: chDuty,
-    syngasComprPowerMW: U('C1')?.metrics[0]?.raw ?? 0,
-    circulatorPowerKW: U('C2')?.metrics[0]?.raw ?? 0,
-    specificEnergyGJt: specEnergy,
-    airFlow: controlledAir ?? ((specs['SRC_AIR']?.flow as number | undefined) ?? 0),
-    secondaryExitC: (U('R2')?.metrics[1]?.raw ?? 0) - 273.15,
-    coSlipLTS: (() => {
-      const s = S('S10');
-      if (!s) return 0;
-      const dry = total(s.n) - s.n[7];
-      return dry > 0 ? s.n[2] / dry : 0;
-    })(),
-    oxidesAfterMeth: oxidesPpm,
-  };
-
-  if (prodTpd > 1 && kpis.productPurityWt < 0.985) {
-    warnings.push('Product purity below 98.5 wt % — dissolved gases high (check separator T/P)');
-  }
-  if (chDuty > 0 && C(chillT) > C(-5)) {
-    warnings.push('Separator above −5 °C — substantial NH3 recycling through the loop');
-  }
+  // --- KPIs: the family hook (ammonia's is the verbatim legacy block; each
+  // family reads its own convention stream/unit ids defensively) ---
+  const familyKpi = family.computeKpis({ states, unitRecs, specs, graph, controlledAir });
+  const kpis: Kpis = familyKpi.kpis;
+  warnings.push(...familyKpi.warnings);
 
   return {
     ok: true,
