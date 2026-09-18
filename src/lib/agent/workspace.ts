@@ -337,8 +337,12 @@ export class AgentWorkspace {
       const result = executeGraph(this.graph);
       this.lastResult = result;
       const summary = this.solveSummary()!;
+      // NOTE: no wall-clock in the summary — it is fed back into the
+      // engineer's messages, and any timing text would break deterministic
+      // replays (the reply cache keys on exact messages). The UI still gets
+      // solveMs through the solve event's summary payload below.
       return ok(
-        `solved: converged=${result.converged}, ${result.iterations} loop iterations, ${result.solveMs.toFixed(0)} ms — production ${result.kpis.productionTpd.toFixed(1)} t/d, purity ${(result.kpis.productPurityWt * 100).toFixed(1)} wt %, per-pass ${(result.kpis.perPassConv * 100).toFixed(1)} %`,
+        `solved: converged=${result.converged}, ${result.iterations} loop iterations — production ${result.kpis.productionTpd.toFixed(1)} t/d, purity ${(result.kpis.productPurityWt * 100).toFixed(1)} wt %, per-pass ${(result.kpis.perPassConv * 100).toFixed(1)} %`,
         { ...summary },
       );
     } catch (e) {

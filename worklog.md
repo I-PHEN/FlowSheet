@@ -541,3 +541,23 @@ Stage Summary:
 - The reset was fully recovered AND overtaken: five families (ammonia/methanol/hydrogen/sulphur/GENERAL), one engine, honest critics, declared products, and flow that students can SEE moving.
 - The general family is the user's architecture realized: no routes, just species + chemistry + separations — the agent designed a novel hybrid plant (H2 + methanator guard) and a full Claus plant from the basics alone, both judged honestly by physics.
 - LESSON WRITTEN IN FIRE: everything after the last GitHub push was lost. The repo MUST be pushed after every session — it needs a fresh token from the user.
+
+---
+Task ID: 29 (token economy + push)
+Agent: main (Super Z)
+Task: Ship the token-economy layer (metering, reply cache, scoped prompts, TTS disk cache), fix the stale agent tests, push to GitHub. Plan (no code) the cinema-mode walkthrough. 
+
+Work Log:
+- MEASURED the cost centers: engineer loop re-sends a ~4.3k-token system prompt every turn (~115k prompt tokens per family build, ~180k general); the 38-unit catalog digest (~2.9k tok) is the bulk. solveFacts + the solve TOOL SUMMARY carried wall-clock ms → non-deterministic messages.
+- llm.ts: TokenMeter (per-run ledger, role buckets, repair turns roll up; snapshot → RunUsage) + ZaiLlm records API usage (snake/camel defensive) + CachedLlm (disk reply cache at .agent-cache/llm, sha256 of salted messages, AGENT_LLM_CACHE=0 kill-switch, AGENT_LLM_CACHE_DIR override, cache failures never break a build).
+- protocol.ts: RunUsage + 'usage' BuildEvent; orchestrator emits the snapshot right before every 'done' (success AND catch paths), accepts optional meter.
+- Determinism fixes so replays hit cache: solveMs dropped from solveFacts AND from the solve tool summary (UI still gets ms via the solve event payload).
+- Prompt economy: catalogDigest(types?) abridges to given unit types; engineerSystem(family, planTypes) scopes the ENGINEER's catalog to route units + plan units (family builds only — general + remix + architect + critic keep the full catalog; remix can add any unit). Engineer system prompt: ammonia −29%, methanol −43%, hydrogen −50%, sulphur −52% per turn. Docent: 40–90 words, 2–4 short caption-friendly sentences (also preps cinema mode).
+- /api/tts: disk cache tier (.agent-cache/tts, keyed voice+speed+text) under the memory LRU — replays after restarts cost zero.
+- UI: LogEntry/Block kind 'usage' → UsageLine "TOKEN LEDGER 0 tokens · 11 cached · ≈37.0k saved + per-role line" under the AGENT WORK card.
+- Tests: section E in agent-tests (meter buckets, usage event before done, cache hit/miss/kill-switch, scoped catalog) + fixed 2 stale section-B expectations from task 28 (family stamp normalized in deep-equal; docent phase expected). 63/63 agent, 62/62 engine, tsc/eslint clean.
+- LIVE E2E (hydrogen brief, /api/agent/build): fresh build 41.2k in + 2.9k out tok / 11 calls / 30 s, PASS 100/100 (102 t/d H2 @ 99.95%); identical re-run = 0 tokens, 11/11 cache hits, ≈37k saved, 0.058 s (500×), byte-identical plant. probe-usage.ts verifies API usage fields live. UI verified via agent-browser (ledger renders, plant assembles); cold-restart + fresh load = no dev-overlay issues (earlier badge was a hot-reload artifact).
+
+Stage Summary:
+- Token economy is real and visible: every run reports its cost; identical briefs replay for zero tokens; family engineer turns are 29–52% lighter; TTS replays are free.
+- Lesson (again): wall-clock in LLM-facing text is a cache-killer — keep timing in UI events only.

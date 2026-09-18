@@ -34,7 +34,7 @@ import {
   ZoomIn,
   Zap,
 } from 'lucide-react';
-import type { BuildPhase, CriticVerdict, SolveSummary } from '@/lib/agent/protocol';
+import type { BuildPhase, CriticVerdict, RunUsage, SolveSummary } from '@/lib/agent/protocol';
 import { FAMILIES } from '@/lib/families';
 import { REGIONS, SURPRISE_BRIEFS, type RegionEntry } from '@/lib/content/regions';
 import { C } from '@/lib/design/tokens';
@@ -43,7 +43,7 @@ import { C } from '@/lib/design/tokens';
 
 export interface LogEntry {
   key: number;
-  kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note';
+  kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note' | 'usage';
   phase?: BuildPhase;
   label?: string;
   role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
@@ -53,6 +53,7 @@ export interface LogEntry {
   seq?: number;
   solve?: SolveSummary;
   verdict?: CriticVerdict;
+  usage?: RunUsage;
 }
 
 export const PHASE_LABEL: Record<BuildPhase, string> = {
@@ -105,6 +106,7 @@ type Block =
   | { kind: 'solve'; key: number; solve: SolveSummary }
   | { kind: 'verdict'; key: number; verdict: CriticVerdict }
   | { kind: 'error'; key: number; text: string }
+  | { kind: 'usage'; key: number; usage: RunUsage }
   | { kind: 'note'; key: number; text: string };
 
 /** the one line that stands for a whole phase once it is over */
@@ -195,6 +197,8 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
           return e.verdict ? { kind: 'verdict', key: e.key, verdict: e.verdict } : null;
         case 'error':
           return { kind: 'error', key: e.key, text: e.text ?? '' };
+        case 'usage':
+          return e.usage ? { kind: 'usage', key: e.key, usage: e.usage } : null;
         default:
           return { kind: 'note', key: e.key, text: e.text ?? '' };
       }
@@ -445,6 +449,36 @@ function NoteLine({ text }: { text: string }) {
   return (
     <div className="bd-msg-in text-center text-[11.5px] leading-relaxed" style={{ color: C.inkFaint }}>
       {text}
+    </div>
+  );
+}
+
+/** the run's token ledger — what this build actually cost (and saved) */
+const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+function UsageLine({ usage }: { usage: RunUsage }) {
+  const parts = [
+    `${fmtTokens(usage.promptTokens + usage.completionTokens)} tokens`,
+    `${fmtTokens(usage.promptTokens)} in + ${fmtTokens(usage.completionTokens)} out`,
+    `${usage.calls} call${usage.calls === 1 ? '' : 's'}`,
+  ];
+  if (usage.cacheHits > 0) {
+    parts.push(`${usage.cacheHits} cached · ≈${fmtTokens(usage.cacheSavedTokens)} saved`);
+  }
+  const roles = usage.byRole
+    .map((r) => `${r.role} ${fmtTokens(r.prompt + r.completion)}${r.hits > 0 ? ` (${r.hits} cached)` : ''}`)
+    .join(' · ');
+  return (
+    <div
+      className="bd-msg-in rounded-lg border px-2.5 py-1.5 font-mono text-[9.5px] leading-relaxed"
+      style={{ borderColor: 'var(--fs-band-line)', color: C.inkFaint }}
+      title={roles}
+    >
+      <span className="font-extrabold tracking-[0.14em]" style={{ color: C.inkSoft }}>
+        TOKEN LEDGER
+      </span>{' '}
+      {parts.join(' · ')}
+      {roles.length > 0 && <span className="block opacity-80">{roles}</span>}
     </div>
   );
 }
@@ -903,6 +937,8 @@ export function SessionPanel({
                     return <VerdictCard key={b.key} verdict={b.verdict} />;
                   case 'error':
                     return <ErrorCard key={b.key} text={b.text} />;
+                  case 'usage':
+                    return <UsageLine key={b.key} usage={b.usage} />;
                   default:
                     return <NoteLine key={b.key} text={b.text} />;
                 }

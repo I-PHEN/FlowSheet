@@ -28,6 +28,7 @@ import type { BuildEvent, CriticVerdict, SolveSummary } from './protocol';
 import { AgentWorkspace } from './workspace';
 import { graphDigest } from './catalog';
 import type { Llm } from './llm';
+import type { TokenMeter } from './llm';
 import { chatJson } from './llm';
 import {
   architectSystem,
@@ -77,9 +78,11 @@ function normalizeAction(a: Record<string, unknown>): { tool: string; args: Reco
 interface OrchestratorOpts {
   llm: Llm;
   emit: (e: BuildEvent) => void;
+  /** the run's token ledger — snapshotted into a `usage` event before done */
+  meter?: TokenMeter;
 }
 
-export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOpts): Promise<void> {
+export async function runAgentBuild(brief: string, { llm, emit, meter }: OrchestratorOpts): Promise<void> {
   const trimmedBrief = brief.trim().slice(0, 2000);
   if (trimmedBrief.length < 10) {
     emit({ type: 'error', message: 'The design brief is too short — describe the plant you want in a sentence or two.' });
@@ -136,8 +139,14 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
 
     // ---------------------------------------------------------- 2. engineer
     emit({ type: 'phase', phase: 'engineer', label: 'Engineer — building the plant with tools' });
+    // the engineer's catalog is abridged to the route's + plan's unit types
+    // (the architect chose from the FULL catalog; the engineer only builds
+    // what the plan carries) — several thousand tokens NOT re-sent every turn
+    const planTypes = units
+      .map((u) => (u as Record<string, unknown>).type)
+      .filter((t): t is string => typeof t === 'string');
     const convo: LlmMessage[] = [
-      { role: 'assistant', content: engineerSystem(family) },
+      { role: 'assistant', content: engineerSystem(family, planTypes) },
       { role: 'user', content: engineerUser(trimmedBrief, planJson) },
     ];
 
@@ -315,6 +324,7 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
 
     // ---------------------------------------------------------- 6. done
     const success = solvedOk && finalValidate.ok && verdict.verdict !== 'fail';
+    if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({
       type: 'done',
       success,
@@ -324,6 +334,7 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
     });
   } catch (e) {
     emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
   }
 }
@@ -339,7 +350,7 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
 export async function runAgentRemix(
   initialGraph: FlowGraph,
   instruction: string,
-  { llm, emit }: OrchestratorOpts,
+  { llm, emit, meter }: OrchestratorOpts,
 ): Promise<void> {
   const trimmed = instruction.trim().slice(0, 1000);
   if (trimmed.length < 3) {
@@ -347,6 +358,7 @@ export async function runAgentRemix(
     emit({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });
     return;
   }
+  // the meter (if any) reports even a failed remix — tokens spent are tokens spent
 
   let seq = 0;
   const ws = new AgentWorkspace(initialGraph); // seeded with the working plant
@@ -377,6 +389,7 @@ export async function runAgentRemix(
     if (baselineOk.ok && ws.solveSummary()) baselineFacts = solveFacts(ws.solveSummary());
 
     // ------------------------------------------ 1. engineer — the edit loop
+    // remixes keep the FULL catalog in scope — a student may ask for any unit
     const convo: LlmMessage[] = [
       { role: 'assistant', content: remixSystem(family) },
       { role: 'user', content: remixUser(trimmed, graphDigest(ws.graph), baselineFacts) },
@@ -521,6 +534,7 @@ export async function runAgentRemix(
 
     // ---------------------------------------------------------- 5. done
     const success = solvedOk && finalValidate.ok && verdict.verdict !== 'fail';
+    if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({
       type: 'done',
       success,
@@ -530,6 +544,7 @@ export async function runAgentRemix(
     });
   } catch (e) {
     emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
   }
 }
@@ -601,11 +616,13 @@ async function routeFamily(brief: string, llm: Llm): Promise<PlantFamily & { rou
 // verdicts, facts, tours — deterministic sanitation of LLM output
 // ---------------------------------------------------------------------------
 
-/** the deterministic solve facts, family-aware (used by critic + docent) */
+/** the deterministic solve facts, family-aware (used by critic + docent).
+ *  Deliberately wall-clock-free: identical plants produce identical facts,
+ *  which is what makes the reply cache able to replay a whole build. */
 function solveFacts(s: SolveSummary | null): string {
   if (!s) return 'solved: NO — the flowsheet did not pass validation or failed to solve';
   const lines = [
-    `solved: yes (converged: ${s.converged}, ${s.iterations} loop iterations, ${s.solveMs.toFixed(0)} ms)`,
+    `solved: yes (converged: ${s.converged}, ${s.iterations} loop iterations)`,
   ];
   if (s.kpis.familyKpis && s.kpis.familyKpis.length > 0) {
     for (const k of s.kpis.familyKpis) lines.push(`${k.label.toLowerCase()}: ${k.value}`);

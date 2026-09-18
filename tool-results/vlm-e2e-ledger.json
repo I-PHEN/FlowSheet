@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided, here are the answers to your questions:\n\n1.  **Yes**, there is a **TOKEN LEDGER** line at the bottom of the right-side session chat panel. \n    *   **Exact text:** `TOKEN LEDGER • 0 tokens · 0 in + 0 out · 0 calls · 11 cached`\n2.  **Yes**, the **AGENT WORK** card is visible and contains phase sections. It includes a \"PLANT ANSWER\" section (with production/purity data) followed by a \"CRITIC VERDICT\" section.\n3.  **Yes**, a plant diagram is clearly visible on the left side of the screen. It displays a sequence of equipment symbols connected by lines, including a feed mixer, primary reformer, shift reactors, and a PSA unit.\n4.  **No**, there are no obvious layout glitches or overlapping text. The interface appears clean and well-structured, with the only potential \"issue\" being the red \"1 Issue\" badge in the bottom-left corner, which seems to be a functional notification rather than a layout error.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789768225,
+  "id": "20260919055020fdd1928a33814cfe",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260919055020fdd1928a33814cfe",
+  "usage": {
+    "completion_tokens": 230,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2095,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2325
+  }
+}

@@ -12,7 +12,7 @@
 
 import { NextRequest } from 'next/server';
 import { runAgentBuild } from '@/lib/agent/orchestrator';
-import { ZaiLlm } from '@/lib/agent/llm';
+import { CachedLlm, TokenMeter, ZaiLlm } from '@/lib/agent/llm';
 import type { BuildEvent } from '@/lib/agent/protocol';
 
 export const runtime = 'nodejs';
@@ -43,8 +43,12 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        const llm = new ZaiLlm();
-        await runAgentBuild(brief, { llm, emit: send });
+        // one meter + one cached LLM per run: every call's usage is
+        // recorded, and identical calls (same brief re-run, replayed turn)
+        // are served from the disk cache for zero tokens
+        const meter = new TokenMeter();
+        const llm = new CachedLlm(new ZaiLlm(meter), meter);
+        await runAgentBuild(brief, { llm, emit: send, meter });
       } catch (e) {
         send({ type: 'error', message: (e as Error).message || 'agent failure' });
         send({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });

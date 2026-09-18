@@ -12,7 +12,7 @@
 
 import { NextRequest } from 'next/server';
 import { runAgentRemix } from '@/lib/agent/orchestrator';
-import { ZaiLlm } from '@/lib/agent/llm';
+import { CachedLlm, TokenMeter, ZaiLlm } from '@/lib/agent/llm';
 import type { BuildEvent } from '@/lib/agent/protocol';
 import type { FlowGraph } from '@/lib/engine/graph';
 
@@ -56,8 +56,10 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        const llm = new ZaiLlm();
-        await runAgentRemix(graph, instruction, { llm, emit: send });
+        // same economy as /build: metered calls + the zero-token reply cache
+        const meter = new TokenMeter();
+        const llm = new CachedLlm(new ZaiLlm(meter), meter);
+        await runAgentRemix(graph, instruction, { llm, emit: send, meter });
       } catch (e) {
         send({ type: 'error', message: (e as Error).message || 'agent failure' });
         send({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });

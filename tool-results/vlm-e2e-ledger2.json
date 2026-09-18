@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Yes**, there is a red 'issues' count badge in the bottom left corner. The number is **1** (displayed as \"1 Issue\").\n\n2) The **TOKEN LEDGER** line text is:\n> `TOKEN LEDGER 0 tokens · 0 in · 0 out · 0 calls · 11 cached`\n> `≈37.0k saved`\n> `router 0 (1 cached) · architect 0 (1 cached) · engineer 0 (7 cached) · critic 0 (1 cached) · docent 0 (1 cached)`\n\n3) **Yes**, both the plant diagram and session panel appear to be rendering correctly. The diagram shows a clear flow of units (SRC_NG, M1, K1, A1, X1, A2, M01, P1, SRC_ST), and the right-hand session panel displays the build status, plant answer metrics, critic verdict, and token usage without any visible rendering errors or broken elements.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789768282,
+  "id": "2026091905505498db586677b64ea9",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026091905505498db586677b64ea9",
+  "usage": {
+    "completion_tokens": 210,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2080,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2290
+  }
+}

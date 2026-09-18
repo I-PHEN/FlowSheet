@@ -1,0 +1,691 @@
+     1→/**
+     2→ * Build orchestrator — the deterministic multi-agent pipeline.
+     3→ *
+     4→ * Sequence (fixed; the LLM only ever proposes, code disposes):
+     5→ *   0. ROUTER     — one small role call: which plant family is this brief?
+     6→ *      (keyword fast-path first; LLM fallback; ammonia is the canonical
+     7→ *      default, general is the fallback for briefs no route describes.)
+     8→ *   1. ARCHITECT  — one role call, family-scoped: reads the brief, returns a
+     9→ *      JSON plan (guidance only — nothing is applied directly).
+    10→ *   2. ENGINEER   — agentic tool loop: each turn the model proposes a JSON
+    11→ *      action batch, the workspace executes deterministically, results
+    12→ *      (including validator messages) are fed back verbatim for
+    13→ *      self-correction. Graph snapshots are emitted after every mutation.
+    14→ *   3. SOLVER     — forced final validate + solve: the deterministic truth,
+    15→ *      regardless of what the engineer claimed.
+    16→ *   4. CRITIC     — one role call over measured facts + graph digest →
+    17→ *      verdict card.
+    18→ *   5. DOCENT     — if the plant solved: one role call that writes the
+    19→ *      narrated guided tour from the solved numbers; deterministically
+    20→ *      validated (refs must exist, lengths sane) before it is emitted.
+    21→ *   6. DONE       — success flag + final graph.
+    22→ *
+    23→ * Guardrails everywhere: turn/action budgets, clamps, plain-English
+    24→ * failures. The only throw path is the top-level catch → error event.
+    25→ */
+    26→
+    27→import type { BuildEvent, CriticVerdict, SolveSummary } from './protocol';
+    28→import { AgentWorkspace } from './workspace';
+    29→import { graphDigest } from './catalog';
+    30→import type { Llm } from './llm';
+    31→import { chatJson } from './llm';
+    32→import {
+    33→  architectSystem,
+    34→  architectUser,
+    35→  criticSystem,
+    36→  criticUser,
+    37→  docentSystem,
+    38→  docentUser,
+    39→  engineerFinalNudge,
+    40→  engineerResults,
+    41→  engineerSystem,
+    42→  engineerUser,
+    43→  remixCriticSystem,
+    44→  remixCriticUser,
+    45→  remixSystem,
+    46→  remixUser,
+    47→  routerSystem,
+    48→  routerUser,
+    49→} from './prompts';
+    50→import type { LlmMessage } from './llm';
+    51→import { validateGraph } from '../engine/validate';
+    52→import { FAMILIES, getFamily, isFamilyId } from '../families';
+    53→import type { PlantFamily } from '../families/types';
+    54→import type { FlowGraph } from '../engine/graph';
+    55→import type { Tour, TourStep } from '../content/units';
+    56→
+    57→const MAX_ENGINEER_TURNS = 24;
+    58→const MAX_GENERAL_TURNS = 34; // free-design builds need recovery room
+    59→const MAX_ACTIONS_PER_TURN = 12;
+    60→const MAX_ACTIONS_TOTAL = 200;
+    61→const MAX_REMIX_TURNS = 14;
+    62→
+    63→/** normalize one proposed action. LLMs sometimes flatten the args onto the
+    64→ * action itself ("{"tool":"remove_unit","id":"SP1"}" instead of
+    65→ * "{"tool":"remove_unit","args":{"id":"SP1"}}") — tolerate both;
+    66→ * properly-nested args win on key conflicts. */
+    67→function normalizeAction(a: Record<string, unknown>): { tool: string; args: Record<string, unknown> } {
+    68→  const tool = String(a.tool ?? '');
+    69→  const { tool: _t, args: nested, ...rest } = a;
+    70→  const merged: Record<string, unknown> =
+    71→    nested !== null && typeof nested === 'object' && !Array.isArray(nested)
+    72→      ? { ...rest, ...(nested as Record<string, unknown>) }
+    73→      : { ...rest };
+    74→  return { tool, args: merged };
+    75→}
+    76→
+    77→interface OrchestratorOpts {
+    78→  llm: Llm;
+    79→  emit: (e: BuildEvent) => void;
+    80→}
+    81→
+    82→export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOpts): Promise<void> {
+    83→  const trimmedBrief = brief.trim().slice(0, 2000);
+    84→  if (trimmedBrief.length < 10) {
+    85→    emit({ type: 'error', message: 'The design brief is too short — describe the plant you want in a sentence or two.' });
+    86→    emit({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });
+    87→    return;
+    88→  }
+    89→
+    90→  let seq = 0;
+    91→  const ws = new AgentWorkspace();
+    92→  const tool = (name: string, args: Record<string, unknown>) => {
+    93→    seq++;
+    94→    const res = ws.execute({ tool: name, args });
+    95→    emit({ type: 'tool', seq, name, args, ok: res.ok, summary: res.summary });
+    96→    if (ws.mutated) emit({ type: 'graph', graph: ws.snapshot() });
+    97→    if (name === 'solve' && res.ok) {
+    98→      const s = ws.solveSummary();
+    99→      if (s) emit({ type: 'solve', seq, solve: s });
+   100→    }
+   101→    return res;
+   102→  };
+   103→
+   104→  try {
+   105→    // ------------------------------------------------ 0. router — the family
+   106→    const family = await routeFamily(trimmedBrief, llm);
+   107→    ws.graph.family = family.id; // every snapshot + the saved plant carry it
+   108→    emit({
+   109→      type: 'family',
+   110→      family: family.id,
+   111→      label: `${family.name} — ${family.route}`,
+   112→      reason: family.routerReason,
+   113→    });
+   114→    emit({
+   115→      type: 'message',
+   116→      role: 'system',
+   117→      text: `Router: this is a ${family.name.toUpperCase()} brief — loading the ${family.name.toLowerCase()} family (units, conventions${family.id === 'general' ? ', and the product-declaration KPI reader' : `, and the ${family.productSpecies} KPI reader`}).`,
+   118→    });
+   119→
+   120→    // ---------------------------------------------------------- 1. architect
+   121→    emit({ type: 'phase', phase: 'architect', label: `Architect — planning the ${family.name.toLowerCase()} flowsheet` });
+   122→    const plan = await chatJson(llm, [
+   123→      { role: 'assistant', content: architectSystem(family) },
+   124→      { role: 'user', content: architectUser(trimmedBrief) },
+   125→    ], 'architect');
+   126→    const units = Array.isArray(plan.units) ? plan.units : [];
+   127→    if (units.length === 0) throw new Error('the architect produced no unit plan');
+   128→    const approach = typeof plan.approach === 'string' ? plan.approach : '';
+   129→    const notes = Array.isArray(plan.notes) ? plan.notes.map(String).filter(Boolean) : [];
+   130→    emit({
+   131→      type: 'message',
+   132→      role: 'architect',
+   133→      text: `${approach}\n${notes.length > 0 ? `\nNotes: ${notes.join(' · ')}` : ''}\n\nPlan: ${units.length} units, ${Array.isArray(plan.streams) ? plan.streams.length : 0} streams.`,
+   134→    });
+   135→    const planJson = JSON.stringify(plan);
+   136→
+   137→    // ---------------------------------------------------------- 2. engineer
+   138→    emit({ type: 'phase', phase: 'engineer', label: 'Engineer — building the plant with tools' });
+   139→    const convo: LlmMessage[] = [
+   140→      { role: 'assistant', content: engineerSystem(family) },
+   141→      { role: 'user', content: engineerUser(trimmedBrief, planJson) },
+   142→    ];
+   143→
+   144→    let refusedDone = false;
+   145→    let refusedDoneCount = 0;
+   146→    /** system + brief/plan stay; the tail is trimmed so long builds do not
+   147→     *  grow each request into the API's token/minute quota */
+   148→    const trimmedConvo = (): LlmMessage[] => {
+   149→      if (convo.length <= 16) return convo;
+   150→      return [convo[0], convo[1], ...convo.slice(-12)];
+   151→    };
+   152→    // general builds compose from scratch — they are harder to wire than
+   153→    // a family route, so they get recovery room in the turn budget
+   154→    const maxTurns = family.id === 'general' ? MAX_GENERAL_TURNS : MAX_ENGINEER_TURNS;
+   155→    for (let turn = 1; turn <= maxTurns; turn++) {
+   156→      const isLast = turn === maxTurns;
+   157→      let raw: Record<string, unknown>;
+   158→      try {
+   159→        raw = await chatJson(llm, trimmedConvo(), `engineer:${turn}`);
+   160→      } catch (turnErr) {
+   161→        // transient LLM failure (rate limit, outage): keep everything built
+   162→        // so far and fall through to the forced final solve — never throw
+   163→        // away built state because the model became unreachable
+   164→        emit({
+   165→          type: 'message',
+   166→          role: 'system',
+   167→          text: `Engineer session interrupted (${(turnErr as Error).message}) — verifying the plant as built so far.`,
+   168→        });
+   169→        break;
+   170→      }
+   171→      const thinking = typeof raw.thinking === 'string' ? raw.thinking : '';
+   172→      let actions = Array.isArray(raw.actions) ? raw.actions : [];
+   173→      const wantsDone = raw.done === true;
+   174→
+   175→      // sanitize + cap the action batch
+   176→      actions = actions
+   177→        .filter((a): a is Record<string, unknown> => a !== null && typeof a === 'object')
+   178→        .map(normalizeAction)
+   179→        .filter((a) => a.tool.length > 0)
+   180→        .slice(0, MAX_ACTIONS_PER_TURN);
+   181→      if (ws.actionCount + actions.length > MAX_ACTIONS_TOTAL) {
+   182→        actions = actions.slice(0, Math.max(0, MAX_ACTIONS_TOTAL - ws.actionCount));
+   183→      }
+   184→      if (thinking) emit({ type: 'message', role: 'engineer', text: thinking });
+   185→
+   186→      // empty turn: demand progress; premature done: refuse (empty canvas OR never solved)
+   187→      const solvedYet = ws.lastResult !== null;
+   188→      if (wantsDone && !solvedYet && !refusedDone && refusedDoneCount < 2) {
+   189→        refusedDone = true;
+   190→        refusedDoneCount++;
+   191→        convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   192→        const unwired = ws.graph.units.length > ws.graph.streams.length;
+   193→        convo.push({
+   194→          role: 'user',
+   195→          content:
+   196→            ws.graph.units.length < 3
+   197→              ? 'REJECTED: you marked the build done with an empty or nearly-empty canvas. Continue building — place the units and streams from the plan, then validate and solve before declaring done.'
+   198→              : unwired
+   199→                ? `REJECTED: you marked the build done with ${ws.graph.units.length} units but only ${ws.graph.streams.length} streams — the plant is not wired. Continue: connect ALL the streams from the plan, then validate, then solve. Only after a successful solve may you declare done.`
+   200→                : 'REJECTED: you declared the build done, but the plant has never solved successfully — run validate, fix every issue it reports, then solve, then read the product stream against the brief. Only then declare done.',
+   201→        });
+   202→        continue;
+   203→      }
+   204→
+   205→      const results: { tool: string; ok: boolean; summary: string }[] = [];
+   206→      for (const a of actions) {
+   207→        const res = tool(a.tool, a.args);
+   208→        results.push({ tool: a.tool, ok: res.ok, summary: res.summary });
+   209→      }
+   210→
+   211→      if (wantsDone || actions.length === 0 || isLast) {
+   212→        if (isLast && !wantsDone) {
+   213→          const state = { units: ws.graph.units.length, streams: ws.graph.streams.length, controllers: ws.graph.controllers.length, solved: ws.lastResult !== null };
+   214→          const issues = validateGraph(ws.graph).map((i) => i.message);
+   215→          convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   216→          let final: Record<string, unknown>;
+   217→          try {
+   218→            final = await chatJson(llm, [...convo, { role: 'user', content: engineerFinalNudge(state, issues) }], 'engineer:final');
+   219→          } catch {
+   220→            final = {};
+   221→          }
+   222→          if (final.done === true && typeof final.doneReason === 'string') {
+   223→            emit({ type: 'message', role: 'engineer', text: `Done: ${final.doneReason}` });
+   224→          } else if (Array.isArray(final.actions) && final.actions.length > 0) {
+   225→            for (const a of final.actions.slice(0, MAX_ACTIONS_PER_TURN)) {
+   226→              const call = a as Record<string, unknown>;
+   227→              const { tool: t, args } = normalizeAction(call);
+   228→              if (!t) continue;
+   229→              const res = tool(t, args);
+   230→              results.push({ tool: t, ok: res.ok, summary: res.summary });
+   231→            }
+   232→          }
+   233→          break;
+   234→        }
+   235→        if (wantsDone) {
+   236→          const reason = typeof raw.doneReason === 'string' ? raw.doneReason : '';
+   237→          emit({ type: 'message', role: 'engineer', text: reason ? `Done: ${reason}` : 'Done.' });
+   238→          break;
+   239→        }
+   240→        // empty turn without done: nudge
+   241→        convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   242→        convo.push({
+   243→          role: 'user',
+   244→          content:
+   245→            'Your last turn proposed no actions. Either propose tool actions (units, streams, specs, validate, solve) or set "done": true with a doneReason. Reply with the JSON turn now.',
+   246→        });
+   247→        continue;
+   248→      }
+   249→
+   250→      convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   251→      convo.push({
+   252→        role: 'user',
+   253→        content: engineerResults(results, {
+   254→          units: ws.graph.units.length,
+   255→          streams: ws.graph.streams.length,
+   256→          controllers: ws.graph.controllers.length,
+   257→          solved: ws.lastResult !== null,
+   258→        }),
+   259→      });
+   260→    }
+   261→
+   262→    // ------------------------------------------------ 3. solver — the truth
+   263→    emit({ type: 'phase', phase: 'solver', label: 'Solver — final validation and simulation' });
+   264→    const finalValidate = tool('validate', {});
+   265→    let solvedOk = false;
+   266→    let solveSummary: SolveSummary | null = null;
+   267→    if (finalValidate.ok) {
+   268→      const finalSolve = tool('solve', {});
+   269→      solvedOk = finalSolve.ok;
+   270→      solveSummary = ws.solveSummary();
+   271→    } else if (ws.lastResult) {
+   272→      // validation regressed after the last successful solve (e.g. a late
+   273→      // mutation) — report the stale solve honestly
+   274→      solveSummary = ws.solveSummary();
+   275→      emit({ type: 'message', role: 'system', text: 'Note: the graph changed after its last successful solve — reported numbers are from the previous state.' });
+   276→    }
+   277→
+   278→    // ---------------------------------------------------------- 4. critic
+   279→    emit({ type: 'phase', phase: 'critic', label: 'Critic — reviewing the plant against the brief' });
+   280→    const facts = solveFacts(solveSummary);
+   281→    let verdict: CriticVerdict;
+   282→    try {
+   283→      const verdictRaw = await chatJson(llm, [
+   284→        { role: 'assistant', content: criticSystem(family) },
+   285→        { role: 'user', content: criticUser(trimmedBrief, facts, graphDigest(ws.graph)) },
+   286→      ], 'critic');
+   287→      verdict = sanitizeVerdict(verdictRaw, solvedOk);
+   288→    } catch (criticErr) {
+   289→      // the critic is an LLM call — if it is unavailable (rate limit, outage)
+   290→      // the build still deserves a verdict from the deterministic facts
+   291→      emit({ type: 'message', role: 'system', text: `Critic call unavailable (${(criticErr as Error).message}) — verdict computed from solver facts only.` });
+   292→      verdict = factsVerdict(solvedOk, solveSummary);
+   293→    }
+   294→    emit({ type: 'verdict', verdict });
+   295→
+   296→    // ------------------------------------------- 5. docent — the guided tour
+   297→    if (solvedOk && finalValidate.ok && verdict.verdict !== 'fail') {
+   298→      emit({ type: 'phase', phase: 'docent', label: 'Docent — writing the guided tour' });
+   299→      try {
+   300→        const tourRaw = await chatJson(llm, [
+   301→          { role: 'assistant', content: docentSystem(family) },
+   302→          { role: 'user', content: docentUser(`A plant built by the agents from the brief: "${trimmedBrief}"`, facts, graphDigest(ws.graph), family.name) },
+   303→        ], 'docent');
+   304→        const tour = sanitizeTour(tourRaw, ws.graph, family);
+   305→        if (tour) {
+   306→          emit({ type: 'message', role: 'docent', text: `Tour written: “${tour.title}” — ${tour.steps.length} stops, ready to play with voice and music once you save the plant.` });
+   307→          emit({ type: 'tour', tour });
+   308→        } else {
+   309→          emit({ type: 'message', role: 'docent', text: 'The docent could not produce a valid tour — the automatic tour will be used instead.' });
+   310→        }
+   311→      } catch (docentErr) {
+   312→        emit({ type: 'message', role: 'system', text: `Docent unavailable (${(docentErr as Error).message}) — the automatic tour will be used instead.` });
+   313→      }
+   314→    }
+   315→
+   316→    // ---------------------------------------------------------- 6. done
+   317→    const success = solvedOk && finalValidate.ok && verdict.verdict !== 'fail';
+   318→    emit({
+   319→      type: 'done',
+   320→      success,
+   321→      graph: ws.snapshot(),
+   322→      unitCount: ws.graph.units.length,
+   323→      streamCount: ws.graph.streams.length,
+   324→    });
+   325→  } catch (e) {
+   326→    emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+   327→    emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
+   328→  }
+   329→}
+   330→
+   331→// ---------------------------------------------------------------------------
+   332→// REMIX — the same pipeline, minus the architect: a working plant is on the
+   333→// canvas and the student asks for a change. The engineer edits it with the
+   334→// same tools (remove_unit included), the solver re-runs the whole plant, a
+   335→// remix-aware critic judges the EDIT against the request (not the textbook
+   336→// route), and the docent rewrites the tour for the remixed plant.
+   337→// ---------------------------------------------------------------------------
+   338→
+   339→export async function runAgentRemix(
+   340→  initialGraph: FlowGraph,
+   341→  instruction: string,
+   342→  { llm, emit }: OrchestratorOpts,
+   343→): Promise<void> {
+   344→  const trimmed = instruction.trim().slice(0, 1000);
+   345→  if (trimmed.length < 3) {
+   346→    emit({ type: 'error', message: 'The remix instruction is too short — describe the change you want in a sentence.' });
+   347→    emit({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });
+   348→    return;
+   349→  }
+   350→
+   351→  let seq = 0;
+   352→  const ws = new AgentWorkspace(initialGraph); // seeded with the working plant
+   353→  const family = getFamily(ws.graph.family && isFamilyId(ws.graph.family) ? ws.graph.family : 'ammonia');
+   354→  const changeLog: string[] = [];
+   355→  const tool = (name: string, args: Record<string, unknown>) => {
+   356→    seq++;
+   357→    const res = ws.execute({ tool: name, args });
+   358→    emit({ type: 'tool', seq, name, args, ok: res.ok, summary: res.summary });
+   359→    if (ws.mutated) {
+   360→      changeLog.push(`${name}: ${res.summary}`);
+   361→      emit({ type: 'graph', graph: ws.snapshot() });
+   362→    }
+   363→    if (name === 'solve' && res.ok) {
+   364→      const s = ws.solveSummary();
+   365→      if (s) emit({ type: 'solve', seq, solve: s });
+   366→    }
+   367→    return res;
+   368→  };
+   369→
+   370→  try {
+   371→    // ---------------------------------------- 0. baseline — solve as loaded
+   372→    // the remix critic diffs against this; also proves the seed is live
+   373→    emit({ type: 'phase', phase: 'engineer', label: 'Engineer — remixing your plant' });
+   374→    const baselineOk = tool('solve', {});
+   375→    let baselineFacts = 'baseline: the loaded plant did not solve (the remix must also repair it)';
+   376→    if (!baselineOk.ok && ws.lastResult) baselineFacts = 'baseline: loaded plant solved earlier but the last solve failed';
+   377→    if (baselineOk.ok && ws.solveSummary()) baselineFacts = solveFacts(ws.solveSummary());
+   378→
+   379→    // ------------------------------------------ 1. engineer — the edit loop
+   380→    const convo: LlmMessage[] = [
+   381→      { role: 'assistant', content: remixSystem(family) },
+   382→      { role: 'user', content: remixUser(trimmed, graphDigest(ws.graph), baselineFacts) },
+   383→    ];
+   384→    const trimmedConvo = (): LlmMessage[] => {
+   385→      if (convo.length <= 14) return convo;
+   386→      return [convo[0], convo[1], ...convo.slice(-10)];
+   387→    };
+   388→
+   389→    for (let turn = 1; turn <= MAX_REMIX_TURNS; turn++) {
+   390→      const isLast = turn === MAX_REMIX_TURNS;
+   391→      let raw: Record<string, unknown>;
+   392→      try {
+   393→        raw = await chatJson(llm, trimmedConvo(), `remix:${turn}`);
+   394→      } catch (turnErr) {
+   395→        emit({
+   396→          type: 'message',
+   397→          role: 'system',
+   398→          text: `Engineer session interrupted (${(turnErr as Error).message}) — verifying the plant as edited so far.`,
+   399→        });
+   400→        break;
+   401→      }
+   402→      const thinking = typeof raw.thinking === 'string' ? raw.thinking : '';
+   403→      let actions = Array.isArray(raw.actions) ? raw.actions : [];
+   404→      const wantsDone = raw.done === true;
+   405→
+   406→      actions = actions
+   407→        .filter((a): a is Record<string, unknown> => a !== null && typeof a === 'object')
+   408→        .map(normalizeAction)
+   409→        .filter((a) => a.tool.length > 0)
+   410→        .slice(0, MAX_ACTIONS_PER_TURN);
+   411→      if (thinking) emit({ type: 'message', role: 'engineer', text: thinking });
+   412→
+   413→      // done is only meaningful from a solved plant (the baseline usually is —
+   414→      // a no-op done is legitimate when the request is impossible; say why)
+   415→      if (actions.length === 0 && !wantsDone && !isLast) {
+   416→        convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   417→        convo.push({
+   418→          role: 'user',
+   419→          content:
+   420→            'Your last turn proposed no actions. Either propose tool actions that make the requested change, or set "done": true with a doneReason (you may say the request is impossible on this plant). Reply with the JSON turn now.',
+   421→        });
+   422→        continue;
+   423→      }
+   424→
+   425→      const results: { tool: string; ok: boolean; summary: string }[] = [];
+   426→      for (const a of actions) {
+   427→        const res = tool(a.tool, a.args);
+   428→        results.push({ tool: a.tool, ok: res.ok, summary: res.summary });
+   429→      }
+   430→
+   431→      if (wantsDone || isLast) {
+   432→        if (wantsDone && typeof raw.doneReason === 'string' && raw.doneReason.trim()) {
+   433→          emit({ type: 'message', role: 'engineer', text: `Done: ${raw.doneReason.trim()}` });
+   434→        } else if (isLast) {
+   435→          const issues = validateGraph(ws.graph).map((i) => i.message);
+   436→          convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   437→          try {
+   438→            const final = await chatJson(llm, [...convo, { role: 'user', content: engineerFinalNudge(
+   439→              { units: ws.graph.units.length, streams: ws.graph.streams.length, controllers: ws.graph.controllers.length, solved: ws.lastResult !== null },
+   440→              issues,
+   441→            ) }], 'remix:final');
+   442→            if (final.done === true && typeof final.doneReason === 'string') {
+   443→              emit({ type: 'message', role: 'engineer', text: `Done: ${final.doneReason}` });
+   444→            } else if (Array.isArray(final.actions)) {
+   445→              for (const a of final.actions.slice(0, MAX_ACTIONS_PER_TURN)) {
+   446→                if (a === null || typeof a !== 'object') continue;
+   447→                const { tool: t, args } = normalizeAction(a as Record<string, unknown>);
+   448→                if (!t) continue;
+   449→                const res = tool(t, args);
+   450→                results.push({ tool: t, ok: res.ok, summary: res.summary });
+   451→              }
+   452→            }
+   453→          } catch {
+   454→            // final nudge unavailable — the forced solve below still runs
+   455→          }
+   456→        }
+   457→        break;
+   458→      }
+   459→
+   460→      convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+   461→      convo.push({
+   462→        role: 'user',
+   463→        content: engineerResults(results, {
+   464→          units: ws.graph.units.length,
+   465→          streams: ws.graph.streams.length,
+   466→          controllers: ws.graph.controllers.length,
+   467→          solved: ws.lastResult !== null,
+   468→        }),
+   469→      });
+   470→    }
+   471→
+   472→    // ------------------------------------ 2. solver — the truth, re-run
+   473→    emit({ type: 'phase', phase: 'solver', label: 'Solver — re-running the remixed plant' });
+   474→    const finalValidate = tool('validate', {});
+   475→    let solvedOk = false;
+   476→    let solveSummary: SolveSummary | null = null;
+   477→    if (finalValidate.ok) {
+   478→      const finalSolve = tool('solve', {});
+   479→      solvedOk = finalSolve.ok;
+   480→      solveSummary = ws.solveSummary();
+   481→    } else if (ws.lastResult) {
+   482→      solveSummary = ws.solveSummary();
+   483→      emit({ type: 'message', role: 'system', text: 'Note: the graph changed after its last successful solve — reported numbers are from the previous state.' });
+   484→    }
+   485→
+   486→    // -------------------------- 3. critic — judges the EDIT, not the textbook
+   487→    emit({ type: 'phase', phase: 'critic', label: 'Critic — reviewing the remix' });
+   488→    const newFacts = solveFacts(solveSummary);
+   489→    let verdict: CriticVerdict;
+   490→    try {
+   491→      const verdictRaw = await chatJson(llm, [
+   492→        { role: 'assistant', content: remixCriticSystem(family) },
+   493→        { role: 'user', content: remixCriticUser(trimmed, baselineFacts, newFacts, graphDigest(ws.graph), changeLog) },
+   494→      ], 'remix-critic');
+   495→      verdict = sanitizeVerdict(verdictRaw, solvedOk);
+   496→    } catch (criticErr) {
+   497→      emit({ type: 'message', role: 'system', text: `Critic call unavailable (${(criticErr as Error).message}) — verdict computed from solver facts only.` });
+   498→      verdict = factsVerdict(solvedOk, solveSummary);
+   499→    }
+   500→    emit({ type: 'verdict', verdict });
+   501→
+   502→    // --------------------------------- 4. docent — a fresh tour for the remix
+   503→    if (solvedOk && finalValidate.ok && verdict.verdict !== 'fail') {
+   504→      emit({ type: 'phase', phase: 'docent', label: 'Docent — writing the remixed plant tour' });
+   505→      try {
+   506→        const tourRaw = await chatJson(llm, [
+   507→          { role: 'assistant', content: docentSystem(family) },
+   508→          { role: 'user', content: docentUser(`A remixed ${family.name.toLowerCase()} plant — the student asked: "${trimmed}"`, newFacts, graphDigest(ws.graph), family.name) },
+   509→        ], 'remix-docent');
+   510→        const tour = sanitizeTour(tourRaw, ws.graph, family);
+   511→        if (tour) {
+   512→          emit({ type: 'message', role: 'docent', text: `Tour written: “${tour.title}” — ${tour.steps.length} stops, ready to play with voice and music once you save the plant.` });
+   513→          emit({ type: 'tour', tour });
+   514→        } else {
+   515→          emit({ type: 'message', role: 'docent', text: 'The docent could not produce a valid tour — the automatic tour will be used instead.' });
+   516→        }
+   517→      } catch (docentErr) {
+   518→        emit({ type: 'message', role: 'system', text: `Docent unavailable (${(docentErr as Error).message}) — the automatic tour will be used instead.` });
+   519→      }
+   520→    }
+   521→
+   522→    // ---------------------------------------------------------- 5. done
+   523→    const success = solvedOk && finalValidate.ok && verdict.verdict !== 'fail';
+   524→    emit({
+   525→      type: 'done',
+   526→      success,
+   527→      graph: ws.snapshot(),
+   528→      unitCount: ws.graph.units.length,
+   529→      streamCount: ws.graph.streams.length,
+   530→    });
+   531→  } catch (e) {
+   532→    emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+   533→    emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
+   534→  }
+   535→}
+   536→
+   537→// ---------------------------------------------------------------------------
+   538→// family routing
+   539→// ---------------------------------------------------------------------------
+   540→
+   541→/** high-confidence keyword fast path — zero LLM cost for obvious briefs */
+   542→const FAMILY_KEYWORDS: Array<{ family: string; words: string[] }> = [
+   543→  // sulphur first: "sulphur treatment plant" must never leak to hydrogen
+   544→  {
+   545→    family: 'sulphur',
+   546→    words: [
+   547→      'sulphur recovery',
+   548→      'sulfur recovery',
+   549→      'sulphur treatment',
+   550→      'sulfur treatment',
+   551→      'sulphur plant',
+   552→      'sulfur plant',
+   553→      'sulphur unit',
+   554→      'sulfur unit',
+   555→      'claus',
+   556→      'acid gas',
+   557→      'sru',
+   558→      'h2s removal',
+   559→      'sulphur production',
+   560→      'sulfur production',
+   561→      'liquid sulphur',
+   562→      'liquid sulfur',
+   563→    ],
+   564→  },
+   565→  { family: 'methanol', words: ['methanol', 'ch3oh', 'wood alcohol', 'wood-alcohol'] },
+   566→  { family: 'hydrogen', words: ['hydrogen plant', 'h2 plant', 'psa', 'fuel-cell hydrogen', 'green hydrogen', 'blue hydrogen', 'hydrogen production'] },
+   567→  { family: 'ammonia', words: ['ammonia', 'haber', 'haber-bosch', 'nh3', 'nitrogen fixation', 'urea feed'] },
+   568→];
+   569→
+   570→async function routeFamily(brief: string, llm: Llm): Promise<PlantFamily & { routerReason: string }> {
+   571→  // 1. LLM classification FIRST — it is the only judge that can read a
+   572→  //    HYBRID brief ("a hydrogen plant with a methanator guard bed") and
+   573→  //    send it to general instead of the family whose route it extends.
+   574→  //    One small call, cheap next to the build itself.
+   575→  try {
+   576→    const raw = await chatJson(llm, [
+   577→      { role: 'assistant', content: routerSystem(FAMILIES) },
+   578→      { role: 'user', content: routerUser(brief) },
+   579→    ], 'router');
+   580→    const id = typeof raw.family === 'string' ? raw.family : '';
+   581→    const reason = typeof raw.reason === 'string' ? raw.reason : '';
+   582→    if (isFamilyId(id)) return Object.assign(Object.create(getFamily(id)), { routerReason: reason || 'classified by the router' });
+   583→  } catch {
+   584→    // router unavailable — fall through to the keyword path
+   585→  }
+   586→  // 2. keyword fallback (first family with a hit wins; sulphur/hydrogen
+   587→  //    checked before ammonia so "ammonia or hydrogen" style briefs lean specific)
+   588→  const lower = brief.toLowerCase();
+   589→  for (const { family, words } of FAMILY_KEYWORDS) {
+   590→    const hit = words.find((w) => lower.includes(w));
+   591→    if (hit) {
+   592→      return Object.assign(Object.create(getFamily(family)), { routerReason: `brief says "${hit}" (keyword fallback)` });
+   593→    }
+   594→  }
+   595→  // 3. no LLM, no keywords: a general attempt is the honest default (the
+   596→  //    agent will compose from the basics rather than silently build ammonia)
+   597→  return Object.assign(Object.create(getFamily('general')), { routerReason: 'router unavailable — building from the physics basics' });
+   598→}
+   599→
+   600→// ---------------------------------------------------------------------------
+   601→// verdicts, facts, tours — deterministic sanitation of LLM output
+   602→// ---------------------------------------------------------------------------
+   603→
+   604→/** the deterministic solve facts, family-aware (used by critic + docent) */
+   605→function solveFacts(s: SolveSummary | null): string {
+   606→  if (!s) return 'solved: NO — the flowsheet did not pass validation or failed to solve';
+   607→  const lines = [
+   608→    `solved: yes (converged: ${s.converged}, ${s.iterations} loop iterations, ${s.solveMs.toFixed(0)} ms)`,
+   609→  ];
+   610→  if (s.kpis.familyKpis && s.kpis.familyKpis.length > 0) {
+   611→    for (const k of s.kpis.familyKpis) lines.push(`${k.label.toLowerCase()}: ${k.value}`);
+   612→  } else {
+   613→    lines.push(
+   614→      `production: ${s.kpis.productionTpd.toFixed(1)} t/d`,
+   615→      `product purity: ${(s.kpis.productPurityWt * 100).toFixed(2)} wt %`,
+   616→    );
+   617→  }
+   618→  lines.push(
+   619→    `overall conversion: ${(s.kpis.overallConv * 100).toFixed(1)} %`,
+   620→    `worst element-balance error: ${s.balanceWorstRelErr.toExponential(2)}`,
+   621→    s.warnings.length > 0 ? `warnings: ${s.warnings.join('; ')}` : 'warnings: none',
+   622→  );
+   623→  return lines.join('\n');
+   624→}
+   625→
+   626→function sanitizeVerdict(raw: Record<string, unknown>, solved: boolean): CriticVerdict {
+   627→  const v = raw.verdict === 'pass' || raw.verdict === 'revise' || raw.verdict === 'fail' ? raw.verdict : solved ? 'revise' : 'fail';
+   628→  const scoreRaw = typeof raw.score === 'number' && Number.isFinite(raw.score) ? raw.score : v === 'pass' ? 80 : v === 'revise' ? 55 : 25;
+   629→  return {
+   630→    verdict: v,
+   631→    score: Math.max(0, Math.min(100, Math.round(scoreRaw))),
+   632→    summary: typeof raw.summary === 'string' && raw.summary.trim() ? raw.summary.trim() : 'No summary provided.',
+   633→    strengths: Array.isArray(raw.strengths) ? raw.strengths.map(String).filter((x) => x.trim()).slice(0, 6) : [],
+   634→    issues: Array.isArray(raw.issues) ? raw.issues.map(String).filter((x) => x.trim()).slice(0, 6) : [],
+   635→    suggestions: Array.isArray(raw.suggestions) ? raw.suggestions.map(String).filter((x) => x.trim()).slice(0, 6) : [],
+   636→  };
+   637→}
+   638→
+   639→/** deterministic verdict when the critic LLM is unavailable — solver facts only */
+   640→function factsVerdict(solved: boolean, s: SolveSummary | null): CriticVerdict {
+   641→  if (!solved || !s) {
+   642→    return {
+   643→      verdict: 'fail',
+   644→      score: 20,
+   645→      summary: 'The flowsheet did not solve (or failed validation). No numeric results to certify.',
+   646→      strengths: [],
+   647→      issues: ['plant did not produce a solved result'],
+   648→      suggestions: ['fix the validation issues shown in the log, then rebuild'],
+   649→    };
+   650→  }
+   651→  const clean = s.converged && s.balanceWorstRelErr < 1e-4 && s.warnings.length === 0;
+   652→  return {
+   653→    verdict: clean ? 'pass' : 'revise',
+   654→    score: clean ? 85 : 55,
+   655→    summary: clean
+   656→      ? `Solver-certified: converged in ${s.iterations} iterations, element balance closed to ${s.balanceWorstRelErr.toExponential(1)}, production ${s.kpis.productionTpd.toFixed(1)} t/d at ${(s.kpis.productPurityWt * 100).toFixed(1)} wt % purity.`
+   657→      : `Solver-certified numbers exist, but the run is not clean (converged: ${s.converged}${s.warnings.length > 0 ? `; warnings: ${s.warnings.slice(0, 2).join('; ')}` : ''}).`,
+   658→    strengths: clean ? ['converged and element-balanced', `production ${s.kpis.productionTpd.toFixed(1)} t/d`] : ['produces a solvable flowsheet'],
+   659→    issues: clean ? [] : [s.converged ? `warnings: ${s.warnings.slice(0, 2).join('; ')}` : 'synthesis loop did not converge'],
+   660→    suggestions: [],
+   661→  };
+   662→}
+   663→
+   664→// ---------------------------------------------------------------------------
+   665→// docent output sanitization — the LLM writes prose, CODE validates structure
+   666→// ---------------------------------------------------------------------------
+   667→
+   668→const T = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+   669→
+   670→/** validate the docent's tour: refs must exist on the graph, texts sane
+   671→ *  lengths, 3-9 steps. Returns null when the output is unusable. */
+   672→function sanitizeTour(raw: Record<string, unknown>, graph: FlowGraph, family: PlantFamily): Tour | null {
+   673→  const unitIds = new Set(graph.units.map((u) => u.id));
+   674→  const stepsRaw = Array.isArray(raw.steps) ? raw.steps : [];
+   675→  const steps: TourStep[] = [];
+   676→  for (const sr of stepsRaw) {
+   677→    if (sr === null || typeof sr !== 'object') continue;
+   678→    const o = sr as Record<string, unknown>;
+   679→    const unitId = T(o.unit);
+   680→    const title = T(o.title);
+   681→    const text = T(o.text);
+   682→    if (!unitId || !unitIds.has(unitId)) continue;
+   683→    if (title.length < 2 || title.length > 80) continue;
+   684→    if (text.length < 40 || text.length > 700) continue;
+   685→    steps.push({ ref: { type: 'unit', id: unitId }, title, text });
+   686→  }
+   687→  if (steps.length < 3 || steps.length > 9) return null;
+   688→  const title = T(raw.title) || `The ${family.name} plant`;
+   689→  return { id: `docent-${Date.now().toString(36)}`, chip: 'Walk my plant', title: title.slice(0, 120), steps };
+   690→}
+   691→
