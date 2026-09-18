@@ -46,6 +46,8 @@ export const C = {
   gas: 'var(--fs-gas)',
   /** liquid ammonia product — light: #3F6B4F green · dark: #85BD9A sage */
   nh3: 'var(--fs-nh3)',
+  /** sulphur-bearing product streams (Claus family dot tint) — light: #A8842C gold · dark: #D9B45B */
+  sulfur: 'var(--fs-sulfur)',
   /** utilities & offgas: water, CO2, purge (dashed) — light: #8B8E93 · dark: #96999E */
   utility: 'var(--fs-utility)',
   /** advisory notes in panels — light: #8A5A2B · dark: #E0AC5E */
