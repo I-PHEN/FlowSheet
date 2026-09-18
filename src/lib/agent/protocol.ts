@@ -18,6 +18,19 @@ import type { Tour } from '../content/units';
 /** the LLM roles + the deterministic solver phase */
 export type BuildPhase = 'architect' | 'engineer' | 'solver' | 'critic' | 'docent' | 'done';
 
+/** what one agent run cost — the token ledger (honest economy) */
+export interface RunUsage {
+  promptTokens: number;
+  completionTokens: number;
+  /** real LLM calls (cache hits excluded) */
+  calls: number;
+  cacheHits: number;
+  /** ≈ prompt tokens NOT spent thanks to the reply cache */
+  cacheSavedTokens: number;
+  /** per-role buckets, insertion order */
+  byRole: Array<{ role: string; prompt: number; completion: number; calls: number; hits: number }>;
+}
+
 export interface SolveSummary {
   kpis: Kpis;
   converged: boolean;
@@ -65,6 +78,8 @@ export type BuildEvent =
   | { type: 'family'; family: string; label: string; reason?: string }
   /** the docent's narrated tour (validated) for the solved plant */
   | { type: 'tour'; tour: Tour }
+  /** the run's token ledger — emitted just before `done` */
+  | { type: 'usage'; usage: RunUsage }
   | { type: 'done'; success: boolean; graph: FlowGraph | null; unitCount: number; streamCount: number }
   | { type: 'error'; message: string };
 

@@ -17,12 +17,17 @@
 
 import { AgentWorkspace } from '../src/lib/agent/workspace';
 import { runAgentBuild } from '../src/lib/agent/orchestrator';
-import { extractJson } from '../src/lib/agent/llm';
+import { CachedLlm, TokenMeter, extractJson } from '../src/lib/agent/llm';
 import type { Llm, LlmMessage } from '../src/lib/agent/llm';
+import { catalogDigest } from '../src/lib/agent/catalog';
+import { engineerSystem } from '../src/lib/agent/prompts';
+import { getFamily } from '../src/lib/families';
 import type { BuildEvent, EngineerStep, ToolCall } from '../src/lib/agent/protocol';
 import { baseCase, run } from '../src/lib/engine';
 import { applyPlantSpec, referenceGraph, buildGraph } from '../src/lib/engine/reference';
 import type { FlowGraph } from '../src/lib/engine/graph';
+import fs from 'fs';
+import path from 'path';
 
 let passed = 0;
 let failed = 0;
@@ -205,7 +210,14 @@ function referenceScript(): { plan: Record<string, unknown>; steps: EngineerStep
   check('build completes', done !== undefined);
   check('build succeeds', done?.success === true, events.filter((e) => e.type === 'error').map((e) => (e as { message: string }).message).join('; '));
   check('no error events', !events.some((e) => e.type === 'error'));
-  check('final graph deep-equals the reference graph', done != null && JSON.stringify(done.graph) === JSON.stringify(gRef), 'graph mismatch');
+  // the orchestrator stamps the routed family onto every snapshot (task 28);
+  // normalize it away — the test is about TOPOLOGY identity
+  const norm = (g: unknown): string => {
+    const c = { ...(g as Record<string, unknown>) };
+    delete c.family;
+    return JSON.stringify(c);
+  };
+  check('final graph deep-equals the reference graph', done?.graph != null && norm(done.graph) === norm(gRef), 'graph mismatch');
 
   const solveEvents = events.filter((e) => e.type === 'solve') as Extract<BuildEvent, { type: 'solve' }>[];
   check('solve event emitted', solveEvents.length > 0);
@@ -216,7 +228,7 @@ function referenceScript(): { plan: Record<string, unknown>; steps: EngineerStep
 
   // event stream shape
   const phases = events.filter((e) => e.type === 'phase').map((e) => (e as { phase: string }).phase);
-  check('phases run architect → engineer → solver → critic → done', JSON.stringify(phases) === JSON.stringify(['architect', 'engineer', 'solver', 'critic']), JSON.stringify(phases));
+  check('phases run architect → engineer → solver → critic → docent', JSON.stringify(phases) === JSON.stringify(['architect', 'engineer', 'solver', 'critic', 'docent']), JSON.stringify(phases));
   check('architect message emitted', events.some((e) => e.type === 'message' && e.role === 'architect'));
   check('engineer thinking messages emitted', events.filter((e) => e.type === 'message' && e.role === 'engineer').length >= 5);
   check('verdict emitted', events.some((e) => e.type === 'verdict'));
@@ -328,6 +340,94 @@ check('truncated object parses with salvageable actions', (() => {
   return Array.isArray(p?.actions) && p?.actions?.length === 2;
 })());
 check('truncated mid-string is repaired', extractJson('{"thinking": "wiring the synthesis lo') != null);
+
+// ---------------------------------------------------------------------------
+console.log('\nE. TOKEN ECONOMY');
+// ---------------------------------------------------------------------------
+
+// E1 — the meter: role buckets, repair turns roll up, snapshot totals
+{
+  const meter = new TokenMeter();
+  meter.record('router', 600, 40);
+  meter.record('engineer:1', 14000, 500);
+  meter.record('engineer:3:repair1', 14500, 300);
+  meter.record('critic', 4200, 350);
+  const snap = meter.snapshot();
+  check('meter totals', snap.promptTokens === 33300 && snap.completionTokens === 1190 && snap.calls === 4, JSON.stringify(snap));
+  const eng = snap.byRole.find((r) => r.role === 'engineer');
+  check('meter rolls turns + repairs into the role', !!eng && eng.calls === 2 && eng.prompt === 28500, JSON.stringify(eng));
+  check('meter keeps roles separate', snap.byRole.length === 3);
+}
+
+// E2 — the meter flows through a whole build (usage event before done)
+{
+  const events: BuildEvent[] = [];
+  const plan = {
+    approach: 'tiny',
+    units: [{ id: 'SRC_NG', type: 'ng-source', role: 'feed' }],
+    streams: [],
+    specs: [],
+    controller: null,
+    notes: [],
+  };
+  const steps: EngineerStep[] = [
+    { thinking: 'placing', actions: [{ tool: 'add_unit', args: { id: 'SRC_NG', type: 'ng-source' } }] },
+    { thinking: 'done', actions: [], done: true, doneReason: 'that is all' },
+  ];
+  const critic = { verdict: 'fail', score: 10, summary: 'not a plant', strengths: [], issues: ['nothing wired'], suggestions: [] };
+  const meter = new TokenMeter();
+  meter.record('architect', 100, 10);
+  await runAgentBuild('Build a tiny reformer front end.', { llm: new ScriptedLlm(plan, steps, critic), emit: (e) => events.push(e), meter });
+  const usage = events.find((e) => e.type === 'usage') as Extract<BuildEvent, { type: 'usage' }> | undefined;
+  const doneIdx = events.findIndex((e) => e.type === 'done');
+  const usageIdx = events.findIndex((e) => e.type === 'usage');
+  check('usage event emitted', !!usage);
+  check('usage snapshot carries the meter', usage?.usage.promptTokens === 100 && usage?.usage.calls === 1);
+  check('usage lands before done (the UI never misses it)', usageIdx >= 0 && doneIdx > usageIdx);
+}
+
+// E3 — the reply cache: identical calls replay for zero tokens
+{
+  const dir = path.join(process.cwd(), 'scripts', '.cache-test');
+  fs.rmSync(dir, { recursive: true, force: true });
+  process.env.AGENT_LLM_CACHE = '1';
+  process.env.AGENT_LLM_CACHE_DIR = dir;
+  let calls = 0;
+  const inner: Llm = { chat: async () => { calls++; return '{"ok":true}'; } };
+  const meter = new TokenMeter();
+  const cached = new CachedLlm(inner, meter);
+  const msgs: LlmMessage[] = [{ role: 'user', content: 'hello world' }];
+  const a = await cached.chat(msgs, 'router');
+  const b = await cached.chat(msgs, 'router');
+  check('cache: first call passes through', calls === 1 && a === '{"ok":true}');
+  check('cache: identical second call served from disk', calls === 1 && b === a);
+  const snap = meter.snapshot();
+  // the scripted inner LLM never meters its pass-through — only the cache hit
+  // is visible to the meter here (real usage capture is ZaiLlm's job, probed
+  // live in scripts/probe-usage.ts)
+  check('cache: hit recorded with estimated savings', snap.cacheHits === 1 && snap.cacheSavedTokens > 0, JSON.stringify(snap));
+  await cached.chat([{ role: 'user', content: 'different question' }], 'router');
+  check('cache: different messages miss', calls === 2);
+  process.env.AGENT_LLM_CACHE = '0';
+  await cached.chat(msgs, 'router');
+  check('cache: env kill-switch bypasses', calls === 3);
+  process.env.AGENT_LLM_CACHE = '1';
+  fs.rmSync(dir, { recursive: true, force: true });
+  delete process.env.AGENT_LLM_CACHE_DIR;
+}
+
+// E4 — the scoped catalog: the engineer re-sends far less every turn
+{
+  const full = catalogDigest();
+  const ammoniaTypes = Array.from(new Set(getFamily('ammonia').referenceGraph().units.map((u) => u.type)));
+  const scoped = catalogDigest(ammoniaTypes);
+  check('catalog: scoped digest is much smaller', scoped.length < full.length * 0.6, `${scoped.length} vs ${full.length}`);
+  check('catalog: scoped keeps every route unit', ammoniaTypes.every((t) => scoped.includes(`- ${t} —`)));
+  check('catalog: scoped digest says it is abridged', scoped.includes('abridged'));
+  const sysScoped = engineerSystem(getFamily('ammonia'), ammoniaTypes);
+  const sysFull = engineerSystem(getFamily('general'));
+  check('engineer prompt: family build lighter than general', sysScoped.length < sysFull.length);
+}
 
 // ---------------------------------------------------------------------------
 

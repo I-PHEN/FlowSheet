@@ -7,12 +7,16 @@
  *   "minus 20 degrees Celsius", V-103 → "V one oh three") so the voice
  *   sounds like an engineer, not a screen reader.
  * - Enforces the SDK's 1024-character cap (truncates at sentence boundary).
- * - Caches rendered audio by spoken text in memory — revisiting a tour step
- *   is instant and costs no quota.
+ * - Caches rendered audio by spoken text in memory AND on disk — revisiting
+ *   a tour step, or replaying it after a dev-server restart, is instant and
+ *   costs no quota (token economy: TTS is priced per character).
  * - All SDK access stays server-side; the browser only fetches this route.
  */
 
 import ZAI from 'z-ai-web-dev-sdk';
+import { createHash } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { toSpoken } from '@/lib/audio/spoken';
 
 export const runtime = 'nodejs';
@@ -31,6 +35,33 @@ async function client() {
 /** rendered-audio cache, keyed by spoken text (bounded, LRU-ish) */
 const CACHE_MAX = 64;
 const cache = new Map<string, Buffer>();
+
+/** the disk tier — survives restarts and sandbox resets. Keyed by
+ *  voice+speed+text so a voice change can never serve stale audio. */
+const DISK_DIR = path.join(process.cwd(), '.agent-cache', 'tts');
+
+function diskPath(spoken: string): string {
+  const h = createHash('sha256').update(`tts:${VOICE}:${SPEED}:${spoken}`).digest('hex');
+  return path.join(DISK_DIR, `${h}.wav`);
+}
+
+function diskGet(spoken: string): Buffer | null {
+  try {
+    const buf = fs.readFileSync(diskPath(spoken));
+    return buf.length > 200 ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+function diskSet(spoken: string, body: Buffer): void {
+  try {
+    fs.mkdirSync(DISK_DIR, { recursive: true });
+    fs.writeFileSync(diskPath(spoken), body);
+  } catch {
+    // never let the cache fail a narration
+  }
+}
 
 function cacheGet(key: string): Buffer | null {
   const hit = cache.get(key);
@@ -102,8 +133,9 @@ export async function POST(req: Request) {
 
   const spoken = clampSpoken(toSpoken(text));
 
-  const cached = cacheGet(spoken);
+  const cached = cacheGet(spoken) ?? diskGet(spoken);
   if (cached) {
+    cacheSet(spoken, cached); // warm the memory tier from disk
     return new Response(new Uint8Array(cached), {
       status: 200,
       headers: { 'Content-Type': 'audio/wav', 'Content-Length': String(cached.length) },
@@ -113,6 +145,7 @@ export async function POST(req: Request) {
   try {
     const buffer = await render(spoken);
     cacheSet(spoken, buffer);
+    diskSet(spoken, buffer);
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: { 'Content-Type': 'audio/wav', 'Content-Length': String(buffer.length) },

@@ -23,10 +23,17 @@ const specLine = (key: string, unit: string | undefined, min: number | undefined
   return doc ? `${bits} — ${doc}` : bits;
 };
 
-/** full unit catalog: type key, role, ports (with phases), spec fields */
-export function catalogDigest(): string {
+/** full unit catalog: type key, role, ports (with phases), spec fields.
+ *  `types` (optional) abridges the digest to those unit types only — the
+ *  engineer loop re-sends its system prompt EVERY turn, so sending the
+ *  full 38-type catalog 8–34 times per build is the single largest token
+ *  sink in the app. The architect always sees the full catalog; the
+ *  engineer gets the route's + the plan's types. */
+export function catalogDigest(types?: string[]): string {
+  const filter = types ? new Set(types) : null;
   const lines: string[] = [];
   for (const def of Object.values(UNIT_TYPES)) {
+    if (filter && !filter.has(def.type)) continue;
     const ins = def.ports.in.length > 0 ? def.ports.in.map((p) => `${p.key}:${p.kind}`).join(', ') : 'none (feed source)';
     const outs = def.ports.out.map((p) => `${p.key}:${p.kind}`).join(', ');
     const specs = def.specFields
@@ -35,6 +42,9 @@ export function catalogDigest(): string {
     lines.push(`- ${def.type} — ${def.name}: ${def.model(resolveSpecs({ type: def.type, specs: {} }))}`);
     lines.push(`  in: ${ins} | out: ${outs}`);
     if (specs) lines.push(`  specs: ${specs}`);
+  }
+  if (filter) {
+    lines.push('(abridged to the unit types this route and plan use; the full catalog has other types — off-route for this build)');
   }
   return lines.join('\n');
 }

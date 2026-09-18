@@ -155,6 +155,9 @@ export default function BuilderPage() {
       case 'tour':
         setTour(ev.tour);
         break;
+      case 'usage':
+        addEntry({ kind: 'usage', usage: ev.usage });
+        break;
       case 'error':
         addEntry({ kind: 'error', text: ev.message });
         break;

@@ -60,3 +60,5 @@ upload/pasted_image_*
 .env
 .env.*
 !.env.example
+# agent + tts caches (token economy: reply/audio replay costs zero)
+.agent-cache/

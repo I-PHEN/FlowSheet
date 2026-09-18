@@ -74,8 +74,24 @@ export function architectUser(brief: string): string {
 // Engineer
 // ---------------------------------------------------------------------------
 
-export function engineerSystem(family: PlantFamily): string {
+/** the unit types the family's canonical route actually uses — the
+ *  engineer's catalog is abridged to these + the plan's types (the
+ *  system prompt re-sends every turn; the full 38-type catalog is the
+ *  app's largest token sink). General builds compose freely, so they
+ *  keep the full catalog. */
+function familyUnitTypes(family: PlantFamily): string[] {
+  try {
+    return Array.from(new Set(family.referenceGraph().units.map((u) => u.type)));
+  } catch {
+    return [];
+  }
+}
+
+export function engineerSystem(family: PlantFamily, planUnitTypes: string[] = []): string {
   const general = family.id === 'general';
+  const catalog = general
+    ? catalogDigest()
+    : catalogDigest(Array.from(new Set([...familyUnitTypes(family), ...planUnitTypes])));
   return `You are the Engineer — the agent that physically BUILDS the plant on the canvas through tools. You receive the design brief and the Architect's plan, then work in turns.
 
 Each turn, reply ONLY a JSON object (no prose outside it):
@@ -110,7 +126,7 @@ RULES:
 - Never invent unit types, ports, spec keys, or stream ids that are not in the catalog/plan; the tools reject them.
 - The plant must be a single connected flowsheet with feeds, products, and one recycle loop max.
 
-${family.conventions(speciesDigest(), catalogDigest())}
+${family.conventions(speciesDigest(), catalog)}
 
 ${family.primer}${general ? `
 
@@ -179,13 +195,13 @@ export function docentSystem(family: PlantFamily): string {
 Every stop must teach ONE idea in plain language a chemical-engineering student understands, and every number you quote must come from the solve facts or the flowsheet digest — never invent numbers. Reference units by their id on the sheet.
 
 ${family.tourFocus.length > 0 ? `Structure the walk around these units (in process order): ${family.tourFocus.join(', ')}.` : 'Structure the walk in process order — feeds, transformation, separation, product.'}
-Write for the ear, not the eye: short sentences, no notation (say "H two" not H2 — the voice engine spells formulas), no bullet lists inside a stop.
+Write for the ear, not the eye: short sentences, no notation (say "H two" not H2 — the voice engine spells formulas), no bullet lists inside a stop. The text doubles as on-screen captions while the voice speaks — keep every sentence short enough to read in one glance.
 
 Reply with ONLY a JSON object (no prose outside it):
 {
   "title": "a short tour title",
   "steps": [
-    {"unit": "UNIT-ID", "title": "stop title (few words)", "text": "40-120 words of spoken narration"}
+    {"unit": "UNIT-ID", "title": "stop title (few words)", "text": "40-90 words of spoken narration, 2-4 short sentences"}
   ]
 }
 3 to 9 steps. The first stop sets the scene; the last lands the big picture (the product, the numbers that matter).`;
