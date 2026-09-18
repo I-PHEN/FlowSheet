@@ -37,6 +37,7 @@ import { pointAt } from '@/lib/flowsheet/geom';
 import { glyphNode } from '@/lib/flowsheet/glyphs';
 import { UnitSymbol } from '@/components/flowsheet/Symbols';
 
+const it_flowActiveColor = 'var(--fs-gas)';
 const NODE_W = 168;
 const NODE_H = 96; // room for the equipment glyph + tag block
 const GLYPH_W = 96;
@@ -224,6 +225,28 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const layout = useMemo(() => (graph ? computeLayout(graph) : null), [graph]);
+  // flow dots: material movement on the streams, speed from the SOLVER's
+  // real molar flows (fast streams animate fast). Off by default when the
+  // user prefers reduced motion.
+  const [flowOn, setFlowOn] = useState(() =>
+    typeof window === 'undefined' || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  );
+
+  // solved molar flow per stream (drives dot speed) — cached solve
+  const flowInfo = useMemo(() => {
+    if (!graph || !flowOn) return null;
+    const r = solveFor(graph);
+    if (!r) return null;
+    let max = 0;
+    const flow = new Map<string, number>();
+    for (const [id, st] of Object.entries(r.streams)) {
+      let t = 0;
+      for (let i = 0; i < st.n.length; i++) t += st.n[i];
+      flow.set(id, t);
+      if (t > max) max = t;
+    }
+    return { flow, max };
+  }, [graph, flowOn]);
   // the user's frame — null means "fit the whole layout". The effective view is
   // DERIVED (clamped against the current layout), so a growing canvas keeps
   // fitting while the user's zoomed frame stays clamped — no state syncing.
@@ -614,6 +637,27 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                   </text>
                 </g>
               )}
+              {flowOn && flowInfo && !it.s.implicit && (() => {
+                const f = flowInfo.flow.get(it.s.id) ?? 0;
+                if (f <= 1e-6 || flowInfo.max <= 1e-6) return null;
+                const ratio = f / flowInfo.max;
+                const dur = 2.2 + 6.8 * (1 - ratio); // heavy streams move fast
+                // beads on a wire: paper fill + colored ring, so the dot
+                // reads against BOTH the line color and the sheet
+                return (
+                  <g style={{ pointerEvents: 'none' }}>
+                    {[0, 1].map((k) => (
+                      <circle
+                        key={k}
+                        r={3.2}
+                        style={{ fill: C.paper, stroke: it.st.color, strokeWidth: 1.3 }}
+                      >
+                        <animateMotion dur={`${dur.toFixed(2)}s`} begin={`${(k * dur / 2).toFixed(2)}s`} repeatCount="indefinite" path={it.d} />
+                      </circle>
+                    ))}
+                  </g>
+                );
+              })()}
             </g>
           ) : null,
         )}
@@ -731,14 +775,26 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         </span>
       </div>
 
-      {/* zoom controls */}
+      {/* zoom + flow controls */}
       <div
         className="absolute bottom-3 right-3 z-10 flex overflow-hidden rounded-lg border"
         style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}
       >
         <button
+          aria-label={flowOn ? 'Hide material flow animation' : 'Show material flow animation'}
+          title={flowOn ? 'Hide material flow' : 'Show material flow (dot speed = real molar flow)'}
+          onClick={() => setFlowOn((v) => !v)}
+          className="hover-band h-8 w-10 border-l text-[11px] font-bold tracking-wider"
+          style={{
+            color: flowOn ? it_flowActiveColor : C.inkFaint,
+            borderColor: 'var(--fs-band-line)',
+          }}
+        >
+          ⌁
+        </button>
+        <button
           aria-label="Zoom out"
-          className="hover-band h-8 w-8 text-sm font-bold"
+          className="hover-band h-8 w-8 border-l text-sm font-bold"
           style={{ color: C.ink }}
           onClick={() => {
             const v = viewRef.current;
