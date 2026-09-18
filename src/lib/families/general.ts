@@ -195,7 +195,10 @@ export const GENERAL: PlantFamily = {
     const purityWt = prodTot > 0 ? (prodMol * SP[SPECIES[spIdx]].mw) / Math.max(massFlow(prod.n), 1e-9) : 0;
 
     // recovery: product species OUT vs the same species fed in from every
-    // source unit (units with no inlets)
+    // source unit (units with no inlets). When the declared species is MADE
+    // in-plant (H2 from CH4, S2 from H2S), species recovery is meaningless —
+    // but for sulphur-bearing products we can do honest S-ATOM accounting:
+    // S atoms out in the product stream vs S atoms fed in every form.
     let fedIn = 0;
     for (const u of graph.units) {
       const def = getUnitType(u.type);
@@ -209,11 +212,41 @@ export const GENERAL: PlantFamily = {
     }
     const recovery = fedIn > 1e-9 ? prodMol / fedIn : 0;
 
+    // S-atom recovery (S2/SO2/H2S declared, H2S/SO2/S2 fed)
+    const S_SPECIES = ['H2S', 'SO2', 'S2'];
+    const sAtoms = (n: number[]): number => S_SPECIES.reduce((acc, name) => {
+      const idx = SPECIES.indexOf(name as (typeof SPECIES)[number]);
+      return acc + (idx >= 0 ? Math.max(n[idx], 0) * (name === 'S2' ? 2 : 1) : 0);
+    }, 0);
+    let sFed = 0;
+    let sOut = 0;
+    if (!S_SPECIES.includes(decl.species)) {
+      // not an S plant — leave zero
+    } else {
+      sOut = sAtoms(prod.n);
+      for (const u of graph.units) {
+        const def = getUnitType(u.type);
+        if (!def || def.ports.in.length > 0) continue;
+        for (const s of graph.streams) {
+          if (s.from.unit === u.id) {
+            const st = states[s.id];
+            if (st) sFed += sAtoms(st.n);
+          }
+        }
+      }
+    }
+    const sRecovery = sFed > 1e-9 ? sOut / sFed : 0;
+    const recoveryLabel = fedIn > 1e-9
+      ? `Recovery of feed ${decl.species}`
+      : S_SPECIES.includes(decl.species) && sFed > 1e-9
+        ? 'S-atom recovery (vs all S fed)'
+        : '';
+
     kpis.productionTpd = prodSpeciesTpd;
     kpis.productPurityMol = purityMol;
     kpis.productPurityWt = purityWt;
-    kpis.overallConv = recovery;
-    kpis.perPassConv = recovery; // best generic proxy
+    kpis.overallConv = fedIn > 1e-9 ? recovery : sRecovery;
+    kpis.perPassConv = kpis.overallConv; // best generic proxy
     kpis.makeupFlow = fedIn;
     void prodTpd;
 
@@ -221,7 +254,9 @@ export const GENERAL: PlantFamily = {
       { label: 'Declared product', value: `${decl.species} via stream ${decl.stream}` },
       { label: 'Production', value: `${prodSpeciesTpd.toFixed(1)} t/d of ${decl.species}`, raw: prodSpeciesTpd },
       { label: 'Purity', value: `${(purityMol * 100).toFixed(2)} mol % / ${(purityWt * 100).toFixed(2)} wt %`, raw: purityMol },
-      { label: `Recovery of feed ${decl.species}`, value: fedIn > 1e-9 ? `${(recovery * 100).toFixed(1)} %` : '— (made in-plant, not fed)' },
+      ...(recoveryLabel
+        ? [{ label: recoveryLabel, value: `${((fedIn > 1e-9 ? recovery : sRecovery) * 100).toFixed(1)} %`, raw: fedIn > 1e-9 ? recovery : sRecovery }]
+        : []),
       { label: 'Plant size', value: `${graph.units.length} units · ${graph.streams.length} streams` },
     ];
     return { kpis, warnings: [] };

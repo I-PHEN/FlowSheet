@@ -29,7 +29,7 @@ export function routerSystem(families: PlantFamily[]): string {
 THE FAMILIES:
 ${menu}
 
-Judge by the PRODUCT and the ROUTE the brief describes, not by shared equipment (several families reform natural gas). A brief that says "ammonia" or "Haber-Bosch" or "nitrogen fixation" is ammonia. "Methanol", "wood alcohol", "CH3OH" is methanol. "Hydrogen", "H2 plant", "PSA", "fuel cell hydrogen" is hydrogen. A brief about SULPHUR — recovering it from acid gas ("sulphur recovery", "Claus", "SRU", "acid gas treatment", "H2S removal from acid gas", "sulphur plant") — is the sulphur family; but "desulphurize a natural-gas or naphtha FEED" is a cleanup step of ANOTHER family's plant, not a sulphur plant. Choose "general" when the brief describes a plant that is NOT any canonical route: hybrids, subsets, capture/absorption plants, plants with extra or missing sections, or anything the route primers do not cover. If the brief is ambiguous about the product but clearly wants a canonical chemical, pick that family and say so in the reason.
+Judge by the PRODUCT and the ROUTE the brief describes, not by shared equipment (several families reform natural gas). A brief that says "ammonia" or "Haber-Bosch" or "nitrogen fixation" is ammonia. "Methanol", "wood alcohol", "CH3OH" is methanol. "Hydrogen", "H2 plant", "PSA", "fuel cell hydrogen" is hydrogen. A brief about SULPHUR — recovering it from acid gas ("sulphur recovery", "Claus", "SRU", "acid gas treatment", "H2S removal from acid gas", "sulphur plant") — is the sulphur family; but "desulphurize a natural-gas or naphtha FEED" is a cleanup step of ANOTHER family's plant, not a sulphur plant. Choose "general" when the brief describes a plant that is NOT any canonical route: hybrids, subsets, capture/absorption plants, plants with extra or missing sections, or anything the route primers do not cover. Watch for hybrids that NAME a canonical product but EXTEND its route — e.g. "a hydrogen plant with a methanator guard bed" (the hydrogen route has no methanator) or "an ammonia plant without the recycle loop" (the ammonia route IS a loop) or "a sulphur plant with a third catalytic bed" — any brief that adds, removes, or swaps sections against the canonical recipe is general. If the brief is ambiguous about the product but clearly wants a canonical chemical, pick that family and say so in the reason.
 
 Reply with ONLY a JSON object (no prose outside it):
 {"family": "ammonia" | "methanol" | "hydrogen" | "sulphur" | "general", "reason": "one short sentence"}`;
@@ -47,7 +47,7 @@ export function architectSystem(family: PlantFamily): string {
   const general = family.id === 'general';
   return `You are the Architect — a senior process design lead for an industrial teaching simulator. You receive a design brief for a ${general ? 'process plant of your own design' : `${family.name.toLowerCase()} plant (${family.route})`} and produce a concise build plan that a plant engineer agent will execute with unit-placement tools.
 
-Decide: which catalog units to use (with ids), how they connect (stream list), which specs deviate from defaults, and the controller setup${general ? ', plus the PRODUCT declaration (the stream carrying the brief\u2019s product out of the plant, and the product species)' : ''}. ${general ? 'There is NO canonical route — compose from the chemistry and separations you know, and design for the brief\u2019s product.' : `Keep the canonical ${family.name.toLowerCase()} teaching route unless the brief clearly says otherwise — this is a teaching tool for that flowsheet. Respect the plant conventions so plant KPIs compute.`}
+Decide: which catalog units to use (with ids), how they connect (stream list), which specs deviate from defaults, and the controller setup${general ? ', plus the PRODUCT declaration (the stream carrying the brief\u2019s product out of the plant, and the product species)' : ''}. ${general ? 'There is NO canonical route — compose from the chemistry and separations you know, and design for the brief\u2019s product. Prefer the SIMPLEST design that meets the brief: every extra unit is another thing to wire wrong, another cost, another teaching distraction. No controller unless the brief demands ratio control; no loop unless the chemistry needs recycle.' : `Keep the canonical ${family.name.toLowerCase()} teaching route unless the brief clearly says otherwise — this is a teaching tool for that flowsheet. Respect the plant conventions so plant KPIs compute.`}
 
 ${family.conventions(speciesDigest(), catalogDigest())}
 
@@ -112,7 +112,12 @@ RULES:
 
 ${family.conventions(speciesDigest(), catalogDigest())}
 
-${family.primer}`;
+${family.primer}${general ? `
+
+WORK DISCIPLINE (you have 24 turns TOTAL — the runtime will stop you):
+- Batches of 8-12 actions, EVERY turn. One action per turn is a failed build.
+- Turn 1-2: ALL units. Turn 3-4: ALL streams, in process order, exactly as the plan lists them. Turn 5: controller and product declaration if the plan calls for them. Turn 6: validate. Turn 7: fix every issue, then solve, then read_stream the product. Only after a SUCCESSFUL solve may you set done to true.
+- set_spec ONLY for specs the brief names or the plan's specs list carries — the catalog defaults are already sensible operating points. NEVER re-state a default.` : ''}`;
 }
 
 export function engineerUser(brief: string, planJson: string): string {
@@ -139,10 +144,10 @@ export function criticSystem(family: PlantFamily): string {
 
 Judge three things:
 1. Feasibility — did it solve, converge, balance, and stay physically sane (production, purity, conversion, warnings)?
-2. Brief satisfaction — does it do what the brief asked (target scale, named features)${general ? ', and does the declared product stream actually carry the product at a meaningful rate' : ''}?
+2. Brief satisfaction — does it do what the brief asked (target scale, named features)${general ? ', and does the declared product stream actually carry the product at a meaningful rate? SANITY-CHECK THE SCALE: if production is implausibly small for the feed rates (a tiny fraction of what the feed could yield — e.g. single-digit t/d from a world-scale feed), that is an issue even when the chemistry is right' : ''}?
 3. Structural quality — ${general ? 'is the flowsheet a sensible process design (feeds, reaction/separation ordering, connected path, purge if a loop exists, nothing absurd)? There is NO canonical route to compare against — judge the DESIGN against the brief and the physics.' : `does the flowsheet follow the canonical teaching route and the plant conventions (correct unit sequence, ${family.hasLoop ? 'one loop, purge present' : 'once-through, no loop'})?`}
 
-IMPORTANT: the canonical route for THIS family is EXACTLY the primer below — nothing more, nothing less. Units the primer does not list are NOT missing: ${family.id === 'ammonia' ? "the hydrogen family has no synthesis loop, and that is correct for hydrogen" : `another family's sections do not belong in this ${family.name.toLowerCase()} plant`}. Judge the flowsheet against THIS family's primer only: flag units that are missing FROM THE PRIMER's route, units the primer forbids (e.g. controllers where the family has none), and wiring that breaks the route. Never demand equipment from a different family.
+IMPORTANT: the BRIEF outranks the primer. If the brief EXPLICITLY asks for a unit or section the primer does not include (a guard bed, an extra stage, a removed loop), honoring the brief is CORRECT — note the deviation as an observation, never as an issue. Beyond that, the canonical route for THIS family is EXACTLY the primer below — nothing more, nothing less: units the primer does not list are NOT missing (another family's sections do not belong in this plant unless the brief asked), so flag units missing FROM THE PRIMER's route, units the primer forbids that the brief did NOT ask for, and wiring that breaks the route. Never demand equipment from a different family.
 
 ${family.conventions(speciesDigest(), catalogDigest())}
 

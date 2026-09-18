@@ -55,6 +55,7 @@ import type { FlowGraph } from '../engine/graph';
 import type { Tour, TourStep } from '../content/units';
 
 const MAX_ENGINEER_TURNS = 24;
+const MAX_GENERAL_TURNS = 34; // free-design builds need recovery room
 const MAX_ACTIONS_PER_TURN = 12;
 const MAX_ACTIONS_TOTAL = 200;
 const MAX_REMIX_TURNS = 14;
@@ -148,8 +149,11 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
       if (convo.length <= 16) return convo;
       return [convo[0], convo[1], ...convo.slice(-12)];
     };
-    for (let turn = 1; turn <= MAX_ENGINEER_TURNS; turn++) {
-      const isLast = turn === MAX_ENGINEER_TURNS;
+    // general builds compose from scratch — they are harder to wire than
+    // a family route, so they get recovery room in the turn budget
+    const maxTurns = family.id === 'general' ? MAX_GENERAL_TURNS : MAX_ENGINEER_TURNS;
+    for (let turn = 1; turn <= maxTurns; turn++) {
+      const isLast = turn === maxTurns;
       let raw: Record<string, unknown>;
       try {
         raw = await chatJson(llm, trimmedConvo(), `engineer:${turn}`);
@@ -185,12 +189,15 @@ export async function runAgentBuild(brief: string, { llm, emit }: OrchestratorOp
         refusedDone = true;
         refusedDoneCount++;
         convo.push({ role: 'assistant', content: JSON.stringify(raw).slice(0, 4000) });
+        const unwired = ws.graph.units.length > ws.graph.streams.length;
         convo.push({
           role: 'user',
           content:
             ws.graph.units.length < 3
               ? 'REJECTED: you marked the build done with an empty or nearly-empty canvas. Continue building — place the units and streams from the plan, then validate and solve before declaring done.'
-              : 'REJECTED: you declared the build done, but the plant has never solved successfully — run validate, fix every issue it reports, then solve, then read the product stream against the brief. Only then declare done.',
+              : unwired
+                ? `REJECTED: you marked the build done with ${ws.graph.units.length} units but only ${ws.graph.streams.length} streams — the plant is not wired. Continue: connect ALL the streams from the plan, then validate, then solve. Only after a successful solve may you declare done.`
+                : 'REJECTED: you declared the build done, but the plant has never solved successfully — run validate, fix every issue it reports, then solve, then read the product stream against the brief. Only then declare done.',
         });
         continue;
       }
@@ -561,16 +568,10 @@ const FAMILY_KEYWORDS: Array<{ family: string; words: string[] }> = [
 ];
 
 async function routeFamily(brief: string, llm: Llm): Promise<PlantFamily & { routerReason: string }> {
-  // 1. keyword fast path (first family with a hit wins; sulphur/hydrogen
-  //    checked before ammonia so "ammonia or hydrogen" style briefs lean specific)
-  const lower = brief.toLowerCase();
-  for (const { family, words } of FAMILY_KEYWORDS) {
-    const hit = words.find((w) => lower.includes(w));
-    if (hit) {
-      return Object.assign(Object.create(getFamily(family)), { routerReason: `brief says "${hit}"` });
-    }
-  }
-  // 2. LLM classification (robust to paraphrase)
+  // 1. LLM classification FIRST — it is the only judge that can read a
+  //    HYBRID brief ("a hydrogen plant with a methanator guard bed") and
+  //    send it to general instead of the family whose route it extends.
+  //    One small call, cheap next to the build itself.
   try {
     const raw = await chatJson(llm, [
       { role: 'assistant', content: routerSystem(FAMILIES) },
@@ -580,9 +581,18 @@ async function routeFamily(brief: string, llm: Llm): Promise<PlantFamily & { rou
     const reason = typeof raw.reason === 'string' ? raw.reason : '';
     if (isFamilyId(id)) return Object.assign(Object.create(getFamily(id)), { routerReason: reason || 'classified by the router' });
   } catch {
-    // router unavailable — fall through to the honest default
+    // router unavailable — fall through to the keyword path
   }
-  // 3. no keywords, no LLM: a general attempt is the honest default (the
+  // 2. keyword fallback (first family with a hit wins; sulphur/hydrogen
+  //    checked before ammonia so "ammonia or hydrogen" style briefs lean specific)
+  const lower = brief.toLowerCase();
+  for (const { family, words } of FAMILY_KEYWORDS) {
+    const hit = words.find((w) => lower.includes(w));
+    if (hit) {
+      return Object.assign(Object.create(getFamily(family)), { routerReason: `brief says "${hit}" (keyword fallback)` });
+    }
+  }
+  // 3. no LLM, no keywords: a general attempt is the honest default (the
   //    agent will compose from the basics rather than silently build ammonia)
   return Object.assign(Object.create(getFamily('general')), { routerReason: 'router unavailable — building from the physics basics' });
 }
