@@ -60,6 +60,13 @@ export interface ElementBalance {
 export interface Kpis {
   /** t/d */
   productionTpd: number;
+  // ---- plant-family extension (v3): one solver, many products ------------
+  /** which family computed these KPIs ('ammonia' | 'methanol' | ...) */
+  family?: string;
+  /** the product species these KPIs describe */
+  productSpecies?: string;
+  /** family-defined headline KPIs, rendered generically by every panel */
+  familyKpis?: Array<{ label: string; value: string; raw?: number }>;
   /** mol fraction NH3 in liquid product */
   productPurityMol: number;
   /** wt fraction */

@@ -13,6 +13,7 @@
  */
 
 import {
+  N_SP,
   baseCase,
   run,
   eqNH3Fraction,
@@ -102,8 +103,8 @@ console.log('\nB. PR-EOS / FLASH SANITY');
 // Pure-species saturation: bisect P where lnφ_liq = lnφ_vap (both PR roots).
 {
   const T = 253.15;
-  const y = new Array(9).fill(0);
-  y[6] = 1;
+  const y = new Array(N_SP).fill(0);
+  y[6] = 1; // pure NH3
   const dln = (P: number) => {
     const fv = prFugacity(y, T, P, 'vapor');
     const fl = prFugacity(y, T, P, 'liquid');
@@ -126,7 +127,8 @@ console.log('\nB. PR-EOS / FLASH SANITY');
 
 // Loop-gas flash at −20°C/145 bar: liquid mostly NH3, gas keeps NH3 single-digit %
 {
-  const n = [2610, 870, 0, 0, 522, 174, 696, 0, 0]; // H2 N2 . . CH4 AR NH3 . .
+  // padded to N_SP — the flash iterates the full species table
+  const n = [...[2610, 870, 0, 0, 522, 174, 696, 0, 0], ...new Array(N_SP - 9).fill(0)]; // H2 N2 . . CH4 AR NH3 . .
   const fl = flashPT(n, 253.15, 145e5);
   const liqTot = total(fl.liquid);
   const liqNH3 = fl.liquid[6] / Math.max(liqTot, 1e-9);
@@ -150,7 +152,7 @@ console.log('\nB. PR-EOS / FLASH SANITY');
 
 // Knockout flash at 40°C/26 bar with 40% steam: water mostly condenses
 {
-  const n = [2800, 900, 260, 340, 40, 18, 0, 3600, 0];
+  const n = [...[2800, 900, 260, 340, 40, 18, 0, 3600, 0], ...new Array(N_SP - 9).fill(0)];
   const fl = flashPT(n, 313.15, 26e5);
   check(
     'KO flash: > 85% of water condenses',
@@ -377,7 +379,8 @@ console.log('\nF. ROBUSTNESS FUZZ — 60 random specs within physical ranges');
         }
       }
       for (const key of Object.keys(r.kpis) as Array<keyof typeof r.kpis>) {
-        if (!Number.isFinite(r.kpis[key])) nanFound = true;
+        const v = r.kpis[key];
+        if (typeof v === 'number' && !Number.isFinite(v)) nanFound = true;
       }
     } catch (e) {
       threw++;

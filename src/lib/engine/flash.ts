@@ -116,8 +116,13 @@ export function flashPT(n: Moles, T: number, P: number): FlashResult {
     const Knew = new Array(N_SP);
     let maxRel = 0;
     for (let i = 0; i < N_SP; i++) {
-      Knew[i] = Math.exp(fl.lnPhi[i] - fv.lnPhi[i]);
-      if (K[i] > 1e-12 && Knew[i] > 1e-12) {
+      // absent species (z ≈ 0): keep the Wilson K. Its PR pseudo-fugacity is
+      // arbitrary, can overflow exp() to Infinity, and Infinity·0 = NaN in
+      // the yv[i] = K[i]·xl[i] update would poison the whole flash. A frozen
+      // finite K contributes exactly zero everywhere (z[i] = 0 gates every
+      // term it appears in) — and it must not gate convergence either:
+      Knew[i] = z[i] > 1e-12 ? Math.exp(fl.lnPhi[i] - fv.lnPhi[i]) : K[i];
+      if (K[i] > 1e-12 && Knew[i] > 1e-12 && z[i] > 1e-12) {
         maxRel = Math.max(maxRel, Math.abs(Knew[i] / K[i] - 1));
       }
     }

@@ -13,7 +13,7 @@
 
 import type { PortDef, SpecField, StreamState } from './graph';
 import type { UnitResult } from './types';
-import { AIR_COMP, I, N_SP, SP } from './species';
+import { AIR_COMP, I, N_SP, SP, RG } from './species';
 import type { Moles } from './species';
 import { enthalpyRate, massFlow, total } from './thermo';
 import {
@@ -31,7 +31,17 @@ import {
   primaryReformer,
   secondaryReformer,
   zeroN,
+  adiabaticT,
+  secantFixedT,
+  meohBed,
 } from './units';
+import {
+  burnH2S,
+  composeClaus,
+  kpClausCat,
+  kpClausThermal,
+  solveClausEq,
+} from './reactions';
 
 // ---------------------------------------------------------------------------
 // helpers (formatting identical to plant.ts — the identity gate depends on it)
@@ -127,7 +137,7 @@ const airSource: UnitTypeDef = {
   specFields: [
     { key: 'flow', kind: 'number', min: 100, max: 6000, default: 1560, unit: 'kmol/h', doc: 'controller-manipulated in auto mode' },
     { key: 'T', kind: 'number', min: 20, max: 300, default: 180, unit: '°C' },
-    { key: 'P', kind: 'number', min: 10, max: 60, default: 30.5, unit: 'bar' },
+    { key: 'P', kind: 'number', min: 1, max: 60, default: 30.5, unit: 'bar', doc: '1.3-1.6 bar for the low-pressure Claus train' },
   ],
   solve: ({ specs }) => ({
     outlets: {
@@ -260,7 +270,7 @@ const whbCooler: UnitTypeDef = {
   model: () => 'Cools secondary effluent to HTS inlet (HP steam generation implied)',
   ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
   specFields: [
-    { key: 'outletT', kind: 'number', min: 250, max: 450, default: 340, unit: '°C', doc: 'HTS inlet temperature' },
+    { key: 'outletT', kind: 'number', min: 30, max: 450, default: 340, unit: '°C', doc: 'next-section inlet temperature (30 °C for cold KO + compression)' },
     { key: 'dp', kind: 'number', min: 0, max: 5, default: 0.5, unit: 'bar' },
   ],
   solve: ({ specs, inlet }) => {
@@ -455,7 +465,7 @@ const syngasCompressor: UnitTypeDef = {
   specFields: [
     { key: 'stages', kind: 'number', min: 1, max: 5, default: 3 },
     { key: 'eta', kind: 'number', min: 0.6, max: 0.85, default: 0.75, doc: 'polytropic efficiency' },
-    { key: 'dischargeP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar' },
+    { key: 'dischargeP', kind: 'number', min: 40, max: 250, default: 150, unit: 'bar' },
     { key: 'postT', kind: 'number', min: 20, max: 80, default: 40, unit: '°C', doc: 'final intercool temperature' },
   ],
   solve: ({ specs, inlet }) => {
@@ -526,7 +536,7 @@ const feedPreheater: UnitTypeDef = {
   model: (specs) => `Implied feed/effluent exchange to bed-1 inlet (${num(specs, 'outletT').toFixed(0)} °C)`,
   ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
   specFields: [
-    { key: 'outletT', kind: 'number', min: 350, max: 450, default: 400, unit: '°C', doc: 'converter bed-1 inlet' },
+    { key: 'outletT', kind: 'number', min: 150, max: 450, default: 400, unit: '°C', doc: 'converter bed-1 inlet' },
     { key: 'outletP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar', doc: 'loop pressure (pass-through)' },
   ],
   // outlet T and P are pure spec — this is what makes the synthesis-loop
@@ -747,7 +757,7 @@ const loopCirculator: UnitTypeDef = {
   ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
   specFields: [
     { key: 'eta', kind: 'number', min: 0.6, max: 0.85, default: 0.75 },
-    { key: 'dischargeP', kind: 'number', min: 80, max: 250, default: 150, unit: 'bar' },
+    { key: 'dischargeP', kind: 'number', min: 40, max: 250, default: 150, unit: 'bar' },
     { key: 'postT', kind: 'number', min: 20, max: 80, default: 40, unit: '°C' },
   ],
   solve: ({ specs, inlet }) => {
@@ -1014,6 +1024,423 @@ const distillationColumnDef: UnitTypeDef = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// Plant families (species #3 + #4) — methanol loop, hydrogen PSA, Claus train
+// ---------------------------------------------------------------------------
+
+const meohConverter: UnitTypeDef = {
+  type: 'meoh-converter',
+  name: 'Methanol converter',
+  model: () => '3 adiabatic Cu/ZnO/Al2O3 beds, fractional approach to MeOH equilibrium per bed',
+  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+  specFields: [
+    { key: 'bedTs', kind: 'number[]', elemMin: 200, elemMax: 280, default: [225, 245, 230], unit: '°C', doc: 'bed inlet temps (bed 1 = feed)' },
+    { key: 'approach', kind: 'number[]', elemMin: 0.5, elemMax: 0.99, default: [0.85, 0.85, 0.85], doc: 'fractional approach per bed' },
+    { key: 'dp', kind: 'number', min: 1, max: 8, default: 3, unit: 'bar' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const bedTs = arr(specs, 'bedTs').map((t) => C(t));
+    const appr = arr(specs, 'approach');
+    const feedP = i.P;
+    let cur = { n: i.n, T: bedTs[0] };
+    let interbedDuty = 0;
+    const beds: Array<{ TOut: number; coIn: number; coOut: number }> = [];
+    for (let b = 0; b < 3; b++) {
+      const bed = meohBed(cur.n, cur.T, feedP, appr[b]);
+      beds.push({ TOut: bed.TOut, coIn: bed.coIn, coOut: bed.coOut });
+      if (b < 2) {
+        const nextT = Math.min(bed.TOut, bedTs[b + 1]);
+        interbedDuty += enthalpyRate(bed.n, bed.TOut) - enthalpyRate(bed.n, nextT);
+        cur = { n: bed.n, T: nextT };
+      } else {
+        cur = { n: bed.n, T: bed.TOut };
+      }
+    }
+    const nEff = cur.n;
+    const effP = feedP - BAR(num(specs, 'dp'));
+    const totIn = total(i.n);
+    const totOut = total(nEff);
+    const carbonIn = i.n[2] + i.n[3];
+    const carbonOut = nEff[2] + nEff[3];
+    const perPass = carbonIn > 1e-9 ? (1 - carbonOut / carbonIn) * 100 : 0;
+    const meohOutPct = totOut > 0 ? (nEff[11] / totOut) * 100 : 0;
+    const bedMetrics = beds.flatMap((b, idx) => [
+      { label: `Bed ${idx + 1} (CO+CO2) in→out`, value: `${b.coIn.toFixed(1)} → ${b.coOut.toFixed(1)} %` },
+      { label: `Bed ${idx + 1} outlet T`, value: `${d1(b.TOut - 273.15)} °C` },
+    ]);
+    void totIn;
+    return {
+      outlets: { out: { T: cur.T, P: effP, n: nEff } },
+      result: {
+        name: 'Methanol converter',
+        model: '3 adiabatic Cu/ZnO/Al2O3 beds, fractional approach to MeOH equilibrium per bed',
+        metrics: [
+          ...bedMetrics,
+          { label: 'MeOH (converter out)', value: `${meohOutPct.toFixed(1)} %` },
+          { label: 'Per-pass carbon conversion', value: `${d1(perPass)} %`, raw: perPass },
+          { label: 'Interbed duty', value: `${d1(MW(interbedDuty))} MW` },
+        ],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const meohSeparator: UnitTypeDef = {
+  type: 'meoh-separator',
+  name: 'Crude-methanol separator + letdown',
+  model: () => 'PT flash at loop P, then crude product letdown to 2 bar (degassing)',
+  ports: {
+    in: [
+      { key: 'chilled', kind: 'gas' },
+      { key: 'letdownIn', kind: 'liquid', doc: 'internal self-loop (separator liquid → letdown)' },
+    ],
+    out: [
+      { key: 'gas', kind: 'gas' },
+      { key: 'sepLiquid', kind: 'liquid' },
+      { key: 'product', kind: 'liquid' },
+      { key: 'flash', kind: 'gas', doc: 'letdown flash vapor (implicit — merges into purge)' },
+    ],
+  },
+  specFields: [{ key: 'letdownP', kind: 'number', min: 1, max: 5, default: 2, unit: 'bar' }],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('chilled');
+    const condP = i.P;
+    const sep = flashDrum(i.n, i.T, i.T, condP, 6);
+    const LETDOWN_P = BAR(num(specs, 'letdownP'));
+    const letdown = isenthalpicFlash(sep.liquid, sep.T, condP, LETDOWN_P);
+    const prodTpd = (massFlow(letdown.liquid) * 24) / 1000;
+    const prodKg = massFlow(letdown.liquid);
+    const prodMeOHkg = letdown.liquid[11] * SP.CH3OH.mw;
+    const recovered = i.n[11] > 1e-9 ? letdown.liquid[11] / i.n[11] : 0;
+    const sepMolPurity = total(letdown.liquid) > 0 ? letdown.liquid[11] / total(letdown.liquid) : 0;
+    const waterWt = (letdown.liquid[7] * SP.H2O.mw) / Math.max(prodKg, 1e-9);
+    return {
+      outlets: {
+        gas: { T: sep.T, P: condP, n: sep.vapor },
+        sepLiquid: { T: sep.T, P: condP, n: sep.liquid },
+        product: { T: letdown.T, P: LETDOWN_P, n: letdown.liquid },
+        flash: { T: letdown.T, P: LETDOWN_P, n: letdown.vapor },
+      },
+      result: {
+        name: 'Crude-methanol separator + letdown',
+        model: 'PT flash at loop P, then crude product letdown to 2 bar (degassing)',
+        metrics: [
+          { label: 'Crude MeOH', value: `${d1(prodTpd)} t/d`, raw: prodTpd },
+          {
+            label: 'Purity',
+            value: `${(sepMolPurity * 100).toFixed(2)} mol % / ${((prodMeOHkg / Math.max(prodKg, 1e-9)) * 100).toFixed(2)} wt %`,
+          },
+          { label: 'Water in crude', value: `${(waterWt * 100).toFixed(2)} wt %` },
+          { label: 'MeOH recovered', value: `${(recovered * 100).toFixed(1)} %` },
+          { label: 'Separator T', value: `${d1(sep.T - 273.15)} °C` },
+          { label: 'Letdown T', value: `${d1(letdown.T - 273.15)} °C / ${num(specs, 'letdownP')} bar` },
+        ],
+        warnings: letdown.liquid[11] <= 0 ? ['no methanol condensation — check separator T'] : [],
+      },
+    };
+  },
+};
+
+const psaUnit: UnitTypeDef = {
+  type: 'psa',
+  name: 'PSA hydrogen purification',
+  model: () => 'Pressure-swing adsorption — recovery-spec H2 split with pro-rata impurity slip to hold product purity',
+  ports: {
+    in: [{ key: 'in', kind: 'gas' }],
+    out: [
+      { key: 'product', kind: 'gas' },
+      { key: 'tailgas', kind: 'gas' },
+    ],
+  },
+  specFields: [
+    { key: 'h2Recovery', kind: 'number', min: 0.7, max: 0.97, default: 0.9, doc: 'fraction of feed H2 recovered to product' },
+    { key: 'purity', kind: 'number', min: 0.98, max: 0.99999, default: 0.9995, doc: 'H2 mole fraction in product' },
+    { key: 'dp', kind: 'number', min: 0.3, max: 3, default: 1, unit: 'bar', doc: 'adsorber pressure drop' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const rec = num(specs, 'h2Recovery');
+    const purity = num(specs, 'purity');
+    const h2p = i.n[0] * rec;
+    // impurities slip pro-rata so the product hits the purity spec, capped
+    // by what is actually available in the feed
+    const impFeed = total(i.n) - i.n[0];
+    const impTarget = (h2p * (1 - purity)) / purity;
+    const imp = Math.min(impTarget, impFeed);
+    const product = zeroN();
+    const tailgas = zeroN();
+    product[0] = h2p;
+    if (impFeed > 1e-9) {
+      for (let s = 1; s < N_SP; s++) {
+        const slip = (imp * i.n[s]) / impFeed;
+        product[s] = slip;
+      }
+    }
+    for (let s = 0; s < N_SP; s++) tailgas[s] = i.n[s] - product[s];
+    const prodTot = total(product);
+    const prodPurity = prodTot > 0 ? product[0] / prodTot : 0;
+    const prodNm3h = product[0] * 22.414; // kmol/h → Nm³/h (ideal, 0 °C)
+    const prodTpd = (product[0] * SP.H2.mw * 24) / 1000;
+    const tailLhvMJ = (tailgas[4] * 50.0 + tailgas[2] * 10.1) / 1000; // MJ/h from CH4 + CO (LHV)
+    const outP = i.P - BAR(num(specs, 'dp'));
+    return {
+      outlets: {
+        product: { T: i.T, P: outP, n: product },
+        tailgas: { T: i.T, P: BAR(1.2), n: tailgas },
+      },
+      result: {
+        name: 'PSA hydrogen purification',
+        model: 'Pressure-swing adsorption — recovery-spec H2 split with pro-rata impurity slip to hold product purity',
+        metrics: [
+          { label: 'H2 product', value: `${d1(prodTpd)} t/d (${Math.round(prodNm3h).toLocaleString()} Nm³/h)`, raw: prodTpd },
+          { label: 'Purity', value: `${(prodPurity * 100).toFixed(3)} mol %`, raw: prodPurity },
+          { label: 'H2 recovery', value: `${(rec * 100).toFixed(1)} %`, raw: rec },
+          { label: 'Tailgas', value: `${d1(total(tailgas))} kmol/h (fuel, ~${d1(tailLhvMJ)} MJ/h)` },
+        ],
+        warnings: impTarget > impFeed ? ['feed too impure to reach purity spec — product purity limited'] : [],
+      },
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Sulphur family units (species #4) — the Claus plant
+// ---------------------------------------------------------------------------
+
+const acidGasSource: UnitTypeDef = {
+  type: 'acid-gas-source',
+  name: 'Acid gas feed',
+  model: () => 'Amine-regenerator acid gas at battery limit (H2S + CO2 + water-saturated traces)',
+  ports: { in: [], out: [{ key: 'out', kind: 'gas' }] },
+  specFields: [
+    { key: 'flow', kind: 'number', min: 100, max: 8000, default: 1000, unit: 'kmol/h', doc: 'acid-gas rate (total, not H2S-only)' },
+    { key: 'h2sPct', kind: 'number', min: 30, max: 98, default: 85, unit: '%', doc: 'H2S mole % in the acid gas' },
+    { key: 'co2Pct', kind: 'number', min: 1, max: 60, default: 10, unit: '%', doc: 'CO2 mole % (the inert diluent of Claus feed)' },
+    { key: 'T', kind: 'number', min: 30, max: 80, default: 40, unit: '°C' },
+    { key: 'P', kind: 'number', min: 1, max: 6, default: 1.4, unit: 'bar', doc: 'Claus plants run just above atmospheric' },
+  ],
+  solve: ({ specs }) => {
+    const f = num(specs, 'flow');
+    const h2s = Math.min(97, Math.max(30, num(specs, 'h2sPct'))) / 100;
+    let co2 = Math.min(60, Math.max(1, num(specs, 'co2Pct'))) / 100;
+    if (h2s + co2 > 0.97) co2 = Math.max(0.01, 0.97 - h2s); // keep ≥1 % room for H2O + CH4
+    const h2o = 0.03; // water-saturated from the regenerator overhead
+    const ch4 = Math.max(0, 1 - h2s - co2 - h2o);
+    const n = zeroN();
+    n[12] = f * h2s;
+    n[3] = f * co2;
+    n[7] = f * h2o;
+    n[4] = f * ch4;
+    return {
+      outlets: { out: { T: C(num(specs, 'T')), P: BAR(num(specs, 'P')), n } },
+      result: {
+        name: 'Acid gas feed',
+        model: 'Amine-regenerator acid gas at battery limit (H2S + CO2 + water-saturated traces)',
+        metrics: [
+          { label: 'Acid gas', value: `${d1(f)} kmol/h` },
+          { label: 'H2S', value: `${(h2s * 100).toFixed(1)} mol % (${d1(n[12])} kmol/h)` },
+          { label: 'CO2', value: `${(co2 * 100).toFixed(1)} mol %` },
+        ],
+        warnings: [],
+      },
+    };
+  },
+};
+
+const clausBurner: UnitTypeDef = {
+  type: 'claus-burner',
+  name: 'Claus burner (thermal reactor)',
+  model: () =>
+    'Burn ⅓ of the H2S with controlled air (H2S + 1.5 O2 → SO2 + H2O), then the flame reaches S2 equilibrium (4H2S + 2SO2 ⇌ 3S2 + 4H2O) at the adiabatic flame temperature',
+  ports: {
+    in: [
+      { key: 'acid', kind: 'gas' },
+      { key: 'air', kind: 'gas' },
+    ],
+    out: [{ key: 'out', kind: 'gas' }],
+  },
+  specFields: [{ key: 'dp', kind: 'number', min: 0, max: 0.5, default: 0.05, unit: 'bar' }],
+  solve: ({ specs, inlet }) => {
+    const acid = inlet('acid');
+    const air = inlet('air');
+    const outP = acid.P - BAR(num(specs, 'dp'));
+    const mixed = mixStreams(
+      [
+        { n: acid.n, T: acid.T, P: acid.P },
+        { n: air.n, T: air.T, P: air.P },
+      ],
+      outP,
+    );
+    // 1 — burn: complete H2S oxidation on the available O2
+    const burned = burnH2S(mixed.n);
+    const TBurn = adiabaticT(mixed.n, mixed.T, burned.n);
+    // 2 — thermal Claus equilibrium at the adiabatic outlet
+    const solveAt = (Tg: number) => {
+      const eq = solveClausEq(burned.n, Tg, outP, kpClausThermal(Tg));
+      const xi = eq.xi;
+      return { T: adiabaticT(burned.n, TBurn, composeClaus(burned.n, xi)), xi, eq };
+    };
+    const T = secantFixedT((Tg) => solveAt(Tg).T, Math.max(600, TBurn - 80), 1e-4, 30);
+    const rf = solveAt(T);
+    const nOut = composeClaus(burned.n, rf.xi);
+
+    // sulphur accounting — every S atom in the feed is the denominator
+    const sAtomsIn = acid.n[12] + acid.n[13]; // H2S + any SO2 in the acid gas
+    const sAtomsAsS2 = nOut[14] * 2;
+    const thermalFrac = sAtomsIn > 1e-9 ? sAtomsAsS2 / sAtomsIn : 0;
+    const burnedThird = burned.h2sBurned / Math.max(acid.n[12], 1e-9);
+    const totOut = total(nOut);
+    const warnings: string[] = [];
+    if (burned.o2Left > 1e-6 && burned.n[12] <= 1e-9) {
+      warnings.push('far too much air — ALL the H2S burned to SO2; no Claus chemistry is possible');
+    } else if (burned.o2Left > 0.02 * (air.n[8] || 1)) {
+      warnings.push('excess air — more than ~2 % of the incoming O2 is left over; the H2S:SO2 ratio is off-stoichiometric (aim to burn exactly ⅓ of the H2S)');
+    } else if (burnedThird < 0.25) {
+      warnings.push('not enough air — less than a third of the H2S burned; the flame is starved of SO2');
+    }
+    return {
+      outlets: { out: { T: rf.T, P: outP, n: nOut } },
+      result: {
+        name: 'Claus burner (thermal reactor)',
+        model: 'Burn ⅓ of the H2S with controlled air, then S2 equilibrium at the adiabatic flame temperature',
+        metrics: [
+          { label: 'Flame T (post-burn)', value: `${d1(TBurn - 273.15)} °C`, raw: TBurn - 273.15 },
+          { label: 'Reactor outlet T', value: `${d1(rf.T - 273.15)} °C`, raw: rf.T - 273.15 },
+          { label: 'H2S burned to SO2', value: `${(burnedThird * 100).toFixed(1)} % of feed H2S (target ≈ 33 %)`, raw: burnedThird },
+          { label: 'S in thermal stage', value: `${(thermalFrac * 100).toFixed(1)} % of feed S as S2`, raw: thermalFrac },
+          { label: 'Gas out', value: `${d1(totOut)} kmol/h` },
+        ],
+        warnings,
+      },
+    };
+  },
+};
+
+const clausConverter: UnitTypeDef = {
+  type: 'claus-converter',
+  name: 'Claus converter (catalytic bed)',
+  model: () =>
+    'Alumina bed — feed re-heated to the bed inlet spec (by exchange with the thermal effluent), then adiabatic Claus equilibrium (effective S8-referenced Kp on the S2 carrier)',
+  ports: { in: [{ key: 'in', kind: 'gas' }], out: [{ key: 'out', kind: 'gas' }] },
+  specFields: [
+    { key: 'bedT', kind: 'number', min: 200, max: 360, default: 310, unit: '°C', doc: 'bed inlet temperature (320/240 °C typical for beds 1/2)' },
+    { key: 'approach', kind: 'number', min: 0.5, max: 0.99, default: 0.9, doc: 'fractional approach to equilibrium' },
+    { key: 'dp', kind: 'number', min: 0, max: 0.5, default: 0.05, unit: 'bar' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const bedT = C(num(specs, 'bedT'));
+    const eta = num(specs, 'approach');
+    const outP = i.P - BAR(num(specs, 'dp'));
+    const solveAt = (Tg: number) => {
+      const eq = solveClausEq(i.n, Tg, outP, kpClausCat(Tg));
+      const xi = eta * eq.xi;
+      return { T: adiabaticT(i.n, bedT, composeClaus(i.n, xi)), xi, eq };
+    };
+    const T = secantFixedT((Tg) => solveAt(Tg).T, bedT + 20, 1e-4, 30);
+    const rf = solveAt(T);
+    const nOut = composeClaus(i.n, rf.xi);
+    const totOut = total(nOut);
+    const sIn = i.n[12] + i.n[13]; // convertible S carriers
+    const sAsS2 = nOut[14] * 2 - i.n[14] * 2;
+    const h2sConv = i.n[12] > 1e-9 ? 1 - nOut[12] / i.n[12] : 0;
+    return {
+      outlets: { out: { T: rf.T, P: outP, n: nOut } },
+      result: {
+        name: 'Claus converter (catalytic bed)',
+        model: 'Alumina bed — adiabatic Claus equilibrium at the bed inlet spec',
+        metrics: [
+          { label: 'H2S conversion (this bed)', value: `${(h2sConv * 100).toFixed(1)} %`, raw: h2sConv },
+          { label: 'S converted to S2', value: `${d1(sAsS2 / 2)} kmol/h S2`, raw: sAsS2 },
+          { label: 'Bed outlet T', value: `${d1(rf.T - 273.15)} °C (inlet ${num(specs, 'bedT')} °C)`, raw: rf.T - 273.15 },
+          { label: 'Approach', value: `${(eta * 100).toFixed(0)} % of equilibrium` },
+          { label: 'Gas out', value: `${d1(totOut)} kmol/h` },
+        ],
+        warnings:
+          sIn <= 1e-9
+            ? ['no H2S/SO2 left to react — either the upstream burner ran wrong or this bed is redundant']
+            : [],
+      },
+    };
+  },
+};
+
+/** sulphur vapour pressure over liquid sulphur, Pa — Clausius–Clapeyron
+ *  (ln P = 46.75 − 25290/T) anchored on the real curve: 101325 Pa at the
+ *  444.6 °C boiling point, ~100 Pa at 600 K. Below ~550 K it is essentially
+ *  zero, which is the whole point of a sulphur condenser. */
+function pSatSulphur(T: number): number {
+  return Math.exp(46.75 - 25290 / Math.max(T, 200));
+}
+
+const sulphurCondenser: UnitTypeDef = {
+  type: 'sulphur-condenser',
+  name: 'Sulphur condenser',
+  model: () =>
+    'Cool the process gas to the condenser spec; S2 condenses to liquid sulphur when its partial pressure exceeds the sulphur vapour pressure (water stays vapour — real condensers run above the water dew point)',
+  ports: {
+    in: [{ key: 'in', kind: 'gas' }],
+    out: [
+      { key: 'vapor', kind: 'gas' },
+      { key: 'sulphur', kind: 'liquid', doc: 'liquid sulphur product (run-down to the sulphur pit)' },
+    ],
+  },
+  specFields: [
+    { key: 'outletT', kind: 'number', min: 120, max: 450, default: 165, unit: '°C', doc: '130–170 °C typical (liquid sulphur stays pumpable, above its 115 °C freezing point)' },
+    { key: 'dp', kind: 'number', min: 0, max: 0.5, default: 0.03, unit: 'bar' },
+  ],
+  solve: ({ specs, inlet }) => {
+    const i = inlet('in');
+    const outT = C(num(specs, 'outletT'));
+    const outP = i.P - BAR(num(specs, 'dp'));
+    const c = cooler(i.n, i.T, outT, outP);
+    const tot = total(c.n);
+    // condense S2 until y_S2 · P = P_sat (essentially all of it below ~550 K)
+    const yS2 = tot > 0 ? Math.max(c.n[14], 0) / tot : 0;
+    const pS2 = yS2 * (outP / 1e5); // bar
+    const psatBar = pSatSulphur(outT) / 1e5;
+    const fracCondensed = c.n[14] > 1e-9 ? Math.min(1, Math.max(0, 1 - psatBar / Math.max(pS2, 1e-12))) : 0;
+    const liquid = zeroN();
+    const vapor = c.n.slice();
+    liquid[14] = c.n[14] * fracCondensed;
+    vapor[14] = c.n[14] - liquid[14];
+
+    const sTpd = (liquid[14] * SP.S2.mw * 24) / 1000; // kmol/h S2 × kg/kmol → t/d
+    const sRecovered = i.n[14] > 1e-9 ? liquid[14] / i.n[14] : 0;
+    // water dew point check — real plants stay above it so the sulphur stays clean
+    const yH2O = tot > 0 ? c.n[7] / tot : 0;
+    const pH2OBar = yH2O * (outP / 1e5);
+    const waterDewC = 1 / (1 / 373.15 - (RG / 40660) * Math.log(Math.max(pH2OBar, 1e-9))) - 273.15;
+    const warnings: string[] = [];
+    if (i.n[14] > 1 && fracCondensed < 0.9) {
+      warnings.push(`only ${(fracCondensed * 100).toFixed(0)} % of the S2 condensed — condenser too hot (sulphur vapour pressure is high above ~280 °C)`);
+    }
+    if (num(specs, 'outletT') < waterDewC + 5) {
+      warnings.push(`below the water dew point (~${d1(waterDewC)} °C) — condensate would contaminate the sulphur product; real condensers run hotter`);
+    }
+    return {
+      outlets: {
+        vapor: { T: outT, P: outP, n: vapor },
+        sulphur: { T: outT, P: outP, n: liquid },
+      },
+      result: {
+        name: 'Sulphur condenser',
+        model: 'Cool to spec; S2 condenses when y_S2·P > P_sat(T); water stays vapour',
+        metrics: [
+          { label: 'Liquid sulphur', value: `${d1(sTpd)} t/d`, raw: sTpd },
+          { label: 'S2 condensed', value: `${(sRecovered * 100).toFixed(1)} % of incoming S2`, raw: sRecovered },
+          { label: 'Duty', value: `${d1(MW(c.dutyKJh))} MW`, raw: MW(c.dutyKJh) },
+          { label: 'Outlet T', value: `${num(specs, 'outletT')} °C` },
+        ],
+        warnings,
+      },
+    };
+  },
+};
+
 export const UNIT_TYPES: Record<string, UnitTypeDef> = {
   'ng-source': ngSource,
   'steam-source': steamSource,
@@ -1044,6 +1471,14 @@ export const UNIT_TYPES: Record<string, UnitTypeDef> = {
   'column-feed': columnFeedSource,
   'feed-heater': feedHeaterDef,
   'distillation-column': distillationColumnDef,
+  // plant families (species #3 + #4): methanol loop, hydrogen PSA, Claus train
+  'meoh-converter': meohConverter,
+  'meoh-separator': meohSeparator,
+  psa: psaUnit,
+  'acid-gas-source': acidGasSource,
+  'claus-burner': clausBurner,
+  'claus-converter': clausConverter,
+  'sulphur-condenser': sulphurCondenser,
 };
 
 export function getUnitType(type: string): UnitTypeDef | undefined {
