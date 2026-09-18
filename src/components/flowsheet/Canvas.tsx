@@ -12,15 +12,18 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import { C, STREAM_STYLE } from '@/lib/design/tokens';
 import { REFERENCE_LAYOUT, type PlantLayout } from '@/lib/flowsheet/layout';
 import { bboxOf, boxToAspect, type Box } from '@/lib/flowsheet/geom';
+import { dotColor, type FlowSpec } from '@/lib/flowsheet/flowAnim';
 import { SPECIES } from '@/lib/engine/species';
 import type { PlantResult } from '@/lib/engine/types';
 import { Diagram, type Focus } from './Diagram';
+import { FlowLayer } from './FlowLayer';
 
 type View = { x: number; y: number; w: number; h: number };
 
@@ -122,6 +125,41 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
   const [hinted, setHinted] = useState(true);
   const movedRef = useRef(false);
   const animRef = useRef<number | null>(null);
+
+  // material movement — dots on the solved streams (speed/count/size from
+  // real molar flows, product tint from the declared product species).
+  // Reduced-motion users start still; anyone can toggle ⌁.
+  const [flowOn, setFlowOn] = useState(() =>
+    typeof window === 'undefined' || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  );
+  const flowSpecs = useMemo<FlowSpec[]>(() => {
+    let max = 0;
+    const flows = new Map<string, number>();
+    for (const s of L.streams) {
+      const st = result.streams[s.id];
+      if (!st) continue;
+      let t = 0;
+      for (let i = 0; i < st.n.length; i++) t += st.n[i];
+      flows.set(s.id, t);
+      if (t > max) max = t;
+    }
+    const productSpecies = result.kpis.productSpecies;
+    const out: FlowSpec[] = [];
+    for (const s of L.streams) {
+      const flow = flows.get(s.id) ?? 0;
+      if (flow <= 1e-6) continue;
+      const st = result.streams[s.id];
+      out.push({
+        id: s.id,
+        d: s.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' '),
+        flow,
+        color: dotColor(s.cls, st?.n, productSpecies),
+        liquid: s.cls === 'product' || s.cls === 'water',
+        pillAt: s.labelAt ?? 0.5,
+      });
+    }
+    return out;
+  }, [L, result]);
 
   const stopAnim = useCallback(() => {
     if (animRef.current != null) cancelAnimationFrame(animRef.current);
@@ -304,6 +342,11 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
     : null;
 
   const focus: Focus | null = selected ?? spotlight ?? null;
+  // stream-dimming parity with Diagram: when one stream is focused or
+  // hovered, every other stream's dots dim with its line
+  const activeStreamId =
+    (focus?.type === 'stream' ? focus.id : null) ??
+    (hover?.type === 'stream' ? hover.id : null);
 
   return (
     <div
@@ -337,6 +380,10 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
         }}
         onBackgroundClick={() => onSelect(null)}
       />
+
+      {/* material movement — an overlay svg sharing the diagram's exact
+          viewBox: pixel-locked to the lines, rides pan/zoom for free */}
+      <FlowLayer view={view} streams={flowSpecs} active={flowOn} dimExcept={activeStreamId} />
 
       {/* hover tooltip */}
       {hover && tipData && (
@@ -392,15 +439,24 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
         ))}
       </div>
 
-      {/* zoom controls */}
+      {/* zoom + flow controls */}
       <div
         className="absolute bottom-3 right-3 z-10 flex overflow-hidden rounded-lg border"
         style={{ borderColor: C.bandLine, background: C.paper }}
       >
         <button
+          aria-label={flowOn ? 'Hide material flow animation' : 'Show material flow animation'}
+          title={flowOn ? 'Hide material flow' : 'Show material flow (dot speed = real molar flow)'}
+          onClick={() => setFlowOn((v) => !v)}
+          className="hover-band h-8 w-10 text-[11px] font-bold tracking-wider"
+          style={{ color: flowOn ? C.gas : C.inkFaint }}
+        >
+          ⌁
+        </button>
+        <button
           aria-label="Zoom out"
-          className="hover-band h-8 w-8 text-sm font-bold"
-          style={{ color: C.ink }}
+          className="hover-band h-8 w-8 border-l text-sm font-bold"
+          style={{ color: C.ink, borderColor: C.bandLine }}
           onClick={() => {
             const v = viewRef.current;
             zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);

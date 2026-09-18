@@ -34,8 +34,10 @@ import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
 import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
 import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet/route';
 import { pointAt } from '@/lib/flowsheet/geom';
+import { dotColor, type FlowSpec } from '@/lib/flowsheet/flowAnim';
 import { glyphNode } from '@/lib/flowsheet/glyphs';
 import { UnitSymbol } from '@/components/flowsheet/Symbols';
+import { FlowLayer } from '@/components/flowsheet/FlowLayer';
 
 const it_flowActiveColor = 'var(--fs-gas)';
 const NODE_W = 168;
@@ -232,7 +234,8 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
     typeof window === 'undefined' || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
   );
 
-  // solved molar flow per stream (drives dot speed) — cached solve
+  // solved molar flow per stream (drives dot speed + count + product tint)
+  // — cached solve; null while a mid-build snapshot does not solve yet
   const flowInfo = useMemo(() => {
     if (!graph || !flowOn) return null;
     const r = solveFor(graph);
@@ -245,7 +248,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       flow.set(id, t);
       if (t > max) max = t;
     }
-    return { flow, max };
+    return { flow, max, comp: r.streams, productSpecies: r.kpis.productSpecies };
   }, [graph, flowOn]);
   // the user's frame — null means "fit the whole layout". The effective view is
   // DERIVED (clamped against the current layout), so a growing canvas keeps
@@ -304,6 +307,94 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
     () => (layout ? { x: 0, y: 0, w: layout.width, h: layout.height } : { x: 0, y: 0, w: 900, h: 360 }),
     [layout],
   );
+
+  // grid routing — corridors and lanes only, so a line can never cross a
+  // unit. MEMOIZED on (graph, layout): hover re-renders must not re-route,
+  // and the flow-dot specs below need a stable identity so the particle
+  // layer never rebuilds its path tables mid-animation.
+  const routed = useMemo(() => {
+    if (!graph || !layout || graph.units.length === 0) return null;
+    const pos = layout.units;
+    const rects: RRect[] = graph.units.map((u) => {
+      const p = pos.get(u.id)!;
+      return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+    });
+    const grid = buildGrid(rects, layout.width, layout.height);
+    const pairSeen = new Map<string, number>();
+    let recycleLanes = 0;
+
+    const out = graph.streams.map((s) => {
+      const st = STREAM_STYLE[s.cls] ?? STREAM_STYLE.syngas;
+      const a = pos.get(s.from.unit);
+      if (!a) return null;
+      const rectOf = (id: string): RRect => {
+        const p = pos.get(id)!;
+        return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+      };
+      let d = '';
+      let endX = 0;
+      let endY = 0;
+      let endAngle = 0;
+      let pill = { x: 0, y: 0 };
+      let selfLoop = false;
+      if (s.to && s.to.unit === s.from.unit) {
+        // self-loop (internal recycle, e.g. separator letdown)
+        selfLoop = true;
+        const x0 = a.x + NODE_W - 26;
+        const y0 = a.y + NODE_H;
+        const x1 = a.x + 26;
+        d = `M ${x0} ${y0} C ${x0 + 26} ${y0 + 34}, ${x1 - 26} ${y0 + 34}, ${x1} ${y0}`;
+        endX = x1;
+        endY = y0;
+        endAngle = Math.PI; // pointing left into the unit
+        pill = { x: (x0 + x1) / 2, y: y0 + 26 };
+      } else {
+        const ra = rectOf(s.from.unit);
+        const rb = s.to ? rectOf(s.to.unit) : null;
+        const forward = s.to
+          ? (pos.get(s.to.unit)?.depth ?? 0) > a.depth
+          : true;
+        const key = `${s.from.unit}→${s.to?.unit ?? 'env'}`;
+        const pairIndex = pairSeen.get(key) ?? 0;
+        pairSeen.set(key, pairIndex + 1);
+        const laneIndex = forward ? 0 : recycleLanes++;
+        const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
+        d = roundedPath(r.pts, 10);
+        const last = r.pts[r.pts.length - 1];
+        endX = last[0];
+        endY = last[1];
+        endAngle = r.endAngle;
+        pill = pointAt(r.pts, 0.5);
+      }
+      const pillW = 12 + s.id.length * 8;
+      return { s, st, d, endX, endY, endAngle, pill, pillW, selfLoop };
+    });
+    return out;
+  }, [graph, layout]);
+
+  // flow-dot specs — the SOLVED state mapped onto the routed lines. Speed,
+  // count, size from real molar flows; color from stream class unless the
+  // stream carries the plant's declared product (then the product hue —
+  // ammonia-rich gas green, sulphur-laden gas gold).
+  const flowSpecs = useMemo(() => {
+    if (!routed || !flowInfo) return [];
+    const specs: FlowSpec[] = [];
+    for (const it of routed) {
+      if (!it || it.s.implicit) continue;
+      const flow = flowInfo.flow.get(it.s.id) ?? 0;
+      if (flow <= 1e-6) continue;
+      const st = flowInfo.comp[it.s.id];
+      specs.push({
+        id: it.s.id,
+        d: it.d,
+        flow,
+        color: dotColor(it.s.cls, st?.n, flowInfo.productSpecies),
+        liquid: it.s.cls === 'product' || it.s.cls === 'water',
+        pillAt: it.selfLoop ? undefined : 0.5,
+      });
+    }
+    return specs;
+  }, [routed, flowInfo]);
 
   // post-build: warm the cache so first hover is instant
   useEffect(() => {
@@ -481,60 +572,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
   }
 
   const { width: W, height: H, units: pos } = layout;
-
-  // grid routing — corridors and lanes only, so a line can never cross a unit
-  const rects: RRect[] = graph.units.map((u) => {
-    const p = pos.get(u.id)!;
-    return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
-  });
-  const grid = buildGrid(rects, W, H);
-  const pairSeen = new Map<string, number>();
-  let recycleLanes = 0;
-
-  const streams = graph.streams.map((s) => {
-    const st = STREAM_STYLE[s.cls] ?? STREAM_STYLE.syngas;
-    const a = pos.get(s.from.unit);
-    if (!a) return null;
-    const rectOf = (id: string): RRect => {
-      const p = pos.get(id)!;
-      return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
-    };
-    let d = '';
-    let endX = 0;
-    let endY = 0;
-    let endAngle = 0;
-    let pill = { x: 0, y: 0 };
-    if (s.to && s.to.unit === s.from.unit) {
-      // self-loop (internal recycle, e.g. separator letdown)
-      const x0 = a.x + NODE_W - 26;
-      const y0 = a.y + NODE_H;
-      const x1 = a.x + 26;
-      d = `M ${x0} ${y0} C ${x0 + 26} ${y0 + 34}, ${x1 - 26} ${y0 + 34}, ${x1} ${y0}`;
-      endX = x1;
-      endY = y0;
-      endAngle = Math.PI; // pointing left into the unit
-      pill = { x: (x0 + x1) / 2, y: y0 + 26 };
-    } else {
-      const ra = rectOf(s.from.unit);
-      const rb = s.to ? rectOf(s.to.unit) : null;
-      const forward = s.to
-        ? (pos.get(s.to.unit)?.depth ?? 0) > a.depth
-        : true;
-      const key = `${s.from.unit}→${s.to?.unit ?? 'env'}`;
-      const pairIndex = pairSeen.get(key) ?? 0;
-      pairSeen.set(key, pairIndex + 1);
-      const laneIndex = forward ? 0 : recycleLanes++;
-      const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
-      d = roundedPath(r.pts, 10);
-      const last = r.pts[r.pts.length - 1];
-      endX = last[0];
-      endY = last[1];
-      endAngle = r.endAngle;
-      pill = pointAt(r.pts, 0.5);
-    }
-    const pillW = 12 + s.id.length * 8;
-    return { s, st, d, endX, endY, endAngle, pill, pillW };
-  });
+  const streams = routed!;
 
   const hoveredStream = hover?.type === 'stream' ? graph.streams.find((x) => x.id === hover.id) : undefined;
   const hoveredUnit = hover?.type === 'unit' ? graph.units.find((x) => x.id === hover.id) : undefined;
@@ -637,27 +675,6 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                   </text>
                 </g>
               )}
-              {flowOn && flowInfo && !it.s.implicit && (() => {
-                const f = flowInfo.flow.get(it.s.id) ?? 0;
-                if (f <= 1e-6 || flowInfo.max <= 1e-6) return null;
-                const ratio = f / flowInfo.max;
-                const dur = 2.2 + 6.8 * (1 - ratio); // heavy streams move fast
-                // beads on a wire: paper fill + colored ring, so the dot
-                // reads against BOTH the line color and the sheet
-                return (
-                  <g style={{ pointerEvents: 'none' }}>
-                    {[0, 1].map((k) => (
-                      <circle
-                        key={k}
-                        r={3.2}
-                        style={{ fill: C.paper, stroke: it.st.color, strokeWidth: 1.3 }}
-                      >
-                        <animateMotion dur={`${dur.toFixed(2)}s`} begin={`${(k * dur / 2).toFixed(2)}s`} repeatCount="indefinite" path={it.d} />
-                      </circle>
-                    ))}
-                  </g>
-                );
-              })()}
             </g>
           ) : null,
         )}
@@ -716,6 +733,10 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           );
         })}
       </svg>
+
+      {/* material movement — dots on the solved flows, sharing the exact
+          viewBox so pan/zoom carries them; toggled by ⌁ beside the zoom */}
+      <FlowLayer view={effView} streams={flowSpecs} active={flowOn} />
 
       {/* hover tooltip */}
       {hover && tipData && (
