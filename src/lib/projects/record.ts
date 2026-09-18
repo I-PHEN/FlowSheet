@@ -14,8 +14,11 @@
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { Kpis } from '@/lib/engine/types';
 import type { CriticVerdict, SavedPlant } from '@/lib/agent/protocol';
+import type { Tour } from '@/lib/content/units';
+import { isFamilyId } from '@/lib/families';
+import { safeTour } from './tour';
 
-export const PLANT_SCHEMA_VERSION = 1;
+export const PLANT_SCHEMA_VERSION = 2;
 
 /** anonymous browser owner id (localStorage) — the per-user isolation key */
 export const OWNER_KEY = 'fs.owner';
@@ -33,6 +36,16 @@ export interface PlantRecord {
   verdict: CriticVerdict | null;
   productionTpd: number | null;
   source: 'user';
+  /** which family built it (v2) — the viewer badges + KPI blocks read it */
+  family?: string;
+  /** the docent's narrated tour (v2) — played by the viewer's tour runner */
+  tour?: Tour | null;
+}
+
+/** the family a record belongs to, with a v1 fallback to the graph stamp */
+export function effectiveFamily(rec: Pick<PlantRecord, 'family' | 'graph'>): string {
+  const f = rec.family ?? rec.graph.family;
+  return f && isFamilyId(f) ? f : 'ammonia';
 }
 
 /** collision-safe-enough local id: time-ordered + random tail */
@@ -77,6 +90,7 @@ export function recordFromSaved(sp: SavedPlant, ownerId: string): PlantRecord {
     verdict: sp.verdict ?? null,
     productionTpd: sp.productionTpd ?? null,
     source: 'user',
+    family: effectiveFamily({ family: undefined, graph: sp.graph }),
   };
 }
 
@@ -136,5 +150,7 @@ export function recordFromImport(json: unknown): PlantRecord | null {
     verdict,
     productionTpd: typeof o.productionTpd === 'number' ? o.productionTpd : (kpis?.productionTpd ?? null),
     source: 'user',
+    family: effectiveFamily({ family: typeof o.family === 'string' ? o.family : undefined, graph: o.graph }),
+    tour: safeTour(o.tour),
   };
 }

@@ -3,12 +3,14 @@
 /**
  * SessionPanel — the chat half of the builder studio.
  *
- * Flow-inspired, but ours: the session is the narrative spine of a build.
- * The user's brief is a chat message; agent reasoning reads like a story;
- * the engineer's tool calls collapse into quiet activity clusters (expand
- * on demand) instead of forty bubbles of noise; the solver's answer and the
- * critic's verdict land as rich cards; and when the curtain falls the
- * composer hands over to the next-move actions (zoom, save, new session).
+ * The session is the narrative spine of a build: the student's brief is a
+ * chat message; ONE "agent work" card per run carries all the thinking
+ * (each phase a collapsible section inside, collapsing to a one-line
+ * summary when the run's outputs land); the plant answer, critic verdict
+ * and errors stay as their own cards; and when the curtain falls the
+ * composer hands over to the next-move actions (tour, zoom, save, new
+ * session). The empty state is the on-ramp: family presets, an
+ * "I don't know what to build" region picker, and surprise briefs.
  *
  * Pure presentation — every piece of state lives in the page.
  */
@@ -16,18 +18,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Compass,
   Factory,
   FlaskConical,
+  HelpCircle,
+  MapPin,
+  Play,
   RotateCcw,
   Save,
+  Sparkles,
   Square,
   ZoomIn,
   Zap,
 } from 'lucide-react';
 import type { BuildPhase, CriticVerdict, SolveSummary } from '@/lib/agent/protocol';
-import { PRESET_BRIEFS } from '@/lib/agent/protocol';
+import { FAMILIES } from '@/lib/families';
+import { REGIONS, SURPRISE_BRIEFS, type RegionEntry } from '@/lib/content/regions';
 import { C } from '@/lib/design/tokens';
 
 // ── the log model (page-owned, derived from BuildEvents) ─────────────────────
@@ -37,7 +46,7 @@ export interface LogEntry {
   kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note';
   phase?: BuildPhase;
   label?: string;
-  role?: 'architect' | 'engineer' | 'critic' | 'system';
+  role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
   text?: string;
   tool?: string;
   ok?: boolean;
@@ -51,6 +60,7 @@ export const PHASE_LABEL: Record<BuildPhase, string> = {
   engineer: 'Engineer building',
   solver: 'Solver verifying',
   critic: 'Critic reviewing',
+  docent: 'Docent writing tour',
   done: 'Done',
 };
 
@@ -59,6 +69,7 @@ export const PHASE_COLOR: Record<BuildPhase, string> = {
   engineer: C.gas,
   solver: C.inkSoft,
   critic: C.nh3,
+  docent: C.utility,
   done: C.nh3,
 };
 
@@ -66,6 +77,7 @@ const ROLE_LABEL: Record<string, string> = {
   architect: 'ARCHITECT',
   engineer: 'ENGINEER',
   critic: 'CRITIC',
+  docent: 'DOCENT',
   system: 'SYSTEM',
 };
 
@@ -73,91 +85,342 @@ const ROLE_COLOR: Record<string, string> = {
   architect: C.feed,
   engineer: C.gas,
   critic: C.nh3,
+  docent: C.utility,
   system: C.inkFaint,
 };
 
-// ── chat derivation: group consecutive tool calls into activity clusters ─────
+// ── chat derivation: one "agent work" card per RUN; every phase is a
+// section inside it; the run's outputs render after the card ────────────────
 
 type ToolLine = { key: number; tool: string; ok: boolean; seq: number; text: string };
+type ThinkLine = { key: number; role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string };
+type SolveLine = { key: number; solve: SolveSummary };
+type PhaseBody = { think: ThinkLine[]; tools: ToolLine[]; solves: SolveLine[] };
+
+type PhaseSection = { phase: BuildPhase; body: PhaseBody; summary: string };
 
 type Block =
   | { kind: 'user'; key: number; text: string }
-  | { kind: 'phase'; key: number; phase: BuildPhase; label: string }
-  | { kind: 'message'; key: number; role: 'architect' | 'engineer' | 'critic' | 'system'; text: string }
-  | { kind: 'activity'; key: number; lines: ToolLine[] }
+  | { kind: 'workcard'; key: number; phases: PhaseSection[] }
   | { kind: 'solve'; key: number; solve: SolveSummary }
   | { kind: 'verdict'; key: number; verdict: CriticVerdict }
   | { kind: 'error'; key: number; text: string }
   | { kind: 'note'; key: number; text: string };
 
+/** the one line that stands for a whole phase once it is over */
+function phaseSummary(phase: BuildPhase, body: PhaseBody): string {
+  const texts = body.think.map((t) => t.text).join('\n');
+  if (phase === 'architect') {
+    const m = texts.match(/Plan:\s*(\d+)\s*units?(?:,\s*(\d+)\s*streams?)?/);
+    if (m) return `${m[1]}-unit plan${m[2] ? ` · ${m[2]} streams` : ''}`;
+    return 'flowsheet plan ready';
+  }
+  if (phase === 'engineer') {
+    const c = (tool: string) => body.tools.filter((l) => l.tool === tool && l.ok).length;
+    const placed = c('add_unit');
+    const removed = c('remove_unit');
+    const wired = c('connect');
+    const unwired = c('disconnect');
+    const retuned = c('set_spec');
+    const parts: string[] = [];
+    if (placed) parts.push(`${placed} units placed`);
+    if (removed) parts.push(`${removed} removed`);
+    if (wired) parts.push(`${wired} streams wired`);
+    if (unwired) parts.push(`${unwired} unwired`);
+    if (retuned) parts.push(`${retuned} specs retuned`);
+    const flagged = body.tools.filter((l) => !l.ok).length;
+    const done = texts.match(/Done:\s*(.+)/);
+    const base = parts.length > 0 ? parts.join(' · ') : `${body.tools.length} actions`;
+    if (done) return `${base} — ${done[1].slice(0, 80)}`;
+    return flagged > 0 ? `${base} · ${flagged} flagged` : base;
+  }
+  if (phase === 'docent') {
+    const m = texts.match(/Tour written:\s*“(.+?)”\s*—\s*(\d+)\s+stops/);
+    if (m) return `“${m[1]}” · ${m[2]} stops`;
+    return 'guided tour ready';
+  }
+  if (phase === 'solver') {
+    const solved = body.tools.some((l) => l.tool === 'solve' && l.ok);
+    const flagged = body.tools.filter((l) => !l.ok).length;
+    if (!solved) return flagged > 0 ? 'validation failed' : 'verified as built';
+    return 'validated · re-solved';
+  }
+  if (phase === 'critic') return 'reviewed the build';
+  return 'done';
+}
+
 function deriveBlocks(entries: LogEntry[]): Block[] {
-  const blocks: Block[] = [];
-  let pending: ToolLine[] = [];
-  const flush = () => {
-    if (pending.length > 0) {
-      blocks.push({ kind: 'activity', key: pending[0].key, lines: pending });
-      pending = [];
-    }
-  };
+  // Split into RUNS at user messages — each run is one agent session (a
+  // build or a remix change). ONE work card per run: every phase becomes a
+  // section inside it, in order, and the run's OUTPUTS (plant answer,
+  // verdict, notes, errors) render after the card. Mid-run solves stay
+  // inside their phase section as a quiet line — only the run's LAST solve
+  // becomes the plant-answer card.
+  const runs: LogEntry[][] = [];
+  let cur: LogEntry[] = [];
   for (const e of entries) {
-    if (e.kind === 'tool') {
-      pending.push({ key: e.key, tool: e.tool ?? '?', ok: e.ok !== false, seq: e.seq ?? 0, text: e.text ?? '' });
-      continue;
-    }
-    flush();
-    switch (e.kind) {
-      case 'user':
-        blocks.push({ kind: 'user', key: e.key, text: e.text ?? '' });
-        break;
-      case 'phase':
-        blocks.push({ kind: 'phase', key: e.key, phase: e.phase ?? 'done', label: e.label ?? '' });
-        break;
-      case 'message':
-        blocks.push({ kind: 'message', key: e.key, role: e.role ?? 'system', text: e.text ?? '' });
-        break;
-      case 'solve':
-        if (e.solve) blocks.push({ kind: 'solve', key: e.key, solve: e.solve });
-        break;
-      case 'verdict':
-        if (e.verdict) blocks.push({ kind: 'verdict', key: e.key, verdict: e.verdict });
-        break;
-      case 'error':
-        blocks.push({ kind: 'error', key: e.key, text: e.text ?? '' });
-        break;
-      default:
-        blocks.push({ kind: 'note', key: e.key, text: e.text ?? '' });
+    if (e.kind === 'user') {
+      if (cur.length > 0) runs.push(cur);
+      cur = [e];
+    } else {
+      cur.push(e);
     }
   }
-  flush();
+  if (cur.length > 0) runs.push(cur);
+
+  const blocks: Block[] = [];
+  for (const run of runs) {
+    const pre: Block[] = []; // before any phase: the router note etc.
+    const outputs: Block[] = []; // after the work: answers, verdicts, notes
+    const phases: PhaseSection[] = [];
+    let pending: { phase: BuildPhase; body: PhaseBody } | null = null;
+    let sawPhase = false;
+    const solveSections: Array<{ body: PhaseBody; entry: SolveLine }> = [];
+
+    const flushPhase = () => {
+      if (!pending) return;
+      const { phase, body } = pending;
+      if (body.think.length > 0 || body.tools.length > 0 || body.solves.length > 0) {
+        phases.push({ phase, body, summary: phaseSummary(phase, body) });
+      }
+      pending = null;
+    };
+    const toBlock = (e: LogEntry): Block | null => {
+      switch (e.kind) {
+        case 'user':
+          return { kind: 'user', key: e.key, text: e.text ?? '' };
+        case 'solve':
+          return e.solve ? { kind: 'solve', key: e.key, solve: e.solve } : null;
+        case 'verdict':
+          return e.verdict ? { kind: 'verdict', key: e.key, verdict: e.verdict } : null;
+        case 'error':
+          return { kind: 'error', key: e.key, text: e.text ?? '' };
+        default:
+          return { kind: 'note', key: e.key, text: e.text ?? '' };
+      }
+    };
+
+    for (const e of run) {
+      if (e.kind === 'phase') {
+        flushPhase();
+        pending = { phase: e.phase ?? 'done', body: { think: [], tools: [], solves: [] } };
+        sawPhase = true;
+        continue;
+      }
+      if (pending && e.kind === 'message') {
+        pending.body.think.push({ key: e.key, role: e.role ?? 'system', text: e.text ?? '' });
+        continue;
+      }
+      if (pending && e.kind === 'tool') {
+        pending.body.tools.push({ key: e.key, tool: e.tool ?? '?', ok: e.ok !== false, seq: e.seq ?? 0, text: e.text ?? '' });
+        continue;
+      }
+      if (pending && e.kind === 'solve' && e.solve) {
+        const line = { key: e.key, solve: e.solve };
+        pending.body.solves.push(line);
+        solveSections.push({ body: pending.body, entry: line });
+        continue;
+      }
+      // non-phase content: before the first phase it leads the run; after,
+      // it is the run's output
+      const b = toBlock(e);
+      if (b) (sawPhase ? outputs : pre).push(b);
+    }
+    flushPhase();
+
+    // promote the run's LAST solve to the standalone plant-answer card
+    if (solveSections.length > 0) {
+      const last = solveSections[solveSections.length - 1];
+      last.body.solves = last.body.solves.filter((l) => l.key !== last.entry.key);
+      outputs.unshift({ kind: 'solve', key: last.entry.key, solve: last.entry.solve });
+    }
+
+    blocks.push(...pre);
+    if (phases.length > 0) {
+      blocks.push({ kind: 'workcard', key: phases[0].body.think[0]?.key ?? phases[0].body.tools[0]?.key ?? phases[0].body.solves[0]?.key ?? 0, phases });
+    }
+    blocks.push(...outputs);
+  }
   return blocks;
 }
 
 // ── small pieces ──────────────────────────────────────────────────────────────
 
-function PhaseRow({ phase, label }: { phase: BuildPhase; label: string }) {
+/** one phase inside the work card — a mini collapsible section */
+function PhaseSectionView({
+  phase,
+  body,
+  summary,
+  live,
+  last,
+}: {
+  phase: BuildPhase;
+  body: PhaseBody;
+  summary: string;
+  live: boolean;
+  last: boolean;
+}) {
+  const [open, setOpen] = useState(live);
+  // prop-change reset during render (React's recommended pattern — no effect)
+  const [prevLive, setPrevLive] = useState(live);
+  if (live !== prevLive) {
+    setPrevLive(live);
+    if (live) setOpen(true);
+  }
+  const flagged = body.tools.filter((l) => !l.ok).length;
   return (
-    <div className="mt-3 flex items-center gap-3" role="separator">
-      <div className="h-px flex-1" style={{ background: 'var(--fs-band-line)' }} />
-      <span className="font-mono text-[10px] font-extrabold tracking-[0.18em]" style={{ color: PHASE_COLOR[phase] }}>
-        {phase.toUpperCase()}
-      </span>
-      <span className="max-w-[45%] truncate text-[10px]" style={{ color: C.inkFaint }}>
-        {label}
-      </span>
-      <div className="h-px flex-1" style={{ background: 'var(--fs-band-line)' }} />
+    <div
+      className="rounded-lg border"
+      style={{
+        borderColor: live
+          ? PHASE_COLOR[phase]
+          : flagged > 0
+            ? C.warn
+            : 'var(--fs-band-line)',
+        background: 'var(--fs-paper-60, transparent)',
+      }}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+      >
+        <span
+          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{
+            background: flagged > 0 ? C.warn : PHASE_COLOR[phase],
+            ...(live ? { animation: 'bd-pulse-kf 1.1s ease-in-out infinite' } : {}),
+          }}
+        />
+        <span className="shrink-0 font-mono text-[9px] font-extrabold tracking-[0.16em]" style={{ color: PHASE_COLOR[phase] }}>
+          {phase.toUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: C.inkSoft }}>
+          {summary}
+        </span>
+        {last && !live && (
+          <span className="shrink-0 font-mono text-[9px]" style={{ color: C.inkFaint }}>
+            ✓
+          </span>
+        )}
+        <ChevronDown
+          size={12}
+          className="shrink-0 transition-transform"
+          style={{ color: C.inkFaint, transform: open ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+      {open && (
+        <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+          <div className="max-h-60 overflow-y-auto pr-1">
+            {body.think.map((t) => (
+              <div key={t.key} className="mb-2 last:mb-0">
+                <div className="font-mono text-[9px] font-extrabold tracking-[0.16em]" style={{ color: ROLE_COLOR[t.role] ?? C.inkFaint }}>
+                  {ROLE_LABEL[t.role] ?? 'AGENT'}
+                </div>
+                <div
+                  className="mt-0.5 whitespace-pre-wrap text-[11.5px] leading-relaxed"
+                  style={{ color: t.role === 'system' ? C.warn : C.inkSoft }}
+                >
+                  {t.text}
+                </div>
+              </div>
+            ))}
+            {body.solves.length > 0 && (
+              <div className="mt-1.5 flex flex-col gap-0.5">
+                {body.solves.map((sl) => (
+                  <div key={sl.key} className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
+                    ▸ mid-run solve — {sl.solve.converged ? 'converged' : 'did not converge'} · {sl.solve.solveMs.toFixed(0)} ms
+                  </div>
+                ))}
+              </div>
+            )}
+            {body.tools.length > 0 && (
+              <div className="mt-1 flex flex-col gap-0.5 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+                {(live ? body.tools.slice(-3) : body.tools).map((l) => (
+                  <div key={l.key} className="flex items-baseline gap-2" title={l.text}>
+                    <span className="font-mono text-[10px] font-bold" style={{ color: l.ok ? C.inkFaint : C.warn }}>
+                      {l.tool}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[10px]" style={{ color: l.ok ? C.inkSoft : C.warn }}>
+                      {l.text}
+                    </span>
+                  </div>
+                ))}
+                {live && body.tools.length > 3 && (
+                  <div className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
+                    + {body.tools.length - 3} earlier
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function AgentMessage({ role, text }: { role: 'architect' | 'engineer' | 'critic' | 'system'; text: string }) {
+/** ONE card for a whole agent run — all phases live inside it. Open (with the
+ *  live phase's section open) while the run happens; collapses to a single
+ *  summary line when the run ends; expandable forever after. */
+function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
+  const [open, setOpen] = useState(live);
+  const [prevLive, setPrevLive] = useState(live);
+  if (live !== prevLive) {
+    setPrevLive(live);
+    setOpen(live);
+  }
+  const anyFlagged = phases.some((p) => p.body.tools.some((l) => !l.ok));
+  const lastIdx = phases.length - 1;
+  const liveIdx = live ? lastIdx : -1;
+  const headline = phases
+    .map((p) => p.summary)
+    .join(' · ')
+    .replace(/\n/g, ' ');
+  const truncated = headline.length > 96 ? `${headline.slice(0, 95)}…` : headline;
   return (
-    <div className="bd-msg-in">
-      <div className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: ROLE_COLOR[role] }}>
-        {ROLE_LABEL[role] ?? 'AGENT'}
-      </div>
-      <div className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed" style={{ color: C.ink }}>
-        {text}
-      </div>
+    <div
+      className="bd-msg-in rounded-xl border"
+      style={{ borderColor: anyFlagged ? C.warn : 'var(--fs-band-line)' }}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        <span
+          className="inline-block h-2 w-2 shrink-0 rounded-full"
+          style={{
+            background: anyFlagged ? C.warn : live ? PHASE_COLOR[phases[lastIdx].phase] : C.nh3,
+            ...(live ? { animation: 'bd-pulse-kf 1.1s ease-in-out infinite' } : {}),
+          }}
+        />
+        <span className="shrink-0 font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.ink }}>
+          AGENT WORK
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[11.5px]" style={{ color: C.inkSoft }} title={headline}>
+          {live ? `${PHASE_LABEL[phases[lastIdx].phase]}…` : truncated}
+        </span>
+        <ChevronDown
+          size={14}
+          className="shrink-0 transition-transform"
+          style={{ color: C.inkFaint, transform: open ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1.5 border-t px-2.5 py-2" style={{ borderColor: 'var(--fs-band-line)' }}>
+          {phases.map((p, i) => (
+            <PhaseSectionView
+              key={`${p.phase}-${p.body.think[0]?.key ?? p.body.tools[0]?.key ?? i}`}
+              phase={p.phase}
+              body={p.body}
+              summary={p.summary}
+              live={i === liveIdx}
+              last={i === lastIdx}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -198,102 +461,46 @@ function ErrorCard({ text }: { text: string }) {
   );
 }
 
-/** the engineer's work, quiet by default — a cluster of tool lines */
-function ActivityCluster({ lines, live }: { lines: ToolLine[]; live: boolean }) {
-  const [open, setOpen] = useState(false);
-  const failed = lines.some((l) => !l.ok);
-  const collapsible = lines.length > 4;
-  const shown = collapsible && !open ? lines.slice(-2) : lines;
-  return (
-    <div className="bd-msg-in rounded-xl border" style={{ borderColor: 'var(--fs-band-line)' }}>
-      <div className="flex items-center gap-2 border-b px-3 py-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
-        <span
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={{ background: failed ? C.warn : C.gas, ...(live ? { animation: 'bd-pulse-kf 1.1s ease-in-out infinite' } : {}) }}
-        />
-        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.inkSoft }}>
-          ENGINEER
-        </span>
-        <span className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
-          {lines.length} action{lines.length === 1 ? '' : 's'}
-          {failed ? ` · ${lines.filter((l) => !l.ok).length} flagged` : ''}
-        </span>
-        {collapsible && (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="hover-band ml-auto rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold"
-            style={{ color: C.inkSoft }}
-          >
-            {open ? 'show less' : 'show all'}
-          </button>
-        )}
-      </div>
-      <div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto px-3 py-1.5">
-        {shown.map((l) => (
-          <div key={l.key} className="flex items-baseline gap-2" title={l.text}>
-            <span className="font-mono text-[10px] font-bold" style={{ color: l.ok ? C.inkFaint : C.warn }}>
-              {l.tool}
-            </span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[10px]" style={{ color: l.ok ? C.inkSoft : C.warn }}>
-              {l.text}
-            </span>
-          </div>
-        ))}
-        {collapsible && !open && (
-          <div className="font-mono text-[10px]" style={{ color: C.inkFaint }}>
-            + {lines.length - 2} earlier action{lines.length - 2 === 1 ? '' : 's'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** the solver's answer, as a compact result card */
+/** the solver's answer, as a compact result card (family-aware rows) */
 function SolveCard({ solve }: { solve: SolveSummary }) {
   const k = solve.kpis;
-  const rows = [
-    { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d` },
-    { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %` },
-    { label: 'Per-pass', value: `${(k.perPassConv * 100).toFixed(1)} %` },
-    { label: 'H2/N2', value: k.h2n2Ratio.toFixed(3) },
-    { label: 'Loop inerts', value: `${(k.loopInerts * 100).toFixed(1)} %` },
-    { label: 'Spec. energy', value: `${k.specificEnergyGJt.toFixed(2)} GJ/t` },
-  ];
+  const rows =
+    k.familyKpis && k.familyKpis.length > 0
+      ? k.familyKpis
+      : [
+          { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d`, raw: k.productionTpd },
+          { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %`, raw: k.productPurityWt },
+        ];
+  const bad = !solve.converged || solve.warnings.length > 0;
   return (
-    <div className="bd-msg-in rounded-xl border px-3 py-2.5" style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}>
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.nh3 }}>
+    <div
+      className="bd-msg-in rounded-xl border px-3 py-2.5"
+      style={{ borderColor: bad ? C.warn : 'var(--fs-band-line)', background: C.paper }}
+    >
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: bad ? C.warn : C.nh3 }}>
           PLANT ANSWER
         </span>
-        <span
-          className="rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold"
-          style={{ color: solve.converged ? C.nh3 : C.warn, borderColor: solve.converged ? C.nh3 : C.warn }}
-        >
-          {solve.converged ? `converged · ${solve.iterations} it` : 'not converged'}
-        </span>
-        <span className="ml-auto font-mono text-[10px]" style={{ color: C.inkFaint }}>
-          {solve.solveMs.toFixed(0)} ms
+        <span className="font-mono text-[9.5px]" style={{ color: C.inkFaint }}>
+          {solve.converged ? 'converged' : 'did not converge'} · {solve.iterations} it · {solve.solveMs.toFixed(0)} ms
         </span>
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-x-4 gap-y-1.5">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
         {rows.map((r) => (
-          <div key={r.label}>
-            <div className="text-[9.5px] font-semibold uppercase tracking-wide" style={{ color: C.inkFaint }}>
+          <div key={r.label} className="min-w-0">
+            <div className="truncate font-mono text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: C.inkFaint }}>
               {r.label}
             </div>
-            <div className="font-mono text-[12.5px] font-bold" style={{ color: C.ink }}>
+            <div className="truncate text-[12px] font-bold" style={{ color: C.ink }} title={r.value}>
               {r.value}
             </div>
           </div>
         ))}
       </div>
       {solve.warnings.length > 0 && (
-        <div className="mt-2 flex flex-col gap-0.5 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
-          {solve.warnings.map((w, i) => (
-            <div key={i} className="text-[11px] leading-snug" style={{ color: C.warn }}>
-              ⚠ {w}
-            </div>
+        <div className="mt-2 border-t pt-1.5 text-[11px] leading-snug" style={{ borderColor: 'var(--fs-band-line)', color: C.warn }}>
+          {solve.warnings.map((w) => (
+            <div key={w}>⚠ {w}</div>
           ))}
         </div>
       )}
@@ -301,60 +508,47 @@ function SolveCard({ solve }: { solve: SolveSummary }) {
   );
 }
 
-/** the critic's verdict */
 function VerdictCard({ verdict }: { verdict: CriticVerdict }) {
-  const color = verdict.verdict === 'pass' ? C.nh3 : verdict.verdict === 'revise' ? C.warn : '#B3452F';
+  const tone = verdict.verdict === 'pass' ? C.nh3 : verdict.verdict === 'revise' ? C.feed : C.warn;
   return (
-    <div
-      className="bd-msg-in rounded-xl border px-3 py-2.5"
-      style={{ background: C.paper, borderColor: color, borderLeftWidth: 3 }}
-    >
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.inkSoft }}>
+    <div className="bd-msg-in rounded-xl border px-3 py-2.5" style={{ borderColor: tone, background: C.paper }}>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: tone }}>
           CRITIC VERDICT
         </span>
-        <span
-          className="rounded-full border px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase"
-          style={{ color, borderColor: color }}
-        >
-          {verdict.verdict}
+        <span className="rounded-full px-2 py-0.5 font-mono text-[10px] font-extrabold" style={{ background: tone, color: C.paper }}>
+          {verdict.verdict.toUpperCase()}
         </span>
-        <span className="ml-auto font-mono text-[13px] font-extrabold" style={{ color }}>
-          {verdict.score}
-          <span className="text-[9px] font-bold" style={{ color: C.inkFaint }}>
-            /100
-          </span>
+        <span className="ml-auto font-mono text-[12px] font-extrabold" style={{ color: tone }}>
+          {verdict.score}/100
         </span>
       </div>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: C.ink }}>
+      <p className="text-[12px] leading-relaxed" style={{ color: C.ink }}>
         {verdict.summary}
       </p>
       {verdict.strengths.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-0.5">
-          {verdict.strengths.map((s, i) => (
-            <li key={i} className="flex gap-1.5 text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-              <span style={{ color: C.nh3 }}>+</span>
-              {s}
+        <ul className="mt-1.5">
+          {verdict.strengths.slice(0, 4).map((s) => (
+            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+              + {s}
             </li>
           ))}
         </ul>
       )}
       {verdict.issues.length > 0 && (
-        <ul className="mt-1.5 flex flex-col gap-0.5">
-          {verdict.issues.map((s, i) => (
-            <li key={i} className="flex gap-1.5 text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-              <span style={{ color: C.warn }}>!</span>
-              {s}
+        <ul className="mt-1">
+          {verdict.issues.slice(0, 4).map((s) => (
+            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.warn }}>
+              − {s}
             </li>
           ))}
         </ul>
       )}
       {verdict.suggestions.length > 0 && (
-        <ul className="mt-1.5 flex flex-col gap-0.5">
-          {verdict.suggestions.map((s, i) => (
-            <li key={i} className="flex gap-1.5 text-[11.5px] leading-snug" style={{ color: C.inkFaint }}>
-              <span>→</span>
-              {s}
+        <ul className="mt-1 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+          {verdict.suggestions.slice(0, 3).map((s) => (
+            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+              → {s}
             </li>
           ))}
         </ul>
@@ -363,7 +557,123 @@ function VerdictCard({ verdict }: { verdict: CriticVerdict }) {
   );
 }
 
-// ── the panel ─────────────────────────────────────────────────────────────────
+// ── the on-ramp: presets by family, regions, surprise ────────────────────────
+
+const CARD_HUES = [C.feed, C.gas, C.nh3, C.utility, C.warn];
+const CARD_ICONS = [Factory, FlaskConical, Zap, Sparkles, Compass];
+
+function PresetCard({
+  label,
+  text,
+  iconIdx,
+  onPick,
+}: {
+  label: string;
+  text: string;
+  iconIdx: number;
+  onPick: () => void;
+}) {
+  const Icon = CARD_ICONS[iconIdx % CARD_ICONS.length];
+  return (
+    <button
+      onClick={onPick}
+      className="card-lift group flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left"
+      style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}
+    >
+      <span
+        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
+        style={{ borderColor: 'var(--fs-band-line)', color: CARD_HUES[iconIdx % CARD_HUES.length] }}
+      >
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-bold" style={{ color: C.ink }}>
+          {label}
+        </span>
+        <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+          {text}
+        </span>
+      </span>
+      <ChevronRight
+        size={15}
+        className="mt-1 shrink-0 transition-transform group-hover:translate-x-0.5"
+        style={{ color: C.inkFaint }}
+      />
+    </button>
+  );
+}
+
+/** the "I don't know" flow: pick a region → see what runs there → one-click brief */
+function RegionPicker({ onPick }: { onPick: (brief: string) => void }) {
+  const [region, setRegion] = useState<RegionEntry | null>(null);
+  if (!region) {
+    return (
+      <div className="mt-4">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: C.inkFaint }}>
+          <MapPin size={12} /> What&rsquo;s made near me?
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {REGIONS.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setRegion(r)}
+              className="hover-band rounded-lg border px-2.5 py-2 text-left text-[12px] font-bold"
+              style={{ borderColor: 'var(--fs-band-line)', color: C.ink }}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 rounded-xl border px-3 py-3" style={{ borderColor: 'var(--fs-band-line)', background: C.canvas }}>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setRegion(null)}
+          className="hover-band flex items-center gap-1 text-[11px] font-bold"
+          style={{ color: C.inkSoft }}
+        >
+          <ChevronLeft size={13} /> all regions
+        </button>
+        <span className="ml-auto truncate text-[11.5px] font-bold" style={{ color: C.ink }}>
+          {region.name} · {region.scope}
+        </span>
+      </div>
+      <p className="mt-1.5 text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+        {region.industries}
+      </p>
+      <div className="mt-2 flex flex-col gap-1.5">
+        {region.here.map((h) => (
+          <button
+            key={h.family}
+            onClick={() => onPick(h.brief)}
+            className="card-lift rounded-lg border px-3 py-2 text-left"
+            style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}
+          >
+            <span className="font-mono text-[9px] font-extrabold tracking-[0.14em]" style={{ color: CARD_HUES[['ammonia', 'methanol', 'hydrogen', 'sulphur'].indexOf(h.family) % 4] }}>
+              {h.family.toUpperCase()}
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+              {h.why}
+            </span>
+            <span className="mt-1 block text-[12px] font-bold" style={{ color: C.ink }}>
+              {h.brief}
+            </span>
+          </button>
+        ))}
+      </div>
+      {region.coming.length > 0 && (
+        <p className="mt-2 text-[10.5px] leading-snug" style={{ color: C.inkFaint }}>
+          Not in the builder yet: {region.coming.join(' · ')}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── the panel ────────────────────────────────────────────────────────────────
 
 export interface SessionPanelProps {
   entries: LogEntry[];
@@ -382,10 +692,17 @@ export interface SessionPanelProps {
   unitCount: number;
   streamCount: number;
   doneOk: boolean | null;
+  tourReady: boolean;
+  onTakeTour: () => void;
+  remixName: string | null;
 }
 
-const CARD_ICONS = [Factory, FlaskConical, Zap];
-const CARD_HUES = [C.feed, C.gas, C.nh3];
+const REMIX_EXAMPLES = [
+  'Halve the feed — what happens to production?',
+  'Run the plant as hot as it will go, safely',
+  'Remove one unit the plant can live without, and prove it',
+  'Push the product purity as high as it will go',
+];
 
 export function SessionPanel({
   entries,
@@ -404,14 +721,19 @@ export function SessionPanel({
   unitCount,
   streamCount,
   doneOk,
+  tourReady,
+  onTakeTour,
+  remixName,
 }: SessionPanelProps) {
   const blocks = useMemo(() => deriveBlocks(entries), [entries]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const pinnedRef = useRef(true);
   const [jump, setJump] = useState(false);
+  const [surprise, setSurprise] = useState(() => Math.floor(Math.random() * SURPRISE_BRIEFS.length));
   const running = status === 'running';
   const idle = status === 'idle';
+  const remixing = remixName !== null;
 
   // keep the transcript pinned to the latest — unless the reader scrolled up
   useEffect(() => {
@@ -435,6 +757,11 @@ export function SessionPanel({
     setJump(!pinned);
   };
 
+  const pickBrief = (text: string) => {
+    onBriefChange(text);
+    taRef.current?.focus();
+  };
+
   const sessionTitle = idle
     ? 'Untitled session'
     : brief.trim().length > 0
@@ -449,7 +776,7 @@ export function SessionPanel({
         : doneOk === false
           ? 'build finished with issues'
           : 'session restored from the library'
-      : 'architect · engineer · solver · critic';
+      : 'architect · engineer · solver · critic · docent';
 
   return (
     <div className="flex h-full w-full flex-col" style={{ background: C.paper }}>
@@ -460,7 +787,7 @@ export function SessionPanel({
       >
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-bold leading-tight" style={{ color: idle ? C.inkFaint : C.ink }}>
-            {sessionTitle}
+            {remixing ? `${remixName} · remix` : sessionTitle}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] leading-tight" style={{ color: C.inkSoft }}>
             {running && <span className="bd-pulse inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: phase ? PHASE_COLOR[phase] : C.gas }} />}
@@ -481,53 +808,83 @@ export function SessionPanel({
       {/* transcript / empty state */}
       {blocks.length === 0 ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-5">
-          <h3 className="text-[17px] font-semibold leading-snug" style={{ color: C.ink }}>
-            What would you like to build?
-          </h3>
-          <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-            Describe an ammonia plant in plain words. An architect plans it, an engineer wires it, the solver
-            verifies it, and a critic scores it — the flowsheet assembles live on the canvas.
-          </p>
-          <div className="mt-4 flex flex-col gap-2">
-            {PRESET_BRIEFS.map((p, i) => {
-              const Icon = CARD_ICONS[i % CARD_ICONS.length];
-              return (
-                <button
-                  key={p.label}
-                  onClick={() => {
-                    onBriefChange(p.text);
-                    taRef.current?.focus();
-                  }}
-                  className="card-lift group flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left"
-                  style={{ background: C.paper, borderColor: 'var(--fs-band-line)' }}
-                >
-                  <span
-                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
-                    style={{ borderColor: 'var(--fs-band-line)', color: CARD_HUES[i % CARD_HUES.length] }}
+          {remixing ? (
+            <>
+              <h3 className="text-[17px] font-semibold leading-snug" style={{ color: C.ink }}>
+                What would you like to change?
+              </h3>
+              <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
+                The plant is on the canvas — ask for a change and the engineer will make the smallest edit that honors
+                it, the solver will re-run every unit, and the critic will judge what the change did. Changes chain:
+                each one starts from the latest plant.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                {REMIX_EXAMPLES.map((text) => (
+                  <button
+                    key={text}
+                    onClick={() => pickBrief(text)}
+                    className="card-lift rounded-xl border px-3.5 py-2.5 text-left text-[12.5px] font-semibold"
+                    style={{ borderColor: 'var(--fs-band-line)', color: C.ink }}
                   >
-                    <Icon size={16} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-bold" style={{ color: C.ink }}>
-                      {p.label}
-                    </span>
-                    <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-                      {p.text}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    size={15}
-                    className="mt-1 shrink-0 transition-transform group-hover:translate-x-0.5"
-                    style={{ color: C.inkFaint }}
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-[17px] font-semibold leading-snug" style={{ color: C.ink }}>
+                What would you like to build?
+              </h3>
+              <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
+                Describe a plant in plain words — ammonia, methanol, hydrogen, sulphur recovery, or something the
+                recipes don&rsquo;t cover. An architect plans it, an engineer wires it, the solver verifies it, a
+                critic scores it, and a docent writes its tour — the flowsheet assembles live on the canvas.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                {FAMILIES.filter((f) => f.presets.length > 0).map((f, fi) => (
+                  <PresetCard
+                    key={f.id}
+                    label={`${f.presets[0].label} — ${f.name.toLowerCase()}`}
+                    text={f.presets[0].text}
+                    iconIdx={fi}
+                    onPick={() => pickBrief(f.presets[0].text)}
                   />
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-auto pt-5 text-[11px] leading-relaxed" style={{ color: C.inkFaint }}>
-            The engineer works through the engine&apos;s tool surface — every unit it places appears on the canvas
-            the moment it is wired.
-          </p>
+                ))}
+              </div>
+              <RegionPicker onPick={pickBrief} />
+              <div className="mt-4 rounded-xl border px-3 py-3" style={{ borderColor: 'var(--fs-band-line)' }}>
+                <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: C.inkFaint }}>
+                  <Sparkles size={12} /> Surprise me
+                </div>
+                {surprise !== null && (
+                  <p className="text-[12px] leading-snug" style={{ color: C.inkSoft }}>
+                    {SURPRISE_BRIEFS[surprise]}
+                  </p>
+                )}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => surprise !== null && pickBrief(SURPRISE_BRIEFS[surprise])}
+                    className="hover-band rounded-full border px-3 py-1.5 text-[11.5px] font-bold"
+                    style={{ borderColor: 'var(--fs-band-line)', color: C.ink }}
+                  >
+                    Build this one
+                  </button>
+                  <button
+                    onClick={() => setSurprise((s) => (s === null ? 0 : (s + 1) % SURPRISE_BRIEFS.length))}
+                    className="hover-band rounded-full border px-3 py-1.5 text-[11.5px] font-bold"
+                    style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+                  >
+                    Another
+                  </button>
+                </div>
+              </div>
+              <p className="mt-auto pt-5 text-[11px] leading-relaxed" style={{ color: C.inkFaint }}>
+                The engineer works through the engine&rsquo;s tool surface — every unit it places appears on the canvas
+                the moment it is wired.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="relative min-h-0 flex-1">
@@ -538,12 +895,8 @@ export function SessionPanel({
                 switch (b.kind) {
                   case 'user':
                     return <UserMessage key={b.key} text={b.text} />;
-                  case 'phase':
-                    return <PhaseRow key={b.key} phase={b.phase} label={b.label} />;
-                  case 'message':
-                    return <AgentMessage key={b.key} role={b.role} text={b.text} />;
-                  case 'activity':
-                    return <ActivityCluster key={b.key} lines={b.lines} live={live} />;
+                  case 'workcard':
+                    return <WorkCard key={b.key} phases={b.phases} live={live} />;
                   case 'solve':
                     return <SolveCard key={b.key} solve={b.solve} />;
                   case 'verdict':
@@ -597,19 +950,19 @@ export function SessionPanel({
                 }
               }}
               rows={2}
-              placeholder="Describe the plant to build — units, targets, constraints…"
+              placeholder={remixing ? 'Describe the change — remove a unit, retune a spec, add equipment…' : 'Describe the plant to build — units, targets, constraints…'}
               aria-label="Design brief"
               className="w-full resize-none bg-transparent px-3.5 pt-3 text-[13px] leading-relaxed outline-none placeholder:opacity-70"
               style={{ color: C.ink }}
             />
             <div className="flex items-center gap-2 px-2.5 pb-2.5">
               <span className="hidden text-[10px] sm:block" style={{ color: C.inkFaint }}>
-                Enter to build · Shift+Enter for a new line
+                Enter to {remixing ? 'remix' : 'build'} · Shift+Enter for a new line
               </span>
               <button
                 onClick={onStart}
                 disabled={!brief.trim()}
-                aria-label="Start the build"
+                aria-label={remixing ? 'Start the remix' : 'Start the build'}
                 className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl transition-opacity disabled:opacity-35"
                 style={{ background: C.ink, color: C.paper }}
               >
@@ -634,7 +987,17 @@ export function SessionPanel({
           </div>
         ) : (
           <div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <button
+                onClick={onTakeTour}
+                disabled={!tourReady}
+                className="hover-band flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold disabled:opacity-40"
+                style={{ background: C.ink, color: C.paper }}
+                title="Save the plant and play the docent's guided tour — voice and music"
+              >
+                <Play size={12} strokeWidth={3} />
+                Take the tour
+              </button>
               <button
                 onClick={onZoomIn}
                 disabled={!hasGraph}
@@ -658,14 +1021,24 @@ export function SessionPanel({
                 className="hover-band ml-auto flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold"
                 style={{ background: C.ink, color: C.paper }}
               >
-                <RotateCcw size={13} />
+                <RotateCcw size={12} />
                 New session
               </button>
             </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed" style={{ color: C.inkFaint }}>
-              Inspect the finished flowsheet like the reference plant — hover streams for live values, click units
-              for their specs. Editing a plant mid-conversation arrives in the next phase.
-            </p>
+            {remixing && (
+              <div className="flex flex-wrap gap-1.5">
+                {REMIX_EXAMPLES.slice(0, 2).map((text) => (
+                  <button
+                    key={text}
+                    onClick={() => pickBrief(text)}
+                    className="hover-band rounded-full border px-3 py-1 text-[11px] font-semibold"
+                    style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

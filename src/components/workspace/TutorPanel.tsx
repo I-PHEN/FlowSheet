@@ -16,9 +16,11 @@ import { useTourAudio } from '@/lib/audio/tourAudio';
 export function TutorHome({
   onTour,
   onColors,
+  remixHref,
 }: {
   onTour: (t: Tour) => void;
   onColors: () => void;
+  remixHref?: string;
 }) {
   return (
     <div>
@@ -57,6 +59,21 @@ export function TutorHome({
           </span>
         </button>
       </div>
+      {remixHref && (
+        <a
+          href={remixHref}
+          className="group mt-4 flex w-full items-center justify-between rounded-lg border px-3.5 py-3 text-left hover-band"
+          style={{ borderColor: C.utility, background: C.paper }}
+          title="Open this plant in the AI builder — describe a change and the agents will remix, re-solve and re-judge it"
+        >
+          <span className="text-[13px] font-semibold" style={{ color: C.ink }}>
+            Remix this plant with AI
+          </span>
+          <span className="text-[13px] font-bold transition-transform group-hover:translate-x-0.5" style={{ color: C.utility }}>
+            →
+          </span>
+        </a>
+      )}
       <p className="mt-5 text-[11px] leading-relaxed" style={{ color: C.inkFaint }}>
         Every walkthrough is narrated — a calm voice over a soft music bed. Ask-anything tutoring
         arrives in a later phase.

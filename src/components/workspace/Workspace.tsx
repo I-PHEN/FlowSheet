@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PanelRight } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { baseCase, run } from '@/lib/engine';
 import type { PlantSpec } from '@/lib/engine/plant';
@@ -36,7 +37,8 @@ function refBox(ref: Focus) {
 }
 
 export function Workspace() {
-  // mode: explore = the book (design case), operate = the live control room
+  // ONE mode axis: learn = the book (tours + unit stories at the design
+  // case), operate = the control room (levers, live deltas)
   const [mode, setMode] = useState<Mode>('explore');
   // the live plant specification — base case until a lever moves
   const [spec, setSpec] = useState<PlantSpec>(() => baseCase());
@@ -128,7 +130,7 @@ export function Workspace() {
       onReset={resetSpec}
     />
   ) : (
-    <TutorHome onTour={startTour} onColors={() => setColors(true)} />
+    <TutorHome onTour={startTour} onColors={() => setColors(true)} remixHref="/plant/builder?remix=reference" />
   );
 
   return (
@@ -174,7 +176,7 @@ export function Workspace() {
                   : { color: C.inkSoft }
               }
             >
-              Explore
+              Learn
             </button>
             <button
               role="tab"
@@ -193,14 +195,16 @@ export function Workspace() {
 
           <button
             onClick={() => setPanelOpen((v) => !v)}
-            className="hover-band rounded-full border px-3 py-1.5 text-[12px] font-bold"
+            aria-label={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
+            title={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
+            className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border"
             style={{
               borderColor: C.bandLine,
-              color: C.ink,
+              color: panelOpen ? C.ink : C.inkSoft,
               background: panelOpen ? C.band : C.paper,
             }}
           >
-            Learn
+            <PanelRight size={15} />
           </button>
 
           <ThemeToggle />

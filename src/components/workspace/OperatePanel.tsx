@@ -11,6 +11,11 @@
 
 import { C } from '@/lib/design/tokens';
 import type { Kpis, PlantResult } from '@/lib/engine/types';
+import { AnswerStrip } from './AnswerStrip';
+
+/** the design point — the reset target and the delta baseline */
+import { baseCase } from '@/lib/engine';
+const BASE = baseCase();
 import type { PlantSpec } from '@/lib/engine/plant';
 
 interface Lever {
@@ -123,39 +128,6 @@ function LeverControl({
   );
 }
 
-function KpiRow({
-  label,
-  value,
-  delta,
-  deltaUnit,
-  deltaGood,
-}: {
-  label: string;
-  value: string;
-  delta?: number;
-  deltaUnit?: string;
-  deltaGood?: boolean;
-}) {
-  const showDelta = delta !== undefined && Math.abs(delta) > 0.05;
-  const deltaColor = !showDelta ? C.inkFaint : delta! > 0 === deltaGood ? C.nh3 : C.warn;
-  return (
-    <div className="flex items-baseline justify-between gap-2 border-b py-1.5" style={{ borderColor: C.bandLine }}>
-      <span className="text-[11.5px]" style={{ color: C.inkSoft }}>
-        {label}
-      </span>
-      <span className="font-mono text-[13px] font-semibold" style={{ color: C.ink }}>
-        {value}
-        {showDelta && (
-          <span className="ml-2 text-[11px] font-bold" style={{ color: deltaColor }}>
-            {delta! > 0 ? '+' : '\u2212'}
-            {Math.abs(delta!).toFixed(1)} {deltaUnit}
-          </span>
-        )}
-      </span>
-    </div>
-  );
-}
-
 export function OperatePanel({
   spec,
   result,
@@ -174,8 +146,34 @@ export function OperatePanel({
   const dTpd = k.productionTpd - b.productionTpd;
   const dConv = (k.perPassConv - b.perPassConv) * 100;
 
+  const dirty =
+    spec.loopP !== BASE.loopP || spec.primaryT !== BASE.primaryT || spec.ngFeed !== BASE.ngFeed;
+
   return (
     <div>
+      {/* the answer lives ABOVE the levers, pinned — no scrolling to see
+          what a change did */}
+      <AnswerStrip
+        dirty={dirty}
+        onReset={onReset}
+        cells={[
+          {
+            label: 'NH3 production',
+            value: `${k.productionTpd.toLocaleString('en-US', { maximumFractionDigits: 1 })} t/d`,
+            delta: dTpd,
+            deltaUnit: 't/d',
+          },
+          {
+            label: 'Per-pass conv.',
+            value: `${(k.perPassConv * 100).toFixed(1)} %`,
+            delta: dConv,
+            deltaUnit: 'pt',
+          },
+          { label: 'Purity', value: `${(k.productPurityMol * 100).toFixed(2)} % mol` },
+          { label: 'H2/N2 at conv.', value: k.h2n2Ratio.toFixed(2) },
+        ]}
+      />
+
       <header>
         <div className="font-mono text-[11px] font-bold tracking-widest" style={{ color: C.inkSoft }}>
           OPERATE · LIVE
@@ -188,37 +186,15 @@ export function OperatePanel({
       <p className="mt-3 text-[13px] leading-relaxed" style={{ color: C.ink }}>
         The flowsheet is live. Each lever below re-solves all 19 units and the synthesis loop, and
         every temperature, pressure, and composition on the canvas updates with it. Start from the
-        design point, move one thing at a time, and watch the plant answer.
+        design point, move one thing at a time, and watch the plant answer — it stays pinned at the
+        top while you scroll the levers.
       </p>
 
       {LEVERS.map((l) => (
         <LeverControl key={l.key} lever={l} value={spec[l.key]} onChange={onChange} />
       ))}
 
-      <section className="mt-6">
-        <h4
-          className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: C.inkSoft }}
-        >
-          Plant answer
-        </h4>
-        <KpiRow
-          label="NH3 production"
-          value={`${k.productionTpd.toLocaleString('en-US', { maximumFractionDigits: 1 })} t/d`}
-          delta={dTpd}
-          deltaUnit="t/d"
-        />
-        <KpiRow
-          label="Per-pass conversion"
-          value={`${(k.perPassConv * 100).toFixed(1)} %`}
-          delta={dConv}
-          deltaUnit="pt"
-        />
-        <KpiRow label="Product purity" value={`${(k.productPurityMol * 100).toFixed(2)} % mol`} />
-        <KpiRow label="H2/N2 at converter" value={k.h2n2Ratio.toFixed(2)} />
-      </section>
-
-      <p className="mt-3 font-mono text-[10.5px]" style={{ color: C.inkFaint }}>
+      <p className="mt-4 font-mono text-[10.5px]" style={{ color: C.inkFaint }}>
         {result.converged
           ? `Converged \u00b7 ${result.iterations} loop iterations`
           : 'Loop did not converge \u2014 values are last iterate'}
@@ -233,14 +209,6 @@ export function OperatePanel({
           ))}
         </div>
       )}
-
-      <button
-        onClick={onReset}
-        className="hover-band mt-5 w-full rounded-lg border py-2 text-[12.5px] font-bold"
-        style={{ borderColor: C.bandLine, color: C.ink }}
-      >
-        Reset to design conditions
-      </button>
     </div>
   );
 }

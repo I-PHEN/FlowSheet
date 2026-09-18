@@ -90,19 +90,21 @@ export class AgentWorkspace {
     const a = call.args ?? {};
     switch (call.tool) {
       case 'add_unit':
-        return this.addUnit(str(a.id), str(a.type));
+        return this.addUnit(str(a.id ?? a.unit), str(a.type));
       case 'remove_unit':
-        return this.removeUnit(str(a.id));
+        return this.removeUnit(str(a.id ?? a.unit ?? a.unitId));
       case 'connect':
-        return this.connect(str(a.id), str(a.name), str(a.cls), a.from, a.to === null || a.to === undefined ? null : a.to, a.implicit === true);
+        return this.connect(str(a.id ?? a.stream), str(a.name), str(a.cls), a.from, a.to === null || a.to === undefined ? null : a.to, a.implicit === true);
       case 'disconnect':
-        return this.disconnect(str(a.id));
+        return this.disconnect(str(a.id ?? a.stream));
       case 'set_spec':
-        return this.setSpec(str(a.unit), str(a.key), a.value);
+        return this.setSpec(str(a.unit ?? a.id ?? a.unitId), str(a.key), a.value);
       case 'add_controller':
         return this.addController(a);
       case 'remove_controller':
         return this.removeController(str(a.id));
+      case 'declare_product':
+        return this.declareProduct(str(a.stream ?? a.id), str(a.species));
       case 'validate':
         return this.validate();
       case 'solve':
@@ -114,7 +116,7 @@ export class AgentWorkspace {
           digest: graphDigest(this.graph),
         });
       default:
-        return fail(`unknown tool "${call.tool}" — available: add_unit, remove_unit, connect, disconnect, set_spec, add_controller, remove_controller, validate, solve, read_stream, get_graph`);
+        return fail(`unknown tool "${call.tool}" — available: add_unit, remove_unit, connect, disconnect, set_spec, add_controller, remove_controller, declare_product, validate, solve, read_stream, get_graph`);
     }
   }
 
@@ -298,6 +300,22 @@ export class AgentWorkspace {
     this.mutationCount++;
     this._mutated = true;
     return ok(`removed controller ${id}`);
+  }
+
+  /** declare the plant's product (stream + species) — the general family's
+   *  KPI reader measures production/purity/recovery from this declaration */
+  private declareProduct(streamId: string | null, species: string | null): ToolResult {
+    if (!streamId) return fail('declare_product needs a "stream" — the id of the stream carrying the product out of the plant');
+    if (!species) return fail('declare_product needs a "species" name (e.g. "H2", "NH3", "CH3OH", "S2")');
+    const edge = this.graph.streams.find((x) => x.id === streamId);
+    if (!edge) return fail(`stream "${streamId}" does not exist — declare the stream that carries the product OUT of the plant`);
+    if (!SPECIES.includes(species as (typeof SPECIES)[number])) {
+      return fail(`species "${species}" is not in the engine's species table (${SPECIES.join(', ')})`);
+    }
+    this.graph.product = { stream: streamId, species };
+    this.mutationCount++;
+    this._mutated = true;
+    return ok(`declared product: ${species} via stream ${streamId} ("${edge.name}")`, { product: this.graph.product });
   }
 
   // --------------------------------------------------------------- the cage

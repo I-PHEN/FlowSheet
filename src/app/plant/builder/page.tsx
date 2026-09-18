@@ -8,8 +8,9 @@
  * (pan, zoom, hover streams, click units); the session (right) is the chat —
  * the narrative spine of the build. The session shrinks to a rail so the
  * plant gets the attention, and the whole thing runs on the existing agent
- * stream (Architect → Engineer → Solver → Critic over SSE). Engine and
- * agent: untouched.
+ * stream (Router → Architect → Engineer → Solver → Critic → Docent over
+ * SSE, or the remix variant on the same protocol). Engine and agent:
+ * untouched.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,11 +18,13 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FlowGraph } from '@/lib/engine/graph';
-import type { BuildEvent, BuildPhase, CriticVerdict, SavedPlant, SolveSummary } from '@/lib/agent/protocol';
+import type { BuildEvent, BuildPhase, CriticVerdict, SolveSummary } from '@/lib/agent/protocol';
+import type { Tour } from '@/lib/content/units';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { SessionPanel, PHASE_COLOR, PHASE_LABEL, type LogEntry } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { C } from '@/lib/design/tokens';
+import { getFamily, isFamilyId } from '@/lib/families';
 import {
   getPlant,
   findLegacyBySlug,
@@ -48,7 +51,13 @@ export default function BuilderPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [family, setFamily] = useState<{ id: string; label: string } | null>(null);
+  const [tour, setTour] = useState<Tour | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
+  // remix mode (?remix=<plantId|reference>): a working plant is loaded on the
+  // canvas and the composer sends CHANGE instructions, not build briefs. The
+  // source updates to the latest graph after each run, so changes chain.
+  const [remixSource, setRemixSource] = useState<{ name: string; graph: FlowGraph } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
   const canvasRef = useRef<BuildCanvasHandle>(null);
@@ -139,40 +148,82 @@ export default function BuilderPage() {
         setVerdict(ev.verdict);
         addEntry({ kind: 'verdict', verdict: ev.verdict });
         break;
+      case 'family':
+        setFamily({ id: ev.family, label: ev.label });
+        addEntry({ kind: 'note', text: `Router → ${ev.label}${ev.reason ? ` (${ev.reason})` : ''}` });
+        break;
+      case 'tour':
+        setTour(ev.tour);
+        break;
       case 'error':
         addEntry({ kind: 'error', text: ev.message });
         break;
       case 'done':
         setDoneOk(ev.success);
         setStatus('finished');
+        // remix chains: the next instruction edits the LATEST graph
+        if (remixSource && ev.graph) setRemixSource({ name: remixSource.name, graph: ev.graph });
         addEntry({
           kind: 'note',
-          text: `Build finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the session)'}.`,
+          text: `${remixSource ? 'Remix' : 'Build'} finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the session)'}.`,
         });
         canvasRef.current?.fit();
         break;
     }
   };
 
+  // load a plant for remixing (?remix=reference → the ammonia family's
+  // reference graph; ?remix=<id> → a saved project from the library)
+  useEffect(() => {
+    const remixId = new URLSearchParams(window.location.search).get('remix');
+    if (!remixId) return;
+    let alive = true;
+    void (async () => {
+      let src: { name: string; graph: FlowGraph } | null = null;
+      if (remixId === 'reference') {
+        const fam = getFamily('ammonia');
+        src = { name: 'The reference plant', graph: fam.referenceGraph() };
+      } else {
+        const rec = await getPlant(remixId);
+        if (rec) src = { name: rec.name, graph: rec.graph };
+      }
+      if (!alive || !src) return;
+      const fid = src.graph.family && isFamilyId(src.graph.family) ? src.graph.family : 'ammonia';
+      const fam = getFamily(fid);
+      setRemixSource(src);
+      setGraph(src.graph);
+      setFamily({ id: fid, label: `${fam.name} — ${fam.route}` });
+      // no log entry on purpose: the empty state (with remix examples) is the
+      // greeting — adding a note would replace it with a bare transcript
+      setChatOpen(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [addEntry]);
+
   async function startBuild() {
     if (!brief.trim() || status === 'running') return;
     setStatus('running');
     setPhase(null);
-    setGraph(null);
+    if (!remixSource) setGraph(null);
     setEntries([{ key: ++keyRef.current, kind: 'user', text: brief.trim() }]);
     setSolve(null);
     setVerdict(null);
     setDoneOk(null);
     setSelected(null);
     setSaved(false);
+    setSavedId(null);
+    if (!remixSource) setFamily(null);
+    setTour(null);
     setChatOpen(true);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const res = await fetch('/api/agent/build', {
+      const res = await fetch(remixSource ? '/api/agent/remix' : '/api/agent/build', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief }),
+        body: JSON.stringify(remixSource ? { graph: remixSource.graph, instruction: brief } : { brief }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -217,7 +268,7 @@ export default function BuilderPage() {
   function resetToIdle() {
     setStatus('idle');
     setPhase(null);
-    setGraph(null);
+    if (!remixSource) setGraph(null);
     setEntries([]);
     setSolve(null);
     setVerdict(null);
@@ -225,17 +276,21 @@ export default function BuilderPage() {
     setSelected(null);
     setSaved(false);
     setSavedId(null);
+    if (!remixSource) setFamily(null);
+    setTour(null);
     setChatOpen(true);
   }
 
   // save as a first-class project (IndexedDB, this browser) — one click to
   // reopen it any time from the home grid
-  async function saveProject() {
-    if (!graph) return;
+  async function saveProject(): Promise<PlantRecord | null> {
+    if (!graph) return null;
     const now = new Date().toISOString();
     const rec: PlantRecord = {
       id: newPlantId(),
-      name: brief.trim().slice(0, 48) || 'Agent-built plant',
+      name: remixSource
+        ? `${remixSource.name.slice(0, 40)} — remixed`
+        : brief.trim().slice(0, 48) || 'Agent-built plant',
       brief: brief.trim(),
       createdAt: now,
       updatedAt: now,
@@ -246,6 +301,8 @@ export default function BuilderPage() {
       verdict,
       productionTpd: solve?.kpis.productionTpd ?? null,
       source: 'user',
+      family: family?.id ?? graph.family,
+      tour,
     };
     try {
       await putPlant(rec);
@@ -259,9 +316,23 @@ export default function BuilderPage() {
           },
         },
       });
+      return rec;
     } catch {
       addEntry({ kind: 'error', text: 'Could not save in this browser (storage unavailable).' });
+      return null;
     }
+  }
+
+  // save (if needed) and jump to the project page where the tour player
+  // lives — voice, music, spotlight, step controls
+  async function takeTour() {
+    if (!graph) return;
+    let id = savedId;
+    if (!id) {
+      const rec = await saveProject();
+      id = rec?.id ?? null;
+    }
+    if (id) window.location.href = `/plant/p/${id}`;
   }
 
   const running = status === 'running';
@@ -276,14 +347,48 @@ export default function BuilderPage() {
           ←
         </Link>
         <div className="min-w-0">
-          <div className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
-            AI Plant Builder
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
+              AI Plant Builder
+            </span>
+            {remixSource && (
+              <span
+                className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
+                style={{ borderColor: C.utility, color: C.utility }}
+                title={`Remixing ${remixSource.name}`}
+              >
+                REMIX
+              </span>
+            )}
+            {family && (
+              <span
+                className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
+                style={{ borderColor: C.nh3, color: C.nh3 }}
+                title={family.label}
+              >
+                {family.id === 'general' ? 'GENERAL BUILD' : `${family.label.split(' — ')[0].toUpperCase()} FAMILY`}
+              </span>
+            )}
           </div>
           <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
-            {unitCount > 0 ? `${unitCount} units · ${streamCount} streams` : 'describe the plant — the agents build it'}
+            {remixSource
+              ? `remixing: ${remixSource.name} · ${unitCount} units`
+              : unitCount > 0
+                ? `${unitCount} units · ${streamCount} streams`
+                : 'describe the plant — the agents build it'}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {status === 'finished' && tour && graph && (
+            <button
+              onClick={() => void takeTour()}
+              className="hidden items-center rounded-full px-3.5 py-1.5 text-[11.5px] font-bold sm:flex"
+              style={{ background: C.ink, color: C.canvas }}
+              title="Save the plant and play the docent's guided tour — voice and music"
+            >
+              ▶ Take the tour
+            </button>
+          )}
           {phase && status !== 'idle' && (
             <span
               className="flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] font-bold"
@@ -367,6 +472,9 @@ export default function BuilderPage() {
               unitCount={unitCount}
               streamCount={streamCount}
               doneOk={doneOk}
+              tourReady={tour !== null && status === 'finished'}
+              onTakeTour={() => void takeTour()}
+              remixName={remixSource?.name ?? null}
             />
           </aside>
         ) : (
