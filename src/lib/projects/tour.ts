@@ -174,3 +174,29 @@ export function generateTour(rec: PlantRecord): Tour {
     steps,
   };
 }
+
+/** sanitize an unknown JSON blob into a playable Tour (refs must exist,
+ *  texts sane) — agent-authored tours pass through, hand-edited junk -> null */
+export function safeTour(t: unknown): Tour | null {
+  if (!t || typeof t !== 'object') return null;
+  const o = t as Record<string, unknown>;
+  if (typeof o.id !== 'string' || typeof o.title !== 'string' || !Array.isArray(o.steps)) return null;
+  const steps: TourStep[] = [];
+  for (const raw of o.steps) {
+    if (!raw || typeof raw !== 'object') continue;
+    const st = raw as Record<string, unknown>;
+    const ref = st.ref as { type?: unknown; id?: unknown } | undefined;
+    const title = typeof st.title === 'string' ? st.title : '';
+    const text = typeof st.text === 'string' ? st.text : '';
+    if (!ref || typeof ref.id !== 'string' || !title || !text) continue;
+    if (text.length < 20 || text.length > 900) continue;
+    steps.push({ ref: { type: 'unit', id: ref.id }, title: title.slice(0, 80), text });
+  }
+  if (steps.length < 3) return null;
+  return {
+    id: o.id.slice(0, 64),
+    chip: typeof o.chip === 'string' ? o.chip.slice(0, 32) : 'Guided tour',
+    title: o.title.slice(0, 120),
+    steps,
+  };
+}

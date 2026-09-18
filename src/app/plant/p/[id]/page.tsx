@@ -13,12 +13,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Download, RotateCcw, Volume2, VolumeX, X } from 'lucide-react';
+import { Download, RotateCcw, Volume2, VolumeX, Wand2, X } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
-import type { PlantRecord } from '@/lib/projects/record';
+import { effectiveFamily, type PlantRecord } from '@/lib/projects/record';
+import { getFamily } from '@/lib/families';
+import { SPECIES } from '@/lib/engine/species';
 import { generateTour } from '@/lib/projects/tour';
 import { useTourAudio, unlockAudio } from '@/lib/audio/tourAudio';
 import { setTourActive } from '@/lib/ui/tourBus';
@@ -42,7 +44,15 @@ export default function ProjectPage() {
     };
   }, [id]);
 
-  const tour = useMemo(() => (rec && rec !== 'missing' ? generateTour(rec) : null), [rec]);
+  // the docent's authored tour (saved with the record) beats the auto-tour
+  const tour = useMemo(
+    () => (rec && rec !== 'missing' ? (rec.tour ?? generateTour(rec)) : null),
+    [rec],
+  );
+  const fam = useMemo(
+    () => (rec && rec !== 'missing' ? getFamily(effectiveFamily(rec)) : null),
+    [rec],
+  );
 
   // narrated audio for the running tour (voice + music + ducking)
   const audio = useTourAudio(tour ?? DUMMY_TOUR, tourIdx ?? 0);
@@ -125,8 +135,19 @@ export default function ProjectPage() {
           ←
         </Link>
         <div className="min-w-0">
-          <div className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
-            {rec.name}
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-bold leading-tight" style={{ color: C.ink }}>
+              {rec.name}
+            </span>
+            {fam && (
+              <span
+                className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
+                style={{ borderColor: C.nh3, color: C.nh3 }}
+                title={fam.route}
+              >
+                {fam.name.toUpperCase()} · {fam.id === 'general' ? (rec.graph.product?.species ?? 'CUSTOM') : fam.productSpecies}
+              </span>
+            )}
           </div>
           <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
             {unitCount} units · {streamCount} streams · saved{' '}
@@ -145,12 +166,14 @@ export default function ProjectPage() {
             <span className="hidden sm:inline">Export</span>
           </button>
           <Link
-            href={`/plant/builder?load=${rec.id}`}
-            className="flex h-8 items-center rounded-lg border px-2.5 text-[11.5px] font-bold"
+            href={`/plant/builder?remix=${rec.id}`}
+            className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11.5px] font-bold"
             style={{ borderColor: C.bandLine, color: C.ink, background: C.paper }}
-            title="Continue editing in the AI builder"
+            title="Open this plant in the AI builder — describe changes and the agents will remix, re-solve and re-judge it"
           >
-            Edit in builder
+            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Remix with AI</span>
+            <span className="sm:hidden">Remix</span>
           </Link>
           <ThemeToggle />
         </div>
@@ -206,18 +229,19 @@ export default function ProjectPage() {
               THE NUMBERS
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <Stat
-                label="PRODUCTION"
-                value={k ? `${Math.round(k.productionTpd).toLocaleString()} t/d` : '—'}
-              />
-              <Stat
-                label="PRODUCT PURITY"
-                value={k ? `${(k.productPurityWt * 100).toFixed(1)} wt%` : '—'}
-              />
-              <Stat
-                label="PER-PASS CONVERSION"
-                value={k ? `${(k.perPassConv * 100).toFixed(1)}%` : '—'}
-              />
+              {(k?.familyKpis && k.familyKpis.length > 0
+                ? k.familyKpis.map((f) => ({
+                    label: f.label.toUpperCase(),
+                    value: f.value,
+                  }))
+                : [
+                    { label: 'PRODUCTION', value: k ? `${Math.round(k.productionTpd).toLocaleString()} t/d` : '—' },
+                    { label: 'PRODUCT PURITY', value: k ? `${(k.productPurityWt * 100).toFixed(1)} wt%` : '—' },
+                    { label: 'PER-PASS CONVERSION', value: k ? `${(k.perPassConv * 100).toFixed(1)}%` : '—' },
+                  ]
+              ).map((f) => (
+                <Stat key={f.label} label={f.label} value={f.value} />
+              ))}
               <Stat label="UNITS · STREAMS" value={`${unitCount} · ${streamCount}`} />
             </div>
             {k && (
@@ -266,7 +290,7 @@ export default function ProjectPage() {
           {/* the tour */}
           <div className="p-4">
             <div className="font-mono text-[9.5px] font-bold tracking-[0.16em]" style={{ color: C.inkFaint }}>
-              GUIDED TOUR · GENERATED FROM YOUR BUILD
+              {'GUIDED TOUR · ' + (rec.tour ? 'WRITTEN BY THE DOCENT FOR THIS PLANT' : 'GENERATED FROM YOUR BUILD')}
             </div>
 
             {tourIdx === null || !tour ? (

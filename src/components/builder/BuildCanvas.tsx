@@ -34,11 +34,15 @@ import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
 import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
 import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet/route';
 import { pointAt } from '@/lib/flowsheet/geom';
+import { glyphNode } from '@/lib/flowsheet/glyphs';
+import { UnitSymbol } from '@/components/flowsheet/Symbols';
 
 const NODE_W = 168;
-const NODE_H = 74;
+const NODE_H = 96; // room for the equipment glyph + tag block
+const GLYPH_W = 96;
+const GLYPH_H = 50;
 const COL_W = 236;
-const ROW_H = 124;
+const ROW_H = 146; // NODE_H + breathing room
 const PAD = 48;
 const BAND_COLS = 8; // wrap the chain into readable bands
 
@@ -552,6 +556,10 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         }}
       >
         <defs>
+          {/* catalyst / packing hatch — shared with the reference canvas symbols */}
+          <pattern id="fsHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="7" strokeWidth="1.3" style={{ stroke: C.inkSoft }} />
+          </pattern>
           {/* the sheet lies ON the canvas — a soft shadow gives it that */}
           <filter id="bcSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
             <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.2" />
@@ -639,14 +647,23 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                   strokeWidth={sel ? 2.6 : 1.8}
                   style={{ fill: C.paper, stroke: sel ? C.ink : hover?.id === u.id ? C.inkSoft : C.inkFaint }}
                 />
-                <text x={12} y={24} fontSize={15} fontWeight={800} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {/* the equipment silhouette — same grammar as the reference
+                    canvas, so a plant keeps its shape wherever it renders */}
+                <g transform={`translate(${(NODE_W - GLYPH_W) / 2}, 13)`}>
+                  <UnitSymbol node={glyphNode(u.id, u.type, GLYPH_W, GLYPH_H)} hi={hover?.id === u.id} sel={sel} />
+                </g>
+                <text
+                  x={NODE_W / 2}
+                  y={NODE_H - 22}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fontWeight={800}
+                  style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                >
                   {u.id}
                 </text>
-                <text x={12} y={44} fontSize={11.5} fontWeight={600} style={{ fill: C.inkSoft }}>
+                <text x={NODE_W / 2} y={NODE_H - 8} textAnchor="middle" fontSize={10} fontWeight={600} style={{ fill: C.inkSoft }}>
                   {(def?.name ?? u.type).slice(0, 26)}
-                </text>
-                <text x={12} y={62} fontSize={9.5} fontWeight={600} letterSpacing={0.8} style={{ fill: C.inkFaint }}>
-                  {u.type}
                 </text>
                 <circle cx={0} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
                 <circle cx={NODE_W} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />

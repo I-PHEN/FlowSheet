@@ -27,12 +27,29 @@ const TICK_MS = 30;
 /** MIDI → Hz */
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 
-// chord loop: [chord tones, bass root] — all diatonic, jazzy-sevenths
-const CHORDS: { tones: number[]; root: number }[] = [
-  { tones: [60, 64, 67, 71], root: 36 }, // Cmaj7
-  { tones: [57, 60, 64, 67], root: 33 }, // Am7
-  { tones: [53, 57, 60, 64], root: 41 }, // Fmaj7
-  { tones: [55, 59, 62, 65], root: 43 }, // G7
+// chord progressions — all diatonic, jazzy-sevenths, and ALL ending on G7
+// so the handback between rotations resolves instead of surprising. One
+// identity, three rotating variations: the ear keeps recognizing the bed
+// while never quite predicting the next 8 bars.
+const PROGRESSIONS: { tones: number[]; root: number }[][] = [
+  [
+    { tones: [60, 64, 67, 71], root: 36 }, // Cmaj7
+    { tones: [57, 60, 64, 67], root: 33 }, // Am7
+    { tones: [53, 57, 60, 64], root: 41 }, // Fmaj7
+    { tones: [55, 59, 62, 65], root: 43 }, // G7
+  ],
+  [
+    { tones: [60, 64, 67, 71], root: 36 }, // Cmaj7
+    { tones: [52, 55, 59, 62], root: 40 }, // Em7
+    { tones: [53, 57, 60, 64], root: 41 }, // Fmaj7
+    { tones: [55, 59, 62, 65], root: 43 }, // G7
+  ],
+  [
+    { tones: [50, 53, 57, 60], root: 38 }, // Dm7
+    { tones: [53, 57, 60, 64], root: 41 }, // Fmaj7
+    { tones: [60, 64, 67, 71], root: 36 }, // Cmaj7
+    { tones: [55, 59, 62, 65], root: 43 }, // G7
+  ],
 ];
 
 class TourMusic {
@@ -207,7 +224,9 @@ class TourMusic {
   private playStep(step: number, t: number) {
     const bar = Math.floor(step / 16); // 0..3 → chord index
     const s = step % 16; // position within the bar
-    const chord = CHORDS[bar];
+    // rotate the progression every 2 cycles — same identity, new middle
+    const chords = PROGRESSIONS[Math.floor(this.cycle / 2) % PROGRESSIONS.length];
+    const chord = chords[bar];
 
     // swing: delay the off-8ths slightly
     const swing = s % 4 === 2 ? SIXTEENTH * 0.16 : 0;
