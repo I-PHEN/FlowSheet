@@ -9,9 +9,14 @@
  * CINEMA: the director flies the camera stop-to-stop, captions stream in
  * the CinemaBar at the bottom of the stage, and clicking any unit mid-tour
  * drops into free roam (camera flies there, a caption card appears).
- * The record in the local project store is the only input; nothing here
- * knows or cares that the plant was drawn by AI agents rather than shipped
- * in code.
+ *
+ * Full parity with the prebuilt workspaces means OPERATE too: Learn | Operate
+ * in the header, and a control room whose levers are derived from the graph
+ * + registry (never per-plant code) — every lever re-solves the whole
+ * flowsheet live, the answer stays pinned while the levers scroll, and the
+ * stream dots ride the new flows. The record in the local project store is
+ * the only input; nothing here knows or cares that the plant was drawn by
+ * AI agents rather than shipped in code.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,21 +24,41 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Download, Wand2 } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
+import { executeGraph } from '@/lib/engine';
+import type { FlowGraph } from '@/lib/engine/graph';
+import type { PlantResult } from '@/lib/engine/types';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
+import { PlantOperate } from '@/components/builder/PlantOperate';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CinemaBar } from '@/components/learn/CinemaBar';
 import { TourIndex } from '@/components/learn/TourIndex';
 import { useTourDirector } from '@/lib/ui/tourDirector';
 import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
 import { effectiveFamily, type PlantRecord } from '@/lib/projects/record';
+import { patchSpec } from '@/lib/projects/operate';
 import { getFamily } from '@/lib/families';
 import { generateTour, roamStep } from '@/lib/projects/tour';
+
+type Mode = 'learn' | 'operate';
+
+/** solve, or null when this combination doesn't — honesty over fake numbers */
+function trySolve(g: FlowGraph): PlantResult | null {
+  try {
+    const r = executeGraph(g);
+    return r.ok ? r : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const [rec, setRec] = useState<PlantRecord | null | 'missing'>(null);
   const [userSelected, setUserSelected] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('learn');
+  // null = the saved design point; a patched graph once a lever has moved
+  const [liveGraph, setLiveGraph] = useState<FlowGraph | null>(null);
   const canvasRef = useRef<BuildCanvasHandle>(null);
 
   useEffect(() => {
@@ -90,6 +115,37 @@ export default function ProjectPage() {
     setUserSelected(null);
     director.start(tour);
   }, [tour, director]);
+
+  // --- operate: the live control room over the saved graph -----------------
+  // (`graph` is the record's design-point graph, declared above for the
+  // tour's roam synthesis — the same object feeds the solve baseline)
+  // the design-point solve: the delta baseline (fallback: the saved kpis)
+  const baseResult = useMemo(() => (graph ? trySolve(graph) : null), [graph]);
+  // the live graph: the record's own object until a lever moves (so the
+  // canvas and its solve cache keep their identity), then immutable patches
+  const opGraph = liveGraph ?? graph;
+  const liveResult = useMemo(() => (opGraph ? trySolve(opGraph) : null), [opGraph]);
+
+  const enterOperate = useCallback(() => {
+    director.end();
+    setUserSelected(null);
+    setMode('operate');
+  }, [director]);
+  const enterLearn = useCallback(() => {
+    director.end();
+    setMode('learn');
+    setLiveGraph(null); // the book mode always shows the saved design point
+  }, [director]);
+  const onLever = useCallback(
+    (unitId: string, specKey: string, value: number) => {
+      setLiveGraph((cur) => {
+        const base = cur ?? (rec && rec !== 'missing' ? rec.graph : null);
+        return base ? patchSpec(base, unitId, specKey, value) : cur;
+      });
+    },
+    [rec],
+  );
+  const resetLever = useCallback(() => setLiveGraph(null), []);
 
   if (rec === null) {
     return (
@@ -157,6 +213,32 @@ export default function ProjectPage() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {/* mode switch — the same Learn | Operate axis as the prebuilts */}
+          <div
+            className="flex items-center rounded-full border p-0.5"
+            style={{ borderColor: C.bandLine, background: C.canvas }}
+            role="tablist"
+            aria-label="Project mode"
+          >
+            <button
+              role="tab"
+              aria-selected={mode === 'learn'}
+              onClick={enterLearn}
+              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              style={mode === 'learn' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+            >
+              Learn
+            </button>
+            <button
+              role="tab"
+              aria-selected={mode === 'operate'}
+              onClick={enterOperate}
+              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              style={mode === 'operate' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+            >
+              Operate
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => exportRecord(rec)}
@@ -188,7 +270,7 @@ export default function ProjectPage() {
           <div className="relative min-h-0 flex-1">
             <BuildCanvas
               ref={canvasRef}
-              graph={rec.graph}
+              graph={opGraph ?? rec.graph}
               selected={spotlightUnit}
               warm
               onUnitClick={(uid) => {
@@ -212,16 +294,31 @@ export default function ProjectPage() {
             YOUR PLANT · {unitCount} UNITS · {streamCount} STREAMS
           </div>
           {rec.graph && userSelected && !touring && (
-            <UnitInspector graph={rec.graph} unitId={userSelected} onClose={() => setUserSelected(null)} />
+            <UnitInspector graph={opGraph ?? rec.graph} unitId={userSelected} onClose={() => setUserSelected(null)} />
           )}
         </section>
 
-        {/* project panel */}
+        {/* project panel — the mode axis owns it: the book in Learn, the
+            control room in Operate (the answer pinned, levers scroll under) */}
         <aside
           className="flex h-[52dvh] w-full shrink-0 flex-col overflow-y-auto border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0"
           style={{ borderColor: C.bandLine, background: C.paper }}
           aria-label="Project details"
         >
+          {mode === 'operate' ? (
+            <div className="p-5">
+              <PlantOperate
+                graph={opGraph ?? rec.graph}
+                result={liveResult}
+                baseResult={baseResult}
+                designKpis={rec.kpis}
+                dirty={liveGraph !== null}
+                onChange={onLever}
+                onReset={resetLever}
+              />
+            </div>
+          ) : (
+            <>
           {/* brief */}
           <div className="border-b p-4" style={{ borderColor: C.bandLine }}>
             <div className="font-mono text-[9.5px] font-bold tracking-[0.16em]" style={{ color: C.inkFaint }}>
@@ -326,6 +423,8 @@ export default function ProjectPage() {
               </div>
             )}
           </div>
+            </>
+          )}
         </aside>
       </main>
     </div>

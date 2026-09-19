@@ -93,6 +93,14 @@ export function CinemaBar({ director }: { director: TourDirector }) {
       >
         {/* transport row */}
         <div className="flex items-center gap-1.5 px-3 pt-2.5">
+          {/* the guide's name rides every caption — one identity, every plant */}
+          <span
+            className="rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em]"
+            style={{ borderColor: C.nh3, color: C.nh3 }}
+            title="Orion — your guide through this plant"
+          >
+            ORION
+          </span>
           <span className="font-mono text-[10px] font-bold tracking-[0.14em]" style={{ color: C.inkFaint }}>
             {stop.source === 'stop' ? `${idx + 1} / ${tour.steps.length}` : 'DETOUR'}
           </span>
