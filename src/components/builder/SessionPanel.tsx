@@ -764,7 +764,9 @@ export function SessionPanel({
   const taRef = useRef<HTMLTextAreaElement>(null);
   const pinnedRef = useRef(true);
   const [jump, setJump] = useState(false);
-  const [surprise, setSurprise] = useState(() => Math.floor(Math.random() * SURPRISE_BRIEFS.length));
+  // deterministic first brief — SSR-stable (Math.random in initial state
+  // made server and client disagree); "Another" cycles at random
+  const [surprise, setSurprise] = useState(0);
   const running = status === 'running';
   const idle = status === 'idle';
   const remixing = remixName !== null;
@@ -905,7 +907,13 @@ export function SessionPanel({
                     Build this one
                   </button>
                   <button
-                    onClick={() => setSurprise((s) => (s === null ? 0 : (s + 1) % SURPRISE_BRIEFS.length))}
+                    onClick={() =>
+                      setSurprise((s) => {
+                        let next = Math.floor(Math.random() * SURPRISE_BRIEFS.length);
+                        if (next === s) next = (s + 1) % SURPRISE_BRIEFS.length;
+                        return next;
+                      })
+                    }
                     className="hover-band rounded-full border px-3 py-1.5 text-[11.5px] font-bold"
                     style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
                   >
