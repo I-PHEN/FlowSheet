@@ -1,0 +1,901 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * BuildCanvas — the stage of the builder studio.
+     5→ *
+     6→ * The graph arrives piecewise from the agent's tool events, so the layout is
+     7→ * computed: BFS depth from the feed sources, depth-columns wrapped into
+     8→ * bands. New units fade in as the engineer places them; streams are
+     9→ * class-colored beziers with id pills, arrowheads, self-loops for internal
+    10→ * recycles, and off-canvas arrows for product/waste sinks.
+    11→ *
+    12→ * Inspection parity with the reference plant: drag to pan, wheel / pinch /
+    13→ * button zoom, FIT, hover tooltips on streams AND units. Stream tooltips
+    14→ * show live values — the engine is pure TypeScript, so the built graph is
+    15→ * re-solved lazily in the browser (cached per snapshot, never blocking the
+    16→ * build) and falls back to structural info when a mid-build graph does not
+    17→ * solve yet. Clicking a unit selects it for the spec inspector.
+    18→ */
+    19→
+    20→import {
+    21→  forwardRef,
+    22→  useCallback,
+    23→  useEffect,
+    24→  useImperativeHandle,
+    25→  useMemo,
+    26→  useRef,
+    27→  useState,
+    28→} from 'react';
+    29→import type { FlowGraph, StreamEdge } from '@/lib/engine/graph';
+    30→import { executeGraph } from '@/lib/engine';
+    31→import type { PlantResult } from '@/lib/engine/types';
+    32→import { SPECIES } from '@/lib/engine/species';
+    33→import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
+    34→import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
+    35→import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet/route';
+    36→import { pointAt } from '@/lib/flowsheet/geom';
+    37→import { dotColor, type FlowSpec } from '@/lib/flowsheet/flowAnim';
+    38→import { glyphNode } from '@/lib/flowsheet/glyphs';
+    39→import { UnitSymbol } from '@/components/flowsheet/Symbols';
+    40→import { FlowLayer } from '@/components/flowsheet/FlowLayer';
+    41→
+    42→const it_flowActiveColor = 'var(--fs-gas)';
+    43→const NODE_W = 168;
+    44→const NODE_H = 96; // room for the equipment glyph + tag block
+    45→const GLYPH_W = 96;
+    46→const GLYPH_H = 50;
+    47→const COL_W = 236;
+    48→const ROW_H = 146; // NODE_H + breathing room
+    49→const PAD = 48;
+    50→const BAND_COLS = 8; // wrap the chain into readable bands
+    51→
+    52→interface Placed {
+    53→  id: string;
+    54→  x: number;
+    55→  y: number;
+    56→  depth: number;
+    57→  col: number;
+    58→  band: number;
+    59→}
+    60→
+    61→interface Layout {
+    62→  width: number;
+    63→  height: number;
+    64→  units: Map<string, Placed>;
+    65→  bandCount: number;
+    66→}
+    67→
+    68→function computeLayout(graph: FlowGraph): Layout {
+    69→  const units = graph.units;
+    70→  if (units.length === 0) return { width: 900, height: 360, units: new Map(), bandCount: 1 };
+    71→
+    72→  // adjacency (unit digraph, self-loops ignored)
+    73→  const preds = new Map<string, Set<string>>();
+    74→  const succs = new Map<string, Set<string>>();
+    75→  for (const u of units) {
+    76→    preds.set(u.id, new Set());
+    77→    succs.set(u.id, new Set());
+    78→  }
+    79→  for (const s of graph.streams) {
+    80→    if (s.to && s.to.unit !== s.from.unit) {
+    81→      preds.get(s.to.unit)?.add(s.from.unit);
+    82→      succs.get(s.from.unit)?.add(s.to.unit);
+    83→    }
+    84→  }
+    85→
+    86→  // BFS depth from units with no predecessors (feeds)
+    87→  const depth = new Map<string, number>();
+    88→  const queue: string[] = [];
+    89→  for (const u of units) {
+    90→    if ((preds.get(u.id) ?? new Set()).size === 0) {
+    91→      depth.set(u.id, 0);
+    92→      queue.push(u.id);
+    93→    }
+    94→  }
+    95→  while (queue.length > 0) {
+    96→    const cur = queue.shift()!;
+    97→    const d = depth.get(cur) ?? 0;
+    98→    for (const next of succs.get(cur) ?? []) {
+    99→      const nd = d + 1;
+   100→      if ((depth.get(next) ?? Infinity) > nd) {
+   101→        depth.set(next, nd);
+   102→        queue.push(next);
+   103→      }
+   104→    }
+   105→  }
+   106→  // unreachable units (shouldn't happen post-validation) park at depth 0
+   107→  for (const u of units) if (!depth.has(u.id)) depth.set(u.id, 0);
+   108→
+   109→  // group by depth, preserving insertion (build) order within a column
+   110→  const byDepth = new Map<number, string[]>();
+   111→  for (const u of units) {
+   112→    const d = depth.get(u.id) ?? 0;
+   113→    if (!byDepth.has(d)) byDepth.set(d, []);
+   114→    byDepth.get(d)!.push(u.id);
+   115→  }
+   116→  const maxDepth = Math.max(...byDepth.keys());
+   117→  const maxColLen = Math.max(...[...byDepth.values()].map((v) => v.length), 1);
+   118→
+   119→  const bandCount = Math.floor(maxDepth / BAND_COLS) + 1;
+   120→  const bandGap = 64;
+   121→  const placed = new Map<string, Placed>();
+   122→  for (const u of units) {
+   123→    const d = depth.get(u.id) ?? 0;
+   124→    const col = byDepth.get(d)!.indexOf(u.id);
+   125→    const band = Math.floor(d / BAND_COLS);
+   126→    // wrap the chain into bands: column position within the band, band rows
+   127→    // stacked vertically — keeps the canvas near-square instead of 20-wide
+   128→    const x = PAD + (d % BAND_COLS) * COL_W;
+   129→    const y = PAD + band * (maxColLen * ROW_H + bandGap) + col * ROW_H + (band % 2 === 1 ? 24 : 0);
+   130→    placed.set(u.id, { id: u.id, x, y, depth: d, col, band });
+   131→  }
+   132→
+   133→  const width = PAD * 2 + Math.min(maxDepth + 1, BAND_COLS) * COL_W;
+   134→  const height = PAD * 2 + bandCount * (maxColLen * ROW_H) + (bandCount - 1) * bandGap + 48;
+   135→  return { width: Math.max(width, 900), height: Math.max(height, 360), units: placed, bandCount };
+   136→}
+   137→
+   138→function Arrow({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
+   139→  const L = 11;
+   140→  const W = 5.5;
+   141→  return (
+   142→    <polygon
+   143→      points={`${x},${y} ${x - L * Math.cos(angle) + W * Math.sin(angle)},${y - L * Math.sin(angle) - W * Math.cos(angle)} ${x - L * Math.cos(angle) - W * Math.sin(angle)},${y - L * Math.sin(angle) + W * Math.cos(angle)}`}
+   144→      style={{ fill: color, pointerEvents: 'none' }}
+   145→    />
+   146→  );
+   147→}
+   148→
+   149→const fmt = (x: number, d = 0) =>
+   150→  x.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+   151→
+   152→/** keep a view inside the layout bounds (some overhang allowed, like the reference canvas) */
+   153→function clampView(v: View, L: Layout): View {
+   154→  const w = Math.min(L.width * 1.6, Math.max(L.width / 5, v.w));
+   155→  const h = w * (L.height / L.width);
+   156→  const x = Math.min(L.width - w * 0.25, Math.max(-w * 0.75, v.x));
+   157→  const y = Math.min(L.height - h * 0.25, Math.max(-h * 0.75, v.y));
+   158→  return { x, y, w, h };
+   159→}
+   160→
+   161→/** live-value solves, memoized per graph snapshot (mid-build snapshots may be
+   162→    unsolvable — null is cached too, so nothing ever blocks or re-solves) */
+   163→const solveCache = new WeakMap<FlowGraph, PlantResult | null>();
+   164→
+   165→function solveFor(g: FlowGraph): PlantResult | null {
+   166→  if (!solveCache.has(g)) {
+   167→    let r: PlantResult | null = null;
+   168→    try {
+   169→      r = executeGraph(g);
+   170→    } catch {
+   171→      r = null; // mid-build snapshots may be unsolvable — that is fine
+   172→    }
+   173→    solveCache.set(g, r);
+   174→  }
+   175→  return solveCache.get(g) ?? null;
+   176→}
+   177→
+   178→/** tooltip payload for a stream — live values when the graph solves, structure otherwise */
+   179→function streamTip(s: StreamEdge, result: PlantResult | null) {
+   180→  const rows: Array<{ k: string; v: string }> = [];
+   181→  const live = result?.streams[s.id];
+   182→  if (live) {
+   183→    const tot = live.n.reduce((a, b) => a + b, 0) || 1;
+   184→    const top = live.n
+   185→      .map((v, i) => ({ sp: SPECIES[i], x: v / tot }))
+   186→      .filter((e) => e.x > 0.005)
+   187→      .sort((a, b) => b.x - a.x)
+   188→      .slice(0, 4);
+   189→    rows.push(
+   190→      { k: 'T', v: `${fmt(live.T - 273.15)} °C` },
+   191→      { k: 'P', v: `${fmt(live.P / 1e5, 1)} bar` },
+   192→      { k: 'Flow', v: `${fmt(tot)} kmol/h` },
+   193→    );
+   194→    return {
+   195→      title: `${s.id} · ${s.name || s.cls}`,
+   196→      rows,
+   197→      foot: top.map((e) => `${e.sp} ${(e.x * 100).toFixed(1)}%`).join(' · '),
+   198→    };
+   199→  }
+   200→  rows.push(
+   201→    { k: 'from', v: s.from.unit },
+   202→    { k: 'to', v: s.to ? s.to.unit : 'sink' },
+   203→    { k: 'class', v: s.cls },
+   204→  );
+   205→  return { title: `${s.id} · ${s.name || s.cls}`, rows, foot: 'values appear once this snapshot solves' };
+   206→}
+   207→
+   208→export interface BuildCanvasHandle {
+   209→  fit: () => void;
+   210→}
+   211→
+   212→export interface BuildCanvasProps {
+   213→  graph: FlowGraph | null;
+   214→  selected: string | null;
+   215→  onUnitClick?: (id: string) => void;
+   216→  onBackgroundClick?: () => void;
+   217→  /** when true (post-build) the live-value cache is warmed in the background */
+   218→  warm?: boolean;
+   219→}
+   220→
+   221→type View = { x: number; y: number; w: number; h: number };
+   222→type Hover = { type: 'unit' | 'stream'; id: string } | null;
+   223→
+   224→export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(function BuildCanvas(
+   225→  { graph, selected, onUnitClick, onBackgroundClick, warm },
+   226→  ref,
+   227→) {
+   228→  const wrapRef = useRef<HTMLDivElement>(null);
+   229→  const layout = useMemo(() => (graph ? computeLayout(graph) : null), [graph]);
+   230→  // flow dots: material movement on the streams, speed from the SOLVER's
+   231→  // real molar flows (fast streams animate fast). Off by default when the
+   232→  // user prefers reduced motion.
+   233→  const [flowOn, setFlowOn] = useState(() =>
+   234→    typeof window === 'undefined' || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+   235→  );
+   236→
+   237→  // solved molar flow per stream (drives dot speed + count + product tint)
+   238→  // — cached solve; null while a mid-build snapshot does not solve yet
+   239→  const flowInfo = useMemo(() => {
+   240→    if (!graph || !flowOn) return null;
+   241→    const r = solveFor(graph);
+   242→    if (!r) return null;
+   243→    let max = 0;
+   244→    const flow = new Map<string, number>();
+   245→    for (const [id, st] of Object.entries(r.streams)) {
+   246→      let t = 0;
+   247→      for (let i = 0; i < st.n.length; i++) t += st.n[i];
+   248→      flow.set(id, t);
+   249→      if (t > max) max = t;
+   250→    }
+   251→    return { flow, max, comp: r.streams, productSpecies: r.kpis.productSpecies };
+   252→  }, [graph, flowOn]);
+   253→  // the user's frame — null means "fit the whole layout". The effective view is
+   254→  // DERIVED (clamped against the current layout), so a growing canvas keeps
+   255→  // fitting while the user's zoomed frame stays clamped — no state syncing.
+   256→  const [view, setView] = useState<View | null>(null);
+   257→  const effView = useMemo(
+   258→    () =>
+   259→      layout
+   260→        ? view
+   261→          ? clampView(view, layout)
+   262→          : { x: 0, y: 0, w: layout.width, h: layout.height }
+   263→        : { x: 0, y: 0, w: 900, h: 360 },
+   264→    [view, layout],
+   265→  );
+   266→  const viewRef = useRef(effView);
+   267→  useEffect(() => {
+   268→    viewRef.current = effView;
+   269→  }, [effView]);
+   270→  const [hover, setHover] = useState<Hover>(null);
+   271→  const [tipPos, setTipPos] = useState({ x: 0, y: 0 });
+   272→  const [hinted, setHinted] = useState(true);
+   273→  const [dragging, setDragging] = useState(false);
+   274→  const movedRef = useRef(false);
+   275→
+   276→  // entrance choreography: new ids animate once (≈700ms), then the class
+   277→  // releases so re-renders never replay the animation
+   278→  const doneRef = useRef<Set<string>>(new Set());
+   279→  const [fresh, setFresh] = useState<Set<string>>(new Set());
+   280→  useEffect(() => {
+   281→    if (!graph || graph.units.length === 0) {
+   282→      doneRef.current = new Set();
+   283→      setFresh(new Set());
+   284→      return;
+   285→    }
+   286→    const ids: string[] = [];
+   287→    for (const u of graph.units) if (!doneRef.current.has(u.id)) ids.push(u.id);
+   288→    for (const s of graph.streams) if (!doneRef.current.has(s.id)) ids.push(s.id);
+   289→    if (ids.length === 0) return;
+   290→    ids.forEach((id) => doneRef.current.add(id));
+   291→    setFresh((prev) => {
+   292→      const n = new Set(prev);
+   293→      ids.forEach((id) => n.add(id));
+   294→      return n;
+   295→    });
+   296→    const t = window.setTimeout(() => {
+   297→      setFresh((prev) => {
+   298→        const n = new Set(prev);
+   299→        ids.forEach((id) => n.delete(id));
+   300→        return n;
+   301→      });
+   302→    }, 760);
+   303→    return () => window.clearTimeout(t);
+   304→  }, [graph]);
+   305→
+   306→  const fitView = useCallback(
+   307→    () => (layout ? { x: 0, y: 0, w: layout.width, h: layout.height } : { x: 0, y: 0, w: 900, h: 360 }),
+   308→    [layout],
+   309→  );
+   310→
+   311→  // grid routing — corridors and lanes only, so a line can never cross a
+   312→  // unit. MEMOIZED on (graph, layout): hover re-renders must not re-route,
+   313→  // and the flow-dot specs below need a stable identity so the particle
+   314→  // layer never rebuilds its path tables mid-animation.
+   315→  const routed = useMemo(() => {
+   316→    if (!graph || !layout || graph.units.length === 0) return null;
+   317→    const pos = layout.units;
+   318→    const rects: RRect[] = graph.units.map((u) => {
+   319→      const p = pos.get(u.id)!;
+   320→      return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+   321→    });
+   322→    const grid = buildGrid(rects, layout.width, layout.height);
+   323→    const pairSeen = new Map<string, number>();
+   324→    let recycleLanes = 0;
+   325→
+   326→    const out = graph.streams.map((s) => {
+   327→      const st = STREAM_STYLE[s.cls] ?? STREAM_STYLE.syngas;
+   328→      const a = pos.get(s.from.unit);
+   329→      if (!a) return null;
+   330→      const rectOf = (id: string): RRect => {
+   331→        const p = pos.get(id)!;
+   332→        return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+   333→      };
+   334→      let d = '';
+   335→      let endX = 0;
+   336→      let endY = 0;
+   337→      let endAngle = 0;
+   338→      let pill = { x: 0, y: 0 };
+   339→      let selfLoop = false;
+   340→      if (s.to && s.to.unit === s.from.unit) {
+   341→        // self-loop (internal recycle, e.g. separator letdown)
+   342→        selfLoop = true;
+   343→        const x0 = a.x + NODE_W - 26;
+   344→        const y0 = a.y + NODE_H;
+   345→        const x1 = a.x + 26;
+   346→        d = `M ${x0} ${y0} C ${x0 + 26} ${y0 + 34}, ${x1 - 26} ${y0 + 34}, ${x1} ${y0}`;
+   347→        endX = x1;
+   348→        endY = y0;
+   349→        endAngle = Math.PI; // pointing left into the unit
+   350→        pill = { x: (x0 + x1) / 2, y: y0 + 26 };
+   351→      } else {
+   352→        const ra = rectOf(s.from.unit);
+   353→        const rb = s.to ? rectOf(s.to.unit) : null;
+   354→        const forward = s.to
+   355→          ? (pos.get(s.to.unit)?.depth ?? 0) > a.depth
+   356→          : true;
+   357→        const key = `${s.from.unit}→${s.to?.unit ?? 'env'}`;
+   358→        const pairIndex = pairSeen.get(key) ?? 0;
+   359→        pairSeen.set(key, pairIndex + 1);
+   360→        const laneIndex = forward ? 0 : recycleLanes++;
+   361→        const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
+   362→        d = roundedPath(r.pts, 10);
+   363→        const last = r.pts[r.pts.length - 1];
+   364→        endX = last[0];
+   365→        endY = last[1];
+   366→        endAngle = r.endAngle;
+   367→        pill = pointAt(r.pts, 0.5);
+   368→      }
+   369→      const pillW = 12 + s.id.length * 8;
+   370→      return { s, st, d, endX, endY, endAngle, pill, pillW, selfLoop };
+   371→    });
+   372→    return out;
+   373→  }, [graph, layout]);
+   374→
+   375→  // flow-dot specs — the SOLVED state mapped onto the routed lines. Speed,
+   376→  // count, size from real molar flows; color from stream class unless the
+   377→  // stream carries the plant's declared product (then the product hue —
+   378→  // ammonia-rich gas green, sulphur-laden gas gold).
+   379→  const flowSpecs = useMemo(() => {
+   380→    if (!routed || !flowInfo) return [];
+   381→    const specs: FlowSpec[] = [];
+   382→    for (const it of routed) {
+   383→      if (!it || it.s.implicit) continue;
+   384→      const flow = flowInfo.flow.get(it.s.id) ?? 0;
+   385→      if (flow <= 1e-6) continue;
+   386→      const st = flowInfo.comp[it.s.id];
+   387→      specs.push({
+   388→        id: it.s.id,
+   389→        d: it.d,
+   390→        flow,
+   391→        color: dotColor(it.s.cls, st?.n, flowInfo.productSpecies),
+   392→        liquid: it.s.cls === 'product' || it.s.cls === 'water',
+   393→        pillAt: it.selfLoop ? undefined : 0.5,
+   394→      });
+   395→    }
+   396→    return specs;
+   397→  }, [routed, flowInfo]);
+   398→
+   399→  // post-build: warm the cache so first hover is instant
+   400→  useEffect(() => {
+   401→    if (!warm || !graph) return;
+   402→    const g = graph;
+   403→    const t = window.setTimeout(() => solveFor(g), 400);
+   404→    return () => window.clearTimeout(t);
+   405→  }, [warm, graph]);
+   406→
+   407→  /** letterbox-aware client→world mapping (view keeps the layout aspect) */
+   408→  const worldFromClient = useCallback((cx: number, cy: number) => {
+   409→    const el = wrapRef.current!;
+   410→    const r = el.getBoundingClientRect();
+   411→    const L = layout!;
+   412→    const aspect = L.width / L.height;
+   413→    let dw = r.width;
+   414→    let dh = r.height;
+   415→    if (r.width / r.height > aspect) dw = r.height * aspect;
+   416→    else dh = r.width / aspect;
+   417→    const ox = (r.width - dw) / 2;
+   418→    const oy = (r.height - dh) / 2;
+   419→    const v = viewRef.current;
+   420→    return {
+   421→      x: v.x + ((cx - r.left - ox) / dw) * v.w,
+   422→      y: v.y + ((cy - r.top - oy) / dh) * v.h,
+   423→      pxPerWorld: dw / v.w,
+   424→    };
+   425→  }, [layout]);
+   426→
+   427→  const zoomAtWorld = useCallback(
+   428→    (wx: number, wy: number, factor: number) => {
+   429→      setHinted(false);
+   430→      setView((v) => {
+   431→        const base = v ?? fitView();
+   432→        const nw = base.w / factor;
+   433→        const k = nw / base.w;
+   434→        return { x: wx - (wx - base.x) * k, y: wy - (wy - base.y) * k, w: nw, h: nw * (base.h / base.w) };
+   435→      });
+   436→    },
+   437→    [fitView],
+   438→  );
+   439→
+   440→  const fit = useCallback(() => {
+   441→    setHinted(false);
+   442→    setView(null);
+   443→  }, []);
+   444→
+   445→  useImperativeHandle(ref, () => ({ fit }));
+   446→
+   447→  // wheel zoom
+   448→  useEffect(() => {
+   449→    const el = wrapRef.current;
+   450→    if (!el || !layout) return;
+   451→    const onWheel = (e: WheelEvent) => {
+   452→      e.preventDefault();
+   453→      const w = worldFromClient(e.clientX, e.clientY);
+   454→      zoomAtWorld(w.x, w.y, e.deltaY < 0 ? 1.14 : 1 / 1.14);
+   455→    };
+   456→    el.addEventListener('wheel', onWheel, { passive: false });
+   457→    return () => el.removeEventListener('wheel', onWheel);
+   458→  }, [zoomAtWorld, worldFromClient, layout]);
+   459→
+   460→  // drag pan + pinch zoom + drag-vs-click suppression
+   461→  useEffect(() => {
+   462→    const el = wrapRef.current;
+   463→    if (!el || !layout) return;
+   464→    const pts = new Map<number, { x: number; y: number }>();
+   465→    let moved = 0;
+   466→    let lastDist = 0;
+   467→
+   468→    const down = (e: PointerEvent) => {
+   469→      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   470→      moved = 0;
+   471→      movedRef.current = false;
+   472→      lastDist = 0;
+   473→      if (pts.size === 1) setDragging(true);
+   474→    };
+   475→    const move = (e: PointerEvent) => {
+   476→      if (!pts.has(e.pointerId)) return;
+   477→      const prev = pts.get(e.pointerId)!;
+   478→      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   479→      moved += Math.hypot(e.clientX - prev.x, e.clientY - prev.y);
+   480→      if (moved > 4) {
+   481→        movedRef.current = true;
+   482→        setHinted(false);
+   483→      }
+   484→      if (pts.size === 1) {
+   485→        const v = viewRef.current;
+   486→        const px = worldFromClient(prev.x, prev.y).pxPerWorld;
+   487→        setView({ x: v.x - (e.clientX - prev.x) / px, y: v.y - (e.clientY - prev.y) / px, w: v.w, h: v.h });
+   488→      } else if (pts.size === 2) {
+   489→        const [a, b] = [...pts.values()];
+   490→        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+   491→        if (lastDist > 0 && dist > 0) {
+   492→          const w = worldFromClient((a.x + b.x) / 2, (a.y + b.y) / 2);
+   493→          zoomAtWorld(w.x, w.y, dist / lastDist);
+   494→        }
+   495→        lastDist = dist;
+   496→      }
+   497→    };
+   498→    const up = (e: PointerEvent) => {
+   499→      pts.delete(e.pointerId);
+   500→      lastDist = 0;
+   501→      if (pts.size === 0) setDragging(false);
+   502→      // allow click right after a suppressed drag ends
+   503→      window.setTimeout(() => {
+   504→        movedRef.current = false;
+   505→      }, 60);
+   506→    };
+   507→    el.addEventListener('pointerdown', down);
+   508→    el.addEventListener('pointermove', move);
+   509→    el.addEventListener('pointerup', up);
+   510→    el.addEventListener('pointercancel', up);
+   511→    return () => {
+   512→      el.removeEventListener('pointerdown', down);
+   513→      el.removeEventListener('pointermove', move);
+   514→      el.removeEventListener('pointerup', up);
+   515→      el.removeEventListener('pointercancel', up);
+   516→    };
+   517→  }, [zoomAtWorld, worldFromClient, layout]);
+   518→
+   519→  const onKeyDown = (e: React.KeyboardEvent) => {
+   520→    const v = viewRef.current;
+   521→    const pan = (fx: number, fy: number) =>
+   522→      setView({ x: v.x + v.w * fx, y: v.y + v.h * fy, w: v.w, h: v.h });
+   523→    if (e.key === '+' || e.key === '=') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1.2);
+   524→    else if (e.key === '-') zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);
+   525→    else if (e.key === 'f' || e.key === '0') fit();
+   526→    else if (e.key === 'ArrowLeft') pan(0.08, 0);
+   527→    else if (e.key === 'ArrowRight') pan(-0.08, 0);
+   528→    else if (e.key === 'ArrowUp') pan(0, 0.08);
+   529→    else if (e.key === 'ArrowDown') pan(0, -0.08);
+   530→    else return;
+   531→    e.preventDefault();
+   532→  };
+   533→
+   534→  if (!graph || !layout || graph.units.length === 0) {
+   535→    return (
+   536→      <div className="relative h-full w-full" style={{ background: C.canvas }}>
+   537→        {/* the one coherent box, waiting for the flowsheet to be drawn on it */}
+   538→        <svg
+   539→          viewBox="0 0 900 360"
+   540→          preserveAspectRatio="xMidYMid meet"
+   541→          style={{ display: 'block', width: '100%', height: '100%' }}
+   542→          aria-hidden="true"
+   543→        >
+   544→          <defs>
+   545→            <filter id="bcSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
+   546→              <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.2" />
+   547→            </filter>
+   548→          </defs>
+   549→          <rect
+   550→            x={10}
+   551→            y={10}
+   552→            width={880}
+   553→            height={340}
+   554→            rx={6}
+   555→            strokeWidth={1.8}
+   556→            filter="url(#bcSheetShadow)"
+   557→            style={{ fill: C.sheet, stroke: C.bandLine }}
+   558→          />
+   559→        </svg>
+   560→        <div className="absolute inset-0 flex items-center justify-center">
+   561→          <div className="text-center">
+   562→            <div className="font-mono text-[13px] font-bold tracking-widest" style={{ color: C.inkFaint }}>
+   563→              THE SHEET IS WAITING
+   564→            </div>
+   565→            <div className="mt-2 max-w-[300px] text-[12.5px]" style={{ color: C.inkSoft }}>
+   566→              Units the engineer places will appear here, live, on one sheet — as the build runs.
+   567→            </div>
+   568→          </div>
+   569→        </div>
+   570→      </div>
+   571→    );
+   572→  }
+   573→
+   574→  const { width: W, height: H, units: pos } = layout;
+   575→  const streams = routed!;
+   576→
+   577→  const hoveredStream = hover?.type === 'stream' ? graph.streams.find((x) => x.id === hover.id) : undefined;
+   578→  const hoveredUnit = hover?.type === 'unit' ? graph.units.find((x) => x.id === hover.id) : undefined;
+   579→
+   580→  const tipData = (() => {
+   581→    if (hoveredStream) return streamTip(hoveredStream, solveFor(graph));
+   582→    if (hoveredUnit) {
+   583→      const def = getUnitType(hoveredUnit.type);
+   584→      return {
+   585→        title: `${hoveredUnit.id} · ${def?.name ?? hoveredUnit.type}`,
+   586→        rows: [] as Array<{ k: string; v: string }>,
+   587→        foot: def ? def.model(resolveSpecs(hoveredUnit)) : hoveredUnit.type,
+   588→      };
+   589→    }
+   590→    return null;
+   591→  })();
+   592→
+   593→  return (
+   594→    <div
+   595→      ref={wrapRef}
+   596→      tabIndex={0}
+   597→      onKeyDown={onKeyDown}
+   598→      className="relative h-full w-full overflow-hidden outline-none"
+   599→      style={{ background: C.canvas, touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
+   600→      onPointerMove={(e) => {
+   601→        const r = wrapRef.current?.getBoundingClientRect();
+   602→        if (r) {
+   603→          setTipPos({
+   604→            x: Math.min(e.clientX - r.left + 16, r.width - 250),
+   605→            y: e.clientY - r.top + 14,
+   606→          });
+   607→        }
+   608→      }}
+   609→    >
+   610→      <svg
+   611→        viewBox={`${effView.x} ${effView.y} ${effView.w} ${effView.h}`}
+   612→        preserveAspectRatio="xMidYMid meet"
+   613→        style={{ display: 'block', width: '100%', height: '100%', fontFamily: 'inherit' }}
+   614→        aria-label="Plant flowsheet being built by the AI agent"
+   615→        onClick={(e) => {
+   616→          if (e.target === e.currentTarget && !movedRef.current) onBackgroundClick?.();
+   617→        }}
+   618→      >
+   619→        <defs>
+   620→          {/* catalyst / packing hatch — shared with the reference canvas symbols */}
+   621→          <pattern id="fsHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+   622→            <line x1="0" y1="0" x2="0" y2="7" strokeWidth="1.3" style={{ stroke: C.inkSoft }} />
+   623→          </pattern>
+   624→          {/* the sheet lies ON the canvas — a soft shadow gives it that */}
+   625→          <filter id="bcSheetShadow" x="-4%" y="-4%" width="108%" height="112%">
+   626→            <feDropShadow dx="0" dy="4" stdDeviation="7" floodOpacity="0.2" />
+   627→          </filter>
+   628→        </defs>
+   629→        {/* one coherent sheet — the box the whole flowsheet is drawn on.
+   630→            It grows to wrap every unit the engineer places, so all bands of
+   631→            the plant (however many) lie on the same big thing. */}
+   632→        <rect
+   633→          x={10}
+   634→          y={10}
+   635→          width={W - 20}
+   636→          height={H - 20}
+   637→          rx={6}
+   638→          strokeWidth={1.8}
+   639→          filter="url(#bcSheetShadow)"
+   640→          style={{ fill: C.sheet, stroke: C.bandLine, pointerEvents: 'none' }}
+   641→        />
+   642→        {streams.map((it) =>
+   643→          it ? (
+   644→            <g key={it.s.id} opacity={it.s.implicit ? 0.55 : 1}>
+   645→              {/* fat invisible hit path — hover + live values */}
+   646→              <path
+   647→                d={it.d}
+   648→                fill="none"
+   649→                strokeWidth={16}
+   650→                stroke="rgba(0,0,0,0)"
+   651→                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+   652→                onPointerEnter={() => setHover({ type: 'stream', id: it.s.id })}
+   653→                onPointerLeave={() => setHover((h) => (h?.id === it.s.id ? null : h))}
+   654→              />
+   655→              {/* the line draws itself in; dashed utilities skip the draw-on
+   656→                  so their dash pattern is never disturbed */}
+   657→              <path
+   658→                d={it.d}
+   659→                fill="none"
+   660→                pathLength={1}
+   661→                strokeWidth={hover?.id === it.s.id ? STREAM_W_HI : STREAM_W}
+   662→                strokeDasharray={it.st.dash}
+   663→                strokeLinecap="round"
+   664→                className={fresh.has(it.s.id) && !it.st.dash ? 'bd-draw' : undefined}
+   665→                style={{ stroke: it.st.color, pointerEvents: 'none' }}
+   666→              />
+   667→              <g className={fresh.has(it.s.id) ? 'bd-pop' : undefined} style={{ pointerEvents: 'none' }}>
+   668→                <Arrow x={it.endX} y={it.endY} angle={it.endAngle} color={it.st.color} />
+   669→              </g>
+   670→              {!it.s.implicit && (
+   671→                <g className={fresh.has(it.s.id) ? 'bd-late' : undefined} style={{ pointerEvents: 'none' }}>
+   672→                  <rect x={it.pill.x - it.pillW / 2} y={it.pill.y - 10} width={it.pillW} height={20} rx={10} strokeWidth={1.2} style={{ fill: C.paper, stroke: it.st.color }} />
+   673→                  <text x={it.pill.x} y={it.pill.y + 4.5} textAnchor="middle" fontSize={11} fontWeight={700} style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+   674→                    {it.s.id}
+   675→                  </text>
+   676→                </g>
+   677→              )}
+   678→            </g>
+   679→          ) : null,
+   680→        )}
+   681→
+   682→        {graph.units.map((u) => {
+   683→          const p = pos.get(u.id)!;
+   684→          const def = getUnitType(u.type);
+   685→          const sel = selected === u.id;
+   686→          return (
+   687→            <g
+   688→              key={u.id}
+   689→              transform={`translate(${p.x}, ${p.y})`}
+   690→              style={{ cursor: 'pointer' }}
+   691→              onClick={() => {
+   692→                if (!movedRef.current) onUnitClick?.(u.id);
+   693→              }}
+   694→              onPointerEnter={() => setHover({ type: 'unit', id: u.id })}
+   695→              onPointerLeave={() => setHover((h) => (h?.id === u.id ? null : h))}
+   696→            >
+   697→              {/* transparent hit area — visuals below are pointer-events:none */}
+   698→              <rect x={-10} y={-10} width={NODE_W + 20} height={NODE_H + 20} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
+   699→              <g
+   700→                className={fresh.has(u.id) ? 'bd-unit-in' : undefined}
+   701→                style={{ pointerEvents: 'none' }}
+   702→              >
+   703→                {sel && <rect x={-9} y={-9} width={NODE_W + 18} height={NODE_H + 18} rx={14} style={{ fill: C.halo }} />}
+   704→                <rect
+   705→                  width={NODE_W}
+   706→                  height={NODE_H}
+   707→                  rx={11}
+   708→                  strokeWidth={sel ? 2.6 : 1.8}
+   709→                  style={{ fill: C.paper, stroke: sel ? C.ink : hover?.id === u.id ? C.inkSoft : C.inkFaint }}
+   710→                />
+   711→                {/* the equipment silhouette — same grammar as the reference
+   712→                    canvas, so a plant keeps its shape wherever it renders */}
+   713→                <g transform={`translate(${(NODE_W - GLYPH_W) / 2}, 13)`}>
+   714→                  <UnitSymbol node={glyphNode(u.id, u.type, GLYPH_W, GLYPH_H)} hi={hover?.id === u.id} sel={sel} />
+   715→                </g>
+   716→                <text
+   717→                  x={NODE_W / 2}
+   718→                  y={NODE_H - 22}
+   719→                  textAnchor="middle"
+   720→                  fontSize={13}
+   721→                  fontWeight={800}
+   722→                  style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+   723→                >
+   724→                  {u.id}
+   725→                </text>
+   726→                <text x={NODE_W / 2} y={NODE_H - 8} textAnchor="middle" fontSize={10} fontWeight={600} style={{ fill: C.inkSoft }}>
+   727→                  {(def?.name ?? u.type).slice(0, 26)}
+   728→                </text>
+   729→                <circle cx={0} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
+   730→                <circle cx={NODE_W} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
+   731→              </g>
+   732→            </g>
+   733→          );
+   734→        })}
+   735→      </svg>
+   736→
+   737→      {/* material movement — dots on the solved flows, sharing the exact
+   738→          viewBox so pan/zoom carries them; toggled by ⌁ beside the zoom */}
+   739→      <FlowLayer view={effView} streams={flowSpecs} active={flowOn} />
+   740→
+   741→      {/* hover tooltip */}
+   742→      {hover && tipData && (
+   743→        <div
+   744→          className="pointer-events-none absolute z-20 w-[240px] rounded-lg border px-3 py-2 text-[12px] leading-snug"
+   745→          style={{
+   746→            background: C.paper,
+   747→            borderColor: 'var(--fs-band-line)',
+   748→            color: C.ink,
+   749→            boxShadow: 'var(--fs-tip-shadow)',
+   750→            left: tipPos.x,
+   751→            top: tipPos.y,
+   752→          }}
+   753→        >
+   754→          <div className="mb-1 font-mono text-[11px] font-bold tracking-wide">{tipData.title}</div>
+   755→          {tipData.rows.map((r) => (
+   756→            <div key={r.k} className="flex justify-between gap-4">
+   757→              <span style={{ color: C.inkSoft }}>{r.k}</span>
+   758→              <span className="font-mono">{r.v}</span>
+   759→            </div>
+   760→          ))}
+   761→          {tipData.foot && (
+   762→            <div className="mt-1 border-t pt-1 font-mono text-[10.5px]" style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}>
+   763→              {tipData.foot}
+   764→            </div>
+   765→          )}
+   766→        </div>
+   767→      )}
+   768→
+   769→      {/* first-visit hint */}
+   770→      {hinted && (
+   771→        <div
+   772→          className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border px-3.5 py-1.5 text-[11px] font-medium tracking-wide"
+   773→          style={{ background: 'var(--fs-paper-a95)', borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+   774→        >
+   775→          Drag to pan · scroll to zoom · hover a stream · click a unit
+   776→        </div>
+   777→      )}
+   778→
+   779→      {/* legend */}
+   780→      <div
+   781→        className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-[10.5px] font-semibold tracking-wide"
+   782→        style={{ background: 'var(--fs-paper-a95)', borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+   783→      >
+   784→        <span className="flex items-center gap-1.5">
+   785→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.feed }} /> FEED
+   786→        </span>
+   787→        <span className="flex items-center gap-1.5">
+   788→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.gas }} /> PROCESS GAS
+   789→        </span>
+   790→        <span className="flex items-center gap-1.5">
+   791→          <span className="h-[3px] w-5 rounded-full" style={{ background: C.nh3 }} /> NH3
+   792→        </span>
+   793→        <span className="flex items-center gap-1.5">
+   794→          <span className="w-5 border-t-2 border-dashed" style={{ borderColor: C.inkFaint }} />
+   795→          UTILITIES
+   796→        </span>
+   797→      </div>
+   798→
+   799→      {/* zoom + flow controls */}
+   800→      <div
+   801→        className="absolute bottom-3 right-3 z-10 flex overflow-hidden rounded-lg border"
+   802→        style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}
+   803→      >
+   804→        <button
+   805→          aria-label={flowOn ? 'Hide material flow animation' : 'Show material flow animation'}
+   806→          title={flowOn ? 'Hide material flow' : 'Show material flow (dot speed = real molar flow)'}
+   807→          onClick={() => setFlowOn((v) => !v)}
+   808→          className="hover-band h-8 w-10 border-l text-[11px] font-bold tracking-wider"
+   809→          style={{
+   810→            color: flowOn ? it_flowActiveColor : C.inkFaint,
+   811→            borderColor: 'var(--fs-band-line)',
+   812→          }}
+   813→        >
+   814→          ⌁
+   815→        </button>
+   816→        <button
+   817→          aria-label="Zoom out"
+   818→          className="hover-band h-8 w-8 border-l text-sm font-bold"
+   819→          style={{ color: C.ink }}
+   820→          onClick={() => {
+   821→            const v = viewRef.current;
+   822→            zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1 / 1.2);
+   823→          }}
+   824→        >
+   825→          −
+   826→        </button>
+   827→        <button
+   828→          aria-label="Zoom in"
+   829→          className="hover-band h-8 w-8 border-l text-sm font-bold"
+   830→          style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
+   831→          onClick={() => {
+   832→            const v = viewRef.current;
+   833→            zoomAtWorld(v.x + v.w / 2, v.y + v.h / 2, 1.2);
+   834→          }}
+   835→        >
+   836→          +
+   837→        </button>
+   838→        <button
+   839→          aria-label="Fit to screen"
+   840→          className="hover-band h-8 w-10 border-l text-[11px] font-bold tracking-wider"
+   841→          style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
+   842→          onClick={fit}
+   843→        >
+   844→          FIT
+   845→        </button>
+   846→      </div>
+   847→    </div>
+   848→  );
+   849→});
+   850→
+   851→/** compact spec inspector for the selected unit (pure registry reads) */
+   852→export function UnitInspector({ graph, unitId, onClose }: { graph: FlowGraph; unitId: string; onClose: () => void }) {
+   853→  const u = graph.units.find((x) => x.id === unitId);
+   854→  if (!u) return null;
+   855→  const def = getUnitType(u.type);
+   856→  if (!def) return null;
+   857→  const specs = resolveSpecs(u);
+   858→  return (
+   859→    <div className="border-t px-4 py-3" style={{ background: C.paper }}>
+   860→      <div className="flex items-start justify-between gap-3">
+   861→        <div className="min-w-0">
+   862→          <div className="flex items-baseline gap-2">
+   863→            <span className="font-mono text-[15px] font-extrabold" style={{ color: C.ink }}>
+   864→              {u.id}
+   865→            </span>
+   866→            <span className="text-[13px] font-bold" style={{ color: C.inkSoft }}>
+   867→              {def.name}
+   868→            </span>
+   869→          </div>
+   870→          <div className="mt-0.5 text-[11.5px]" style={{ color: C.inkFaint }}>
+   871→            {def.model(specs)}
+   872→          </div>
+   873→        </div>
+   874→        <button onClick={onClose} className="hover-band shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold" style={{ color: C.inkSoft }}>
+   875→          close
+   876→        </button>
+   877→      </div>
+   878→      {def.specFields.length > 0 && (
+   879→        <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3 lg:grid-cols-4">
+   880→          {def.specFields.map((f) => {
+   881→            const val = specs[f.key];
+   882→            const changed = JSON.stringify(val) !== JSON.stringify(f.default);
+   883→            const shown = Array.isArray(val) ? `[${val.join(', ')}]` : String(val);
+   884→            return (
+   885→              <div key={f.key} className="flex items-baseline justify-between gap-2 border-b border-dashed py-0.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+   886→                <span className="font-mono text-[11px]" style={{ color: C.inkSoft }}>
+   887→                  {f.key}
+   888→                  {f.unit ? ` (${f.unit})` : ''}
+   889→                </span>
+   890→                <span className="font-mono text-[11px] font-bold" style={{ color: changed ? C.ink : C.inkFaint }}>
+   891→                  {shown}
+   892→                </span>
+   893→              </div>
+   894→            );
+   895→          })}
+   896→        </div>
+   897→      )}
+   898→    </div>
+   899→  );
+   900→}
+   901→

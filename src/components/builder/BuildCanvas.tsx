@@ -33,7 +33,8 @@ import { SPECIES } from '@/lib/engine/species';
 import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
 import { C, STREAM_STYLE, STREAM_W, STREAM_W_HI } from '@/lib/design/tokens';
 import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet/route';
-import { pointAt } from '@/lib/flowsheet/geom';
+import { pointAt, bboxOf, boxToAspect, type Box } from '@/lib/flowsheet/geom';
+import { tweenView } from '@/lib/flowsheet/camera';
 import { dotColor, type FlowSpec } from '@/lib/flowsheet/flowAnim';
 import { glyphNode } from '@/lib/flowsheet/glyphs';
 import { UnitSymbol } from '@/components/flowsheet/Symbols';
@@ -207,6 +208,8 @@ function streamTip(s: StreamEdge, result: PlantResult | null) {
 
 export interface BuildCanvasHandle {
   fit: () => void;
+  /** Learn-mode camera: fly (animated, user-cancellable) to a unit or stream */
+  flyToRef: (ref: { type: 'unit' | 'stream'; id: string }) => void;
 }
 
 export interface BuildCanvasProps {
@@ -267,6 +270,14 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
   useEffect(() => {
     viewRef.current = effView;
   }, [effView]);
+  // in-flight camera tween — cancelled by any user interaction
+  const animRef = useRef<(() => void) | null>(null);
+  const stopAnim = useCallback(() => {
+    if (animRef.current) {
+      animRef.current();
+      animRef.current = null;
+    }
+  }, []);
   const [hover, setHover] = useState<Hover>(null);
   const [tipPos, setTipPos] = useState({ x: 0, y: 0 });
   const [hinted, setHinted] = useState(true);
@@ -337,6 +348,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       let endAngle = 0;
       let pill = { x: 0, y: 0 };
       let selfLoop = false;
+      let pts: Array<[number, number]> | null = null;
       if (s.to && s.to.unit === s.from.unit) {
         // self-loop (internal recycle, e.g. separator letdown)
         selfLoop = true;
@@ -360,6 +372,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         const laneIndex = forward ? 0 : recycleLanes++;
         const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
         d = roundedPath(r.pts, 10);
+        pts = r.pts;
         const last = r.pts[r.pts.length - 1];
         endX = last[0];
         endY = last[1];
@@ -367,7 +380,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         pill = pointAt(r.pts, 0.5);
       }
       const pillW = 12 + s.id.length * 8;
-      return { s, st, d, endX, endY, endAngle, pill, pillW, selfLoop };
+      return { s, st, d, pts, endX, endY, endAngle, pill, pillW, selfLoop };
     });
     return out;
   }, [graph, layout]);
@@ -426,6 +439,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
 
   const zoomAtWorld = useCallback(
     (wx: number, wy: number, factor: number) => {
+      stopAnim();
       setHinted(false);
       setView((v) => {
         const base = v ?? fitView();
@@ -434,15 +448,51 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         return { x: wx - (wx - base.x) * k, y: wy - (wy - base.y) * k, w: nw, h: nw * (base.h / base.w) };
       });
     },
-    [fitView],
+    [stopAnim, fitView],
   );
 
   const fit = useCallback(() => {
+    stopAnim();
     setHinted(false);
     setView(null);
-  }, []);
+  }, [stopAnim]);
 
-  useImperativeHandle(ref, () => ({ fit }));
+  /** Learn-mode camera: fly to a unit's node or a stream's routed line.
+   *  Same math as the reference canvas's panTo — pad, aspect, clamp, tween —
+   *  and any drag/wheel/pinch from the user cancels the flight instantly. */
+  const flyToRef = useCallback(
+    (f: { type: 'unit' | 'stream'; id: string }) => {
+      if (!layout) return;
+      let box: Box | null = null;
+      if (f.type === 'unit') {
+        const p = layout.units.get(f.id);
+        if (p) box = { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+      } else if (routed) {
+        const it = routed.find((r) => r && r.s.id === f.id);
+        if (it) {
+          if (it.pts) box = bboxOf(it.pts, 30);
+          else {
+            // self-loop bezier hugs its own unit's bottom edge
+            const p = layout.units.get(it.s.from.unit);
+            if (p) box = { x: p.x, y: p.y, w: NODE_W, h: NODE_H + 44 };
+          }
+        }
+      }
+      if (!box) return;
+      stopAnim();
+      const target = clampView(
+        boxToAspect(bboxOf([[box.x, box.y], [box.x + box.w, box.y + box.h]], 70), layout.width / layout.height),
+        layout,
+      );
+      animRef.current = tweenView(viewRef.current, target, {
+        ms: 620,
+        onUpdate: (v) => setView(v),
+      });
+    },
+    [layout, routed, stopAnim],
+  );
+
+  useImperativeHandle(ref, () => ({ fit, flyToRef }), [fit, flyToRef]);
 
   // wheel zoom
   useEffect(() => {
@@ -470,6 +520,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       moved = 0;
       movedRef.current = false;
       lastDist = 0;
+      stopAnim(); // the user owns the camera now
       if (pts.size === 1) setDragging(true);
     };
     const move = (e: PointerEvent) => {
@@ -514,7 +565,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
     };
-  }, [zoomAtWorld, worldFromClient, layout]);
+  }, [zoomAtWorld, worldFromClient, layout, stopAnim]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const v = viewRef.current;
