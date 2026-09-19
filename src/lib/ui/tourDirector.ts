@@ -75,6 +75,22 @@ export function dwellFor(text: string): number {
   return Math.min(14000, 2600 + words * 270);
 }
 
+/**
+ * How long a caption should take to STREAM in, ms — words appear as Orion
+ * says them, never dumped onto the screen all at once.
+ *
+ *   voice on  → ~340 ms per word (≈176 wpm, the narrator's pace), so the
+ *               caption finishes about when the voice does;
+ *   voice off → 60% of the reading dwell: the reveal itself is readable,
+ *               and the tail gets the remaining 40% before auto-advance.
+ */
+export function streamFor(text: string, opts: { voice: boolean }): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  if (words <= 1) return 600;
+  if (opts.voice) return Math.min(14000, Math.max(1600, words * 340));
+  return Math.min(9000, Math.max(1200, dwellFor(text) * 0.6));
+}
+
 /** the stop to show, given the tour state (pure) */
 export function resolveStop(
   tour: Tour | null,

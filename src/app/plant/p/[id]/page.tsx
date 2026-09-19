@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Download, Wand2 } from 'lucide-react';
+import { Download, PanelRight, Wand2 } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { executeGraph } from '@/lib/engine';
 import type { FlowGraph } from '@/lib/engine/graph';
@@ -33,6 +33,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { CinemaBar } from '@/components/learn/CinemaBar';
 import { TourIndex } from '@/components/learn/TourIndex';
 import { useTourDirector } from '@/lib/ui/tourDirector';
+import { useCinemaPanel } from '@/lib/ui/useCinemaPanel';
 import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
 import { effectiveFamily, type PlantRecord } from '@/lib/projects/record';
 import { patchSpec } from '@/lib/projects/operate';
@@ -108,6 +109,9 @@ export default function ProjectPage() {
       ? director.stop.ref.id
       : userSelected;
   const touring = director.tour !== null;
+  // tours collapse the panel for a full-screen view; the user's toggle still
+  // works mid-tour and an untouched panel returns when the tour ends
+  const { showPanel, togglePanel } = useCinemaPanel(touring);
 
   const startTour = useCallback(() => {
     if (!tour) return;
@@ -240,6 +244,19 @@ export default function ProjectPage() {
             </button>
           </div>
           <button
+            onClick={togglePanel}
+            aria-label={showPanel ? 'Hide the side panel' : 'Show the side panel'}
+            title={showPanel ? 'Hide the side panel' : 'Show the side panel'}
+            className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border"
+            style={{
+              borderColor: C.bandLine,
+              color: showPanel ? C.ink : C.inkSoft,
+              background: showPanel ? C.band : C.paper,
+            }}
+          >
+            <PanelRight size={15} />
+          </button>
+          <button
             type="button"
             onClick={() => exportRecord(rec)}
             className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11.5px] font-bold"
@@ -299,7 +316,10 @@ export default function ProjectPage() {
         </section>
 
         {/* project panel — the mode axis owns it: the book in Learn, the
-            control room in Operate (the answer pinned, levers scroll under) */}
+            control room in Operate (the answer pinned, levers scroll under).
+            During a tour the cinema takes the width (useCinemaPanel); the
+            header toggle brings it back anytime. */}
+        {showPanel && (
         <aside
           className="flex h-[52dvh] w-full shrink-0 flex-col overflow-y-auto border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0"
           style={{ borderColor: C.bandLine, background: C.paper }}
@@ -426,6 +446,7 @@ export default function ProjectPage() {
             </>
           )}
         </aside>
+        )}
       </main>
     </div>
   );
