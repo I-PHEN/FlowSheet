@@ -33,6 +33,7 @@ import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canva
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTourDirector } from '@/lib/ui/tourDirector';
+import { useCinemaPanel } from '@/lib/ui/useCinemaPanel';
 import { CinemaBar } from '@/components/learn/CinemaBar';
 import { TourIndex } from '@/components/learn/TourIndex';
 import { DetailPanel, type PlantContent } from '@/components/workspace/DetailPanel';
@@ -420,7 +421,6 @@ export function DistillationWorkspace() {
   const canvasRef = useRef<CanvasHandle>(null);
   const [selected, setSelected] = useState<Focus | null>(null);
   const [colors, setColors] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
 
   // the tour brain — page level, panel-independent
   const synthesize = useCallback(
@@ -433,6 +433,9 @@ export function DistillationWorkspace() {
     [result],
   );
   const director = useTourDirector(synthesize);
+  // tours collapse the panel for a full-screen view; the user's toggle still
+  // works mid-tour and an untouched panel returns when the tour ends
+  const { showPanel: panelOpen, togglePanel, openPanel } = useCinemaPanel(director.tour !== null);
 
   // camera choreography: the director emits intents, this canvas executes
   useEffect(() => {
@@ -450,7 +453,7 @@ export function DistillationWorkspace() {
     setMode('operate');
     setColors(false);
     setSelected(null);
-    setPanelOpen(true);
+    openPanel(true);
   };
 
   const enterLearn = () => {
@@ -464,10 +467,10 @@ export function DistillationWorkspace() {
   const resetSpec = () => setSpec(DISTILL_BASE);
 
   const startTour = (t: Tour) => {
-    // unlockAudio() fires inside director.start() — this click is the gesture
+    // unlockAudio() fires inside director.start() — this click is the gesture.
+    // The cinema owns the panel now: it collapses for the tour (useCinemaPanel)
     setColors(false);
     setSelected(null);
-    setPanelOpen(true);
     director.start(t);
   };
 
@@ -573,7 +576,7 @@ export function DistillationWorkspace() {
           </div>
 
           <button
-            onClick={() => setPanelOpen((v) => !v)}
+            onClick={togglePanel}
             aria-label={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
             title={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
             className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border"
@@ -624,7 +627,7 @@ export function DistillationWorkspace() {
           >
             {panelBody}
             <button
-              onClick={() => setPanelOpen(false)}
+              onClick={() => openPanel(false)}
               className="absolute right-4 top-4 rounded-md border px-2 py-0.5 text-[12px] font-bold"
               style={{ borderColor: C.bandLine, color: C.inkSoft }}
             >

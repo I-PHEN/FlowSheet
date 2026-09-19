@@ -62,3 +62,6 @@ upload/pasted_image_*
 !.env.example
 # agent + tts caches (token economy: reply/audio replay costs zero)
 .agent-cache/
+
+# sandbox artifacts (agent tooling, screenshots, VLM results)
+tool-results/

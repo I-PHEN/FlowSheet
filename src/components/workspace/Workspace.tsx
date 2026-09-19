@@ -25,6 +25,7 @@ import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canva
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTourDirector } from '@/lib/ui/tourDirector';
+import { useCinemaPanel } from '@/lib/ui/useCinemaPanel';
 import { CinemaBar } from '@/components/learn/CinemaBar';
 import { TourIndex } from '@/components/learn/TourIndex';
 import { DetailPanel } from './DetailPanel';
@@ -54,7 +55,6 @@ export function Workspace() {
   const canvasRef = useRef<CanvasHandle>(null);
   const [selected, setSelected] = useState<Focus | null>(null);
   const [colors, setColors] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
 
   // the tour brain — page level, panel-independent (that's the point)
   const synthesize = useCallback(
@@ -67,6 +67,9 @@ export function Workspace() {
     [result],
   );
   const director = useTourDirector(synthesize);
+  // tours collapse the panel for a full-screen view; the user's toggle still
+  // works mid-tour and an untouched panel returns when the tour ends
+  const { showPanel: panelOpen, togglePanel, openPanel } = useCinemaPanel(director.tour !== null);
 
   // camera choreography: the director emits intents (data), this canvas
   // executes them — a new intent object fires this effect exactly once
@@ -85,7 +88,7 @@ export function Workspace() {
     setMode('operate');
     setColors(false);
     setSelected(null);
-    setPanelOpen(true);
+    openPanel(true);
   };
 
   const enterLearn = () => {
@@ -99,10 +102,10 @@ export function Workspace() {
   const resetSpec = () => setSpec(baseCase());
 
   const startTour = (t: Tour) => {
-    // unlockAudio() fires inside director.start() — this click is the gesture
+    // unlockAudio() fires inside director.start() — this click is the gesture.
+    // The cinema owns the panel now: it collapses for the tour (useCinemaPanel)
     setColors(false);
     setSelected(null);
-    setPanelOpen(true);
     director.start(t);
   };
 
@@ -191,7 +194,7 @@ export function Workspace() {
           </div>
 
           <button
-            onClick={() => setPanelOpen((v) => !v)}
+            onClick={togglePanel}
             aria-label={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
             title={panelOpen ? 'Hide the side panel' : 'Show the side panel'}
             className="hover-band flex h-8 w-8 items-center justify-center rounded-lg border"
@@ -242,7 +245,7 @@ export function Workspace() {
           >
             {panelBody}
             <button
-              onClick={() => setPanelOpen(false)}
+              onClick={() => openPanel(false)}
               className="absolute right-4 top-4 rounded-md border px-2 py-0.5 text-[12px] font-bold"
               style={{ borderColor: C.bandLine, color: C.inkSoft }}
             >
