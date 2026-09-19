@@ -98,11 +98,13 @@ export default function Home() {
           <span className="text-[15px] font-extrabold tracking-tight" style={{ color: C.ink }}>
             Flowsheet
           </span>
-          <span className="text-[11.5px] font-semibold tracking-wide" style={{ color: C.inkFaint }}>
+          <span className="hidden text-[11.5px] font-semibold tracking-wide sm:inline" style={{ color: C.inkFaint }}>
             AI-NATIVE PROCESS SIMULATOR
           </span>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 pb-16 pt-10 sm:pt-14">
