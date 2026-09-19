@@ -5,32 +5,35 @@
  *
  * Same stage as the prebuilts: the live BuildCanvas renderer (pan, zoom,
  * hover streams, click units), an inspector, and — the point of the page —
- * a narrated guided tour generated from the build itself. The record in
- * the local project store is the only input; nothing here knows or cares
- * that the plant was drawn by AI agents rather than shipped in code.
+ * a narrated guided tour generated from the build itself. The tour runs as
+ * CINEMA: the director flies the camera stop-to-stop, captions stream in
+ * the CinemaBar at the bottom of the stage, and clicking any unit mid-tour
+ * drops into free roam (camera flies there, a caption card appears).
+ * The record in the local project store is the only input; nothing here
+ * knows or cares that the plant was drawn by AI agents rather than shipped
+ * in code.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Download, RotateCcw, Volume2, VolumeX, Wand2, X } from 'lucide-react';
+import { Download, Wand2 } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { CinemaBar } from '@/components/learn/CinemaBar';
+import { TourIndex } from '@/components/learn/TourIndex';
+import { useTourDirector } from '@/lib/ui/tourDirector';
 import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
 import { effectiveFamily, type PlantRecord } from '@/lib/projects/record';
 import { getFamily } from '@/lib/families';
-import { SPECIES } from '@/lib/engine/species';
-import { generateTour } from '@/lib/projects/tour';
-import { useTourAudio, unlockAudio } from '@/lib/audio/tourAudio';
-import { setTourActive } from '@/lib/ui/tourBus';
+import { generateTour, roamStep } from '@/lib/projects/tour';
 
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const [rec, setRec] = useState<PlantRecord | null | 'missing'>(null);
   const [userSelected, setUserSelected] = useState<string | null>(null);
-  const [tourIdx, setTourIdx] = useState<number | null>(null);
   const canvasRef = useRef<BuildCanvasHandle>(null);
 
   useEffect(() => {
@@ -54,39 +57,39 @@ export default function ProjectPage() {
     [rec],
   );
 
-  // narrated audio for the running tour (voice + music + ducking)
-  const audio = useTourAudio(tour ?? DUMMY_TOUR, tourIdx ?? 0);
+  // the tour brain — page level, panel-independent. Free-roam captions for
+  // units without an authored stop are synthesized from registry facts.
+  const graph = rec && rec !== 'missing' ? rec.graph : null;
+  const synthesize = useCallback(
+    (ref: { type: 'unit' | 'stream'; id: string }): { title: string; text: string } | null => {
+      if (!graph || ref.type !== 'unit') return null;
+      return roamStep(graph, ref.id);
+    },
+    [graph],
+  );
+  const director = useTourDirector(synthesize);
+
+  // camera choreography: the director emits intents, this canvas executes
+  useEffect(() => {
+    const cam = director.cam;
+    if (!cam) return;
+    if (cam.kind === 'fit') canvasRef.current?.fit();
+    else canvasRef.current?.flyToRef(cam.ref);
+  }, [director.cam]);
 
   // the tour owns the spotlight while it runs; the user owns it otherwise
-  const spotlightStep = tourIdx !== null && tour ? tour.steps[tourIdx] : null;
-  const selected =
-    spotlightStep && spotlightStep.ref.type === 'unit' ? spotlightStep.ref.id : userSelected;
-
-  // publish tour state for the floating Build button
-  useEffect(() => {
-    setTourActive(tourIdx !== null);
-    return () => setTourActive(false);
-  }, [tourIdx]);
+  const spotlightUnit =
+    director.tour && director.stop && director.stop.ref.type === 'unit'
+      ? director.stop.ref.id
+      : userSelected;
+  const touring = director.tour !== null;
 
   const startTour = useCallback(() => {
-    unlockAudio();
+    if (!tour) return;
+    // unlockAudio() fires inside director.start() — this click is the gesture
     setUserSelected(null);
-    setTourIdx(0);
-  }, []);
-
-  const endTour = useCallback(() => {
-    setTourIdx(null);
-    setUserSelected(null);
-    canvasRef.current?.fit();
-  }, []);
-
-  const go = useCallback(
-    (i: number) => {
-      if (!tour) return;
-      setTourIdx(Math.max(0, Math.min(tour.steps.length - 1, i)));
-    },
-    [tour],
-  );
+    director.start(tour);
+  }, [tour, director]);
 
   if (rec === null) {
     return (
@@ -115,7 +118,6 @@ export default function ProjectPage() {
 
   const unitCount = rec.graph.units.length;
   const streamCount = rec.graph.streams.filter((s) => !s.implicit).length;
-  const step = tourIdx !== null && tour ? tour.steps[tourIdx] : null;
   const k = rec.kpis;
 
   return (
@@ -183,18 +185,25 @@ export default function ProjectPage() {
       <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* stage */}
         <section className="relative flex min-h-0 flex-1 flex-col" aria-label="Project flowsheet">
-          <div className="min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1">
             <BuildCanvas
               ref={canvasRef}
               graph={rec.graph}
-              selected={selected}
+              selected={spotlightUnit}
               warm
               onUnitClick={(uid) => {
-                if (tourIdx !== null) return; // a running tour owns the spotlight
+                if (touring) {
+                  // a click during a tour = free roam: fly there, caption, pause
+                  director.roamTo({ type: 'unit', id: uid });
+                  return;
+                }
                 setUserSelected((cur) => (cur === uid ? null : uid));
               }}
               onBackgroundClick={() => setUserSelected(null)}
             />
+            {/* the tour lives on the stage — captions at the bottom, narration
+                owned by the page: it survives everything */}
+            <CinemaBar director={director} />
           </div>
           <div
             className="pointer-events-none absolute left-3 top-3 z-10 rounded-full border px-3 py-1 font-mono text-[10px] font-extrabold tracking-[0.14em]"
@@ -202,8 +211,8 @@ export default function ProjectPage() {
           >
             YOUR PLANT · {unitCount} UNITS · {streamCount} STREAMS
           </div>
-          {rec.graph && selected && tourIdx === null && (
-            <UnitInspector graph={rec.graph} unitId={selected} onClose={() => setUserSelected(null)} />
+          {rec.graph && userSelected && !touring && (
+            <UnitInspector graph={rec.graph} unitId={userSelected} onClose={() => setUserSelected(null)} />
           )}
         </section>
 
@@ -293,130 +302,27 @@ export default function ProjectPage() {
               {'GUIDED TOUR · ' + (rec.tour ? 'WRITTEN BY THE DOCENT FOR THIS PLANT' : 'GENERATED FROM YOUR BUILD')}
             </div>
 
-            {tourIdx === null || !tour ? (
+            {!touring ? (
               <>
                 <p className="mt-2 text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
-                  A narrated walk down the process path — intro, unit by unit, the numbers.
-                  Voice and a soft instrumental bed, just like the prebuilt plants.
+                  A narrated walk down the process path — the camera flies unit to unit, captions
+                  stream at the bottom of the sheet, and you can pause anytime to explore on your
+                  own. Voice and a soft instrumental bed, just like the prebuilt plants.
                 </p>
                 <button
                   type="button"
                   onClick={startTour}
-                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-bold"
+                  disabled={!tour}
+                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-bold disabled:opacity-40"
                   style={{ background: C.ink, color: C.canvas }}
                 >
                   <span aria-hidden="true">▶</span>
-                  {tour ? tour.chip : 'Walk my plant'}
+                  {tour ? tour.chip : 'No tour available'}
                 </button>
               </>
             ) : (
               <div className="mt-2">
-                {/* controls */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => audio.toggleVoice()}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border"
-                    style={{ borderColor: C.bandLine, color: audio.prefs.voice ? C.ink : C.inkFaint }}
-                    title={audio.prefs.voice ? 'Voice on' : 'Voice off'}
-                    aria-label={audio.prefs.voice ? 'Voice on' : 'Voice off'}
-                  >
-                    {audio.prefs.voice ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => audio.toggleMusic()}
-                    className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 font-mono text-[10px] font-bold tracking-wider"
-                    style={{ borderColor: C.bandLine, color: audio.prefs.music ? C.ink : C.inkFaint }}
-                    title={audio.prefs.music ? 'Music on' : 'Music off'}
-                  >
-                    <span aria-hidden="true">♪</span>
-                    {audio.prefs.music ? 'MUSIC' : 'MUTED'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={audio.replay}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border"
-                    style={{ borderColor: C.bandLine, color: C.ink }}
-                    title="Replay narration"
-                    aria-label="Replay narration"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={endTour}
-                    className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg border"
-                    style={{ borderColor: C.bandLine, color: C.ink }}
-                    title="End tour"
-                    aria-label="End tour"
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-
-                {/* the step */}
-                {step && (
-                  <div key={tourIdx} className="bd-msg-in mt-3">
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-mono text-[10px] font-bold tracking-wider" style={{ color: C.inkFaint }}>
-                        {tourIdx + 1} / {tour.steps.length}
-                      </span>
-                      <span className="text-[13.5px] font-bold" style={{ color: C.ink }}>
-                        {step.title}
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-                      {step.text}
-                    </p>
-                  </div>
-                )}
-
-                {/* nav */}
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => go(tourIdx - 1)}
-                    disabled={tourIdx === 0}
-                    className="flex h-9 items-center rounded-full border px-4 text-[12px] font-bold disabled:opacity-35"
-                    style={{ borderColor: C.bandLine, color: C.ink }}
-                  >
-                    ← Back
-                  </button>
-                  {tourIdx < tour.steps.length - 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => go(tourIdx + 1)}
-                      className="flex h-9 flex-1 items-center justify-center rounded-full text-[12px] font-bold"
-                      style={{ background: C.ink, color: C.canvas }}
-                    >
-                      Next →
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={endTour}
-                      className="flex h-9 flex-1 items-center justify-center rounded-full text-[12px] font-bold"
-                      style={{ background: C.ink, color: C.canvas }}
-                    >
-                      Finish tour ✓
-                    </button>
-                  )}
-                </div>
-
-                {/* progress */}
-                <div className="mt-3 flex gap-1">
-                  {tour.steps.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      aria-label={`Go to step ${i + 1}`}
-                      onClick={() => go(i)}
-                      className="h-1.5 flex-1 rounded-full transition-colors"
-                      style={{ background: i <= tourIdx ? C.ink : C.bandLine }}
-                    />
-                  ))}
-                </div>
+                <TourIndex director={director} />
               </div>
             )}
           </div>
@@ -438,11 +344,3 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-/** placeholder tour so the audio hook always has a valid shape */
-const DUMMY_TOUR = {
-  id: 'none',
-  chip: '',
-  title: '',
-  steps: [{ ref: { type: 'unit' as const, id: '' }, title: '', text: '' }],
-};

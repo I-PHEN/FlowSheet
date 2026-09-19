@@ -1,31 +1,37 @@
 'use client';
 
 /**
- * Plant workspace — top bar (back · title · mode switch · tutor toggle),
- * full-bleed flowsheet canvas, right-side panel that swaps between the
- * tutor home, a running tour, and the selected unit/stream detail.
+ * Plant workspace — top bar (back · title · mode switch · panel toggle),
+ * full-bleed flowsheet stage, and a right-side panel.
+ *
+ * Learn (one mode, two paces): the guided tour is CINEMA — the director
+ * flies the camera stop-to-stop, captions stream in the CinemaBar at the
+ * bottom of the stage, and the narrator is owned by the page, so panels
+ * may open and close freely. Clicking anything on the sheet mid-tour
+ * drops into free roam (camera flies there, caption card appears);
+ * RESUME returns to the thread. Operate stays the control room.
  */
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelRight } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { baseCase, run } from '@/lib/engine';
 import type { PlantSpec } from '@/lib/engine/plant';
 import { REFERENCE_LAYOUT, STREAM_MAP, UNIT_MAP } from '@/lib/flowsheet/layout';
 import { bboxOf } from '@/lib/flowsheet/geom';
-import type { Tour } from '@/lib/content/units';
+import { UNIT_CONTENT, type Tour } from '@/lib/content/units';
 import { FlowsheetCanvas, type CanvasHandle } from '@/components/flowsheet/Canvas';
 import type { Focus } from '@/components/flowsheet/Diagram';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { setTourActive } from '@/lib/ui/tourBus';
-import { unlockAudio } from '@/lib/audio/tourAudio';
+import { useTourDirector } from '@/lib/ui/tourDirector';
+import { CinemaBar } from '@/components/learn/CinemaBar';
+import { TourIndex } from '@/components/learn/TourIndex';
 import { DetailPanel } from './DetailPanel';
 import { OperatePanel } from './OperatePanel';
-import { ColorAnswer, TourRunner, TutorHome } from './TutorPanel';
+import { ColorAnswer, TutorHome } from './TutorPanel';
 
-type TourState = { tour: Tour; idx: number } | null;
-type Mode = 'explore' | 'operate';
+type Mode = 'learn' | 'operate';
 
 function refBox(ref: Focus) {
   if (ref.type === 'unit') {
@@ -39,7 +45,7 @@ function refBox(ref: Focus) {
 export function Workspace() {
   // ONE mode axis: learn = the book (tours + unit stories at the design
   // case), operate = the control room (levers, live deltas)
-  const [mode, setMode] = useState<Mode>('explore');
+  const [mode, setMode] = useState<Mode>('learn');
   // the live plant specification — base case until a lever moves
   const [spec, setSpec] = useState<PlantSpec>(() => baseCase());
   // the whole canvas + every panel + every tooltip reads from this one solve
@@ -47,69 +53,70 @@ export function Workspace() {
   const baseKpis = useMemo(() => run(baseCase()).kpis, []);
   const canvasRef = useRef<CanvasHandle>(null);
   const [selected, setSelected] = useState<Focus | null>(null);
-  const [tour, setTour] = useState<TourState>(null);
   const [colors, setColors] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
 
-  // publish tour state for the floating Build button (ducks while narrating)
+  // the tour brain — page level, panel-independent (that's the point)
+  const synthesize = useCallback(
+    (ref: Focus): { title: string; text: string } | null => {
+      if (ref.type !== 'unit') return null;
+      const story = UNIT_CONTENT[ref.id];
+      if (!story) return null;
+      return { title: result.units[ref.id]?.name ?? ref.id, text: story.plain };
+    },
+    [result],
+  );
+  const director = useTourDirector(synthesize);
+
+  // camera choreography: the director emits intents (data), this canvas
+  // executes them — a new intent object fires this effect exactly once
   useEffect(() => {
-    setTourActive(tour !== null);
-    return () => setTourActive(false);
-  }, [tour]);
+    const cam = director.cam;
+    if (!cam) return;
+    if (cam.kind === 'fit') canvasRef.current?.fit();
+    else {
+      const b = refBox(cam.ref);
+      if (b) canvasRef.current?.panTo(b);
+    }
+  }, [director.cam]);
 
   const enterOperate = () => {
+    director.end();
     setMode('operate');
-    setTour(null);
     setColors(false);
     setSelected(null);
     setPanelOpen(true);
   };
 
-  const enterExplore = () => {
+  const enterLearn = () => {
     // the book mode always shows design conditions — leave the lab, reset
-    setMode('explore');
+    director.end();
+    setMode('learn');
     setSpec(baseCase());
   };
 
   const patchSpec = (patch: Partial<PlantSpec>) => setSpec((s) => ({ ...s, ...patch }));
   const resetSpec = () => setSpec(baseCase());
 
-  const spotlight = tour ? tour.tour.steps[tour.idx].ref : null;
-
   const startTour = (t: Tour) => {
-    unlockAudio(); // audio needs a user gesture — this click is it
+    // unlockAudio() fires inside director.start() — this click is the gesture
     setColors(false);
     setSelected(null);
-    setTour({ tour: t, idx: 0 });
     setPanelOpen(true);
-    const b = refBox(t.steps[0].ref);
-    if (b) canvasRef.current?.panTo(b);
-  };
-
-  const stepTo = (i: number) => {
-    if (!tour) return;
-    const idx = Math.max(0, Math.min(tour.tour.steps.length - 1, i));
-    setTour({ ...tour, idx });
-    const b = refBox(tour.tour.steps[idx].ref);
-    if (b) canvasRef.current?.panTo(b);
+    director.start(t);
   };
 
   const select = (f: Focus | null) => {
-    if (f) {
-      // manual selection interrupts a running tour
-      setTour(null);
-      setColors(false);
-      setPanelOpen(true);
+    if (f && director.tour) {
+      // a click during a tour = free roam: fly there, caption card, pause
+      director.roamTo(f);
     }
     setSelected(f);
   };
 
-  const exitTour = () => {
-    setTour(null);
-    canvasRef.current?.fit();
-  };
-
-  const panelBody = selected ? (
+  const panelBody = director.tour ? (
+    <TourIndex director={director} />
+  ) : selected ? (
     <DetailPanel
       result={result}
       selected={selected}
@@ -117,8 +124,6 @@ export function Workspace() {
       onClose={() => setSelected(null)}
       condLabel={mode === 'operate' ? 'operating point' : 'base case'}
     />
-  ) : tour ? (
-    <TourRunner tour={tour.tour} idx={tour.idx} onStep={stepTo} onExit={exitTour} />
   ) : colors ? (
     <ColorAnswer onBack={() => setColors(false)} />
   ) : mode === 'operate' ? (
@@ -167,14 +172,10 @@ export function Workspace() {
           >
             <button
               role="tab"
-              aria-selected={mode === 'explore'}
-              onClick={enterExplore}
+              aria-selected={mode === 'learn'}
+              onClick={enterLearn}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={
-                mode === 'explore'
-                  ? { background: C.ink, color: C.paper }
-                  : { color: C.inkSoft }
-              }
+              style={mode === 'learn' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
             >
               Learn
             </button>
@@ -183,11 +184,7 @@ export function Workspace() {
               aria-selected={mode === 'operate'}
               onClick={enterOperate}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={
-                mode === 'operate'
-                  ? { background: C.ink, color: C.paper }
-                  : { color: C.inkSoft }
-              }
+              style={mode === 'operate' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
             >
               Operate
             </button>
@@ -213,15 +210,18 @@ export function Workspace() {
 
       {/* main */}
       <main className="relative flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <FlowsheetCanvas
             ref={canvasRef}
             layout={REFERENCE_LAYOUT}
             result={result}
             selected={selected}
-            spotlight={spotlight}
+            spotlight={director.stop?.ref ?? null}
             onSelect={select}
           />
+          {/* the tour lives on the stage — captions at the bottom, narration
+              owned by the page: closing the panel no longer silences it */}
+          <CinemaBar director={director} />
         </div>
 
         {/* desktop panel */}
@@ -237,7 +237,7 @@ export function Workspace() {
         {/* mobile sheet */}
         {panelOpen && (
           <aside
-            className="fixed inset-x-0 bottom-0 z-30 max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t p-5 pb-8 shadow-2xl lg:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 max-h-[62dvh] overflow-y-auto rounded-t-2xl border-t p-5 pb-8 shadow-2xl lg:hidden"
             style={{ background: C.paper, borderColor: C.bandLine }}
           >
             {panelBody}

@@ -10,35 +10,55 @@
 
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { Tour, TourStep } from '@/lib/content/units';
-import { getUnitType } from '@/lib/engine/registry';
+import { getUnitType, resolveSpecs } from '@/lib/engine/registry';
 import type { PlantRecord } from './record';
 
-/** friendly role prose for common registry types */
+/** friendly role prose, keyed by REAL registry type (gated by tests — the
+ *  keys drifted once and every tour silently fell back to generic prose) */
 const ROLE: Record<string, string> = {
-  'natural-gas-feed': 'sets the feed contract — composition, pressure and flow everything downstream inherits',
-  'process-steam-feed': 'supplies the steam the chemistry will need later',
-  'process-air-feed': 'brings in air from the battery limit',
+  // feeds
+  'ng-source': 'sets the feed contract — composition, pressure and flow everything downstream inherits',
+  'steam-source': 'supplies the steam the chemistry will need later',
+  'air-source': 'brings in air from the battery limit — and the nitrogen and argon riding with it',
+  'acid-gas-source': 'brings the acid gas feed in from the battery limit',
+  'syngas-feed': 'delivers the feed mixture this separation study starts from',
+  'column-feed': 'feeds the column at the right tray and condition',
+  // front end
   'feed-mixer': 'blends the incoming streams into one feed with a defined composition',
   'primary-reformer': 'cracks the hydrocarbon into syngas over catalyst at high temperature',
   'secondary-reformer': 'completes the reforming with injected air and leaves the gas hot enough to work with',
-  'waste-heat-boiler': 'recovers heat from the hot gas and makes steam while cooling the stream',
-  'heat-exchanger': 'trades heat between streams — energy is money on a flowsheet',
-  'cooler': 'rejects heat so the gas reaches the temperature the next step wants',
-  'hts-reactor': 'shifts carbon monoxide toward hydrogen over iron catalyst',
-  'ltr-reactor': 'polishes the shift reaction at low temperature for maximum hydrogen yield',
+  'whb-cooler': 'recovers heat from the hot gas and makes steam while cooling the stream',
+  'wgs-hts': 'shifts carbon monoxide toward hydrogen over iron catalyst',
+  'intercooler': 'chills the gas between the shift beds, moving the reaction equilibrium in the favorable direction',
+  'wgs-lts': 'polishes the shift reaction at low temperature for maximum hydrogen yield',
+  'ko-drum-shift': 'drains condensed water out of the gas before the next step',
   'co2-removal': 'scrubs the acid gas out of the process stream',
-  'methanator': 'converts the last traces of carbon oxides back to methane',
-  'compressor': 'raises the pressure — the loop only reacts when the gas is squeezed',
-  'synthesis-converter': 'is where the real chemistry happens: the gas reacts over catalyst and product begins to form',
-  'condenser': 'chills the gas until the product condenses out as liquid',
-  'cold-condenser': 'deep-chills the gas to squeeze out the last of the product',
-  'letdown-drum': 'flashes the liquid and lets vapor and liquid go their separate ways',
-  'separator': 'splits the phases — light components overhead, product out the bottom',
-  'recycle-splitter': 'sends the unreacted gas back around and keeps the loop balanced',
-  'purge-splitter': 'controls what leaves the loop so inerts never accumulate',
-  'product-flash': 'finishes the product stream at battery-limit conditions',
-  'steam-drum': 'manages the water side of the heat recovery',
+  methanator: 'converts the last traces of carbon oxides back to methane',
+  'ko-drum-meth': 'removes the water methanation produced before the gas is compressed',
+  // loop
+  'syngas-compressor': 'raises the pressure — the loop only reacts when the gas is squeezed',
+  'loop-mixer': 'is where fresh make-up syngas meets the returning recycle',
+  'feed-preheater': 'preheats the feed with the converter’s own effluent — the loop heats itself',
+  converter: 'is where the real chemistry happens: the gas reacts over catalyst beds and product begins to form',
+  'condensation-train': 'chills the gas until the product condenses out as liquid',
+  'nh3-separator': 'splits the phases — light components overhead, product out the bottom',
+  'purge-split': 'controls what leaves the loop so inerts never accumulate',
+  'loop-circulator': 'boosts the separated gas back to loop pressure and keeps the loop moving',
+  // teaching templates
+  chiller: 'cools the gas until the valuable component is ready to condense',
+  'flash-drum': 'lets vapor and liquid go their separate ways — nothing added, nothing reacting',
+  'feed-heater': 'brings the feed to its bubble point before the column',
+  'distillation-column': 'separates by volatility, stage by stage — a tower of many small flashes',
+  // families (species #3 + #4)
+  'meoh-converter': 'is where methanol forms over catalyst — carbon oxides reacting with hydrogen',
+  'meoh-separator': 'condenses the crude methanol out and returns unreacted gas to the loop',
+  psa: 'adsorbs impurities at pressure and releases them at low pressure — hydrogen comes out clean',
+  'claus-burner': 'burns a third of the acid gas to SO2, creating the oxygen the Claus chemistry needs',
+  'claus-converter': 'reacts hydrogen sulphide with SO2 over catalyst to make elemental sulphur',
+  'sulphur-condenser': 'condenses sulphur vapor into liquid and lets it drain out of the train',
 };
+
+export { ROLE };
 
 const FIRST_STEP = [
   'Everything starts here',
@@ -198,5 +218,40 @@ export function safeTour(t: unknown): Tour | null {
     chip: typeof o.chip === 'string' ? o.chip.slice(0, 32) : 'Guided tour',
     title: o.title.slice(0, 120),
     steps,
+  };
+}
+
+/**
+ * Caption for a unit the user clicked while FREE ROAMING an AI-built plant
+ * (no authored stop for it). Registry facts + role prose — the same honest
+ * material the inspector shows, phrased as a caption. Deterministic.
+ */
+export function roamStep(graph: FlowGraph, unitId: string): { title: string; text: string } {
+  const u = graph.units.find((x) => x.id === unitId);
+  if (!u) return { title: unitId, text: 'This unit is no longer on the sheet.' };
+  const def = getUnitType(u.type);
+  const name = def?.name ?? u.type;
+  const role = ROLE[u.type] ?? 'holds its conditions and moves the process forward';
+  const { inS, outS } = streamsOf(graph, unitId);
+  const inNames = inS.map((s) => s.name || s.id);
+  const outNames = outS.map((s) => s.name || s.id);
+  const inLine = inNames.length
+    ? `It receives ${inNames.slice(0, 2).join(' and ')},`
+    : 'It is where the plant begins,';
+  const outLine = outNames.length
+    ? `and hands off to ${outNames.slice(0, 2).join(' and ')}.`
+    : 'and the process leaves the sheet here.';
+  const model = def ? def.model(resolveSpecs(u)) : '';
+  return {
+    title: name,
+    text: [
+      `This is ${u.id}, the ${name.toLowerCase()}.`,
+      `${inLine} ${outLine}`,
+      `In operation it ${role}.`,
+      model ? `Datasheet: ${model}.` : '',
+      'Hover its streams for live values — every number was solved, not drawn.',
+    ]
+      .filter(Boolean)
+      .join(' '),
   };
 }

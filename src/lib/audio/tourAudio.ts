@@ -1,23 +1,27 @@
 /**
- * useTourAudio — the coordination layer that turns a guided tour into a
- * narrated, scored experience (for every plant — flash, ammonia, and the
- * distillation column to come).
+ * useTourAudio — the audio engine behind a running tour.
  *
- * While a tour runs:
- *   - the music bed starts (gentle fade-in) and stops when the tour ends
- *   - each step's title + text are spoken by the narrator (TTS)
- *   - the music ducks under the voice and recovers between steps
- *   - the next step's audio is prefetched so transitions feel instant
- *   - voice and music can be toggled independently; the choice persists
+ * Refactored for the Learn merge: the hook no longer knows what a "tour"
+ * or a "step index" is. It takes a SCRIPT (the exact text to narrate, or
+ * null for silence) and an ACTIVE flag (is a tour on stage at all), and
+ * does the rest:
  *
- * Browsers only allow audio after a user gesture, so tour entry points call
- * unlockAudio() synchronously inside their click handlers.
+ *   - active + music pref  → the music bed runs (gentle fade-in/out)
+ *   - script + voice pref  → the narrator speaks it; script changes cut
+ *                            the old line and speak the new one; null
+ *                            stops the voice
+ *   - the music ducks under the voice and recovers between lines
+ *   - voice and music toggle independently; the choice persists
+ *
+ * It is mounted ONCE per page by the tour director — never inside a
+ * collapsible panel — so closing a panel can no longer silence a tour.
+ * Browsers only allow audio after a user gesture, so tour entry points
+ * still call unlockAudio() synchronously inside their click handlers.
  */
 
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Tour } from '@/lib/content/units';
 import { narrator, type NarrationState } from './narration';
 import { tourMusic } from './music';
 
@@ -53,17 +57,21 @@ export function unlockAudio(): void {
   void tourMusic.unlock();
 }
 
-/** the narration script for a tour step: "Step title. Step text." */
+/** the narration script for a tour stop: "Stop title. Stop text." */
 export function stepScript(step: { title: string; text: string }): string {
   return `${step.title}. ${step.text}`;
 }
 
-export function useTourAudio(tour: Tour, idx: number) {
+/**
+ * @param script exact text to narrate, or null for silence
+ * @param active whether a tour is on stage (drives the music bed)
+ */
+export function useTourAudio(script: string | null, active: boolean) {
   const [prefs, setPrefs] = useState<AudioPrefs>(() => ({ voice: true, music: true }));
   const [narration, setNarration] = useState<NarrationState>('idle');
   // prefs are read from localStorage after mount (SSR-safe), then applied;
   // `hydrated` is state (not a ref) so the narration effect below re-runs
-  // once real prefs arrive — otherwise the first step would never speak
+  // once real prefs arrive — otherwise the first line would never speak
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -74,8 +82,7 @@ export function useTourAudio(tour: Tour, idx: number) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const savePrefs = useCallback((p: AudioPrefs) => {
-    setPrefs(p);
+  const persist = useCallback((p: AudioPrefs) => {
     try {
       window.localStorage.setItem(PREFS_KEY, JSON.stringify(p));
     } catch {
@@ -83,8 +90,7 @@ export function useTourAudio(tour: Tour, idx: number) {
     }
   }, []);
 
-  // narrator state → React + music ducking (subscribe: the panel can be
-  // mounted twice — desktop aside + mobile sheet — and both stay in sync)
+  // narrator state → React + music ducking
   useEffect(() => {
     const unsubscribe = narrator.subscribe((s) => {
       setNarration(s);
@@ -93,34 +99,29 @@ export function useTourAudio(tour: Tour, idx: number) {
     return unsubscribe;
   }, []);
 
-  // music bed: runs while the tour runs (and the pref is on)
+  // music bed: runs while a tour is on stage (and the pref is on)
   useEffect(() => {
-    if (prefs.music) void tourMusic.start();
+    if (active && prefs.music) void tourMusic.start();
     else tourMusic.stop();
     return () => {
       tourMusic.stop();
     };
-  }, [prefs.music]);
+  }, [active, prefs.music]);
 
-  // narration: (re)speaks whenever the step changes or voice turns on
-  const step = tour.steps[idx];
-  const script = step ? stepScript(step) : '';
+  // narration: (re)speaks whenever the script changes or voice turns on
   useEffect(() => {
     if (!hydrated) return; // wait for real prefs
-    if (!prefs.voice) {
+    if (!script || !prefs.voice) {
       narrator.stop();
       return;
     }
     void narrator.speak(script);
-    // warm the next step while this one plays
-    const next = tour.steps[idx + 1];
-    if (next) narrator.prefetch(stepScript(next));
     return () => {
       narrator.stop();
     };
-  }, [script, prefs.voice, idx, tour.steps, hydrated]);
+  }, [script, prefs.voice, hydrated]);
 
-  // leaving the tour entirely → silence everything
+  // leaving the page entirely → silence everything
   useEffect(() => {
     return () => {
       narrator.stop();
@@ -129,13 +130,21 @@ export function useTourAudio(tour: Tour, idx: number) {
   }, []);
 
   const toggleVoice = useCallback(() => {
-    savePrefs({ ...prefs, voice: !prefs.voice });
-    if (prefs.voice) narrator.stop(); // turning OFF → cut current speech now
-  }, [prefs, savePrefs]);
+    setPrefs((p) => {
+      const next = { ...p, voice: !p.voice };
+      if (p.voice) narrator.stop(); // turning OFF → cut current speech now
+      persist(next);
+      return next;
+    });
+  }, [persist]);
 
   const toggleMusic = useCallback(() => {
-    savePrefs({ ...prefs, music: !prefs.music });
-  }, [prefs, savePrefs]);
+    setPrefs((p) => {
+      const next = { ...p, music: !p.music };
+      persist(next);
+      return next;
+    });
+  }, [persist]);
 
   const replay = useCallback(() => {
     if (!prefs.voice || !script) return;
