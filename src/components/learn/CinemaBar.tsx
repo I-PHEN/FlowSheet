@@ -3,37 +3,43 @@
 /**
  * CinemaBar — the one caption system for the Learn mode.
  *
- * A single overlay at the bottom of the stage carries the whole tour. It
- * renders for BOTH paces —
+ * A single player bar DOCKED to the very bottom edge of the stage carries
+ * the whole tour. It renders for BOTH paces —
  *
  *   GUIDED: the camera flies stop to stop, the caption STREAMS in word by
- *           word at the narrator's pace, the tour advances itself when the
- *           voice finishes; ⏸ drops into free roam.
+ *           word AS THE VOICE SPEAKS IT (real playback progress, not an
+ *           estimate), and the tour advances itself when the voice
+ *           finishes; ⏸ drops into free roam.
  *   ROAM:   the card shows whatever the user clicked (authored stop or
  *           synthesized caption); the primary action becomes RESUME, and
  *           an optional ↺ narrates the card on demand.
  *
- * Three laws shape the experience:
+ * Four laws shape the experience:
  *
- *   1. STREAM, DON'T DUMP — captions arrive as Orion says them
- *      (useStreamedText + streamFor): word by word, caret at the tail,
- *      never the whole paragraph printed at once.
- *   2. THE YOUTUBE LAW — the transport row (chips + every control) fades
- *      and collapses after a few idle seconds, so the sheet owns the
- *      screen; any pointer move, key, wheel, or touch brings it back
- *      instantly. Hovering or focusing the bar keeps it up; pausing keeps
- *      it up. The caption and the progress dots always stay.
- *   3. THE BAR BELONGS TO THE STAGE, never to a side panel — the tour
- *      (and its narration) survives panels opening, closing, or never
- *      existing.
+ *   1. THE SYNC LAW — the narrator is the clock. useSyncedCaption maps
+ *      word k onto the audio element's actual currentTime/duration, so
+ *      captions can never outrun the voice; pausing freezes them where
+ *      the voice cut, and a resumed line re-streams as it is re-read.
+ *   2. THE DOCK LAW — the bar is flush with the bottom edge of the
+ *      stage, player-chrome style: the caption leads, the scrubber dots
+ *      ride under it, and the transport row (pause included) is the LAST
+ *      row, at the very bottom of the screen. The bar never floats over
+ *      the plant; it IS the bottom of the player.
+ *   3. THE YOUTUBE LAW — the transport row fades and collapses after a
+ *      few idle seconds; any pointer move, key, wheel, or touch brings it
+ *      back instantly. Hovering or focusing the bar keeps it up; pausing
+ *      keeps it up. The caption and the progress dots always stay.
+ *   4. THE GUIDE LAW — Orion's nameplate (the Belt: three stars in his
+ *      ammonia green) rides every caption; on the first stop, where his
+ *      voice introduces him, the plate reads ORION · YOUR GUIDE.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import type { TourDirector } from '@/lib/ui/tourDirector';
-import { streamFor } from '@/lib/ui/tourDirector';
-import { useStreamedText } from '@/lib/ui/useStreamedText';
+import { useSyncedCaption } from '@/lib/ui/useSyncedCaption';
+import { OrionPlate } from '@/components/learn/OrionMark';
 
 /** idle time before the transport row vanishes — YouTube's beat */
 const CHROME_HIDE_MS = 2800;
@@ -127,11 +133,10 @@ export function CinemaBar({ director }: { director: TourDirector }) {
   // paused or roaming → the chrome stays (like any player paused)
   const chromeHidden = touring && guided && idle && !hovering && !focusWithin;
 
-  // ---- the streaming law: words arrive as Orion says them ----------------
+  // ---- the sync law: words arrive as the voice says them -----------------
   // (hooks run unconditionally — the bar may appear mid-life at any stop)
   const voiceLive = audio.prefs.voice && audio.narration !== 'error' && audio.narration !== 'blocked';
-  const streamMs = stop ? streamFor(stop.text, { voice: guided && voiceLive }) : 0;
-  const { shown, streaming } = useStreamedText(stop?.text ?? '', streamMs);
+  const { shown, streaming } = useSyncedCaption(stop, voiceLive, guided && voiceLive);
   const textRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     const el = textRef.current; // long captions: keep the newest words in view
@@ -140,12 +145,17 @@ export function CinemaBar({ director }: { director: TourDirector }) {
 
   if (!tour || !stop) return null;
 
+  // the first stop is Orion's introduction — the voice says his name there,
+  // so the nameplate says it too
+  const firstStop = stop.source === 'stop' && stop.idx === 0;
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-14">
-      {/* pb-14: the bar floats above the legend / zoom cluster at every
-          width — the stage chrome stays reachable while touring */}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
+      {/* THE DOCK: flush with the bottom edge of the stage, full width —
+          player chrome, never a card hovering over the plant. The legend
+          and zoom cluster yield beneath it for the length of the tour. */}
       <div
-        className="pointer-events-auto w-full max-w-[720px] rounded-2xl border shadow-2xl"
+        className="pointer-events-auto w-full border-t shadow-2xl"
         style={{ background: C.paperA95, borderColor: C.bandLine }}
         role="region"
         aria-label={`Guided tour — stop ${idx + 1} of ${tour.steps.length}`}
@@ -154,7 +164,52 @@ export function CinemaBar({ director }: { director: TourDirector }) {
         onFocusCapture={() => setFocusWithin(true)}
         onBlurCapture={() => setFocusWithin(false)}
       >
-        {/* transport row — fades and collapses away when the viewer is idle */}
+        {/* 1 — the caption: streams in word by word as the voice speaks */}
+        <div
+          key={`${stop.ref.type}:${stop.ref.id}:${stop.source}:${stop.idx ?? 's'}`}
+          className="bd-msg-in px-4 pt-2.5"
+        >
+          <div className="max-w-[720px] text-[14px] font-bold leading-tight" style={{ color: C.ink }}>
+            {stop.title}
+          </div>
+          <p
+            ref={textRef}
+            className="mt-1 max-h-[104px] max-w-[720px] overflow-y-auto text-[12.5px] leading-relaxed"
+            style={{ color: C.inkSoft }}
+          >
+            {shown}
+            {streaming && (
+              <span
+                className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]"
+                style={{ background: C.inkSoft }}
+                aria-hidden="true"
+              />
+            )}
+          </p>
+        </div>
+
+        {/* 2 — progress / hints — always visible (the dots are the scrubber) */}
+        <div className="flex items-center gap-2 px-4 pb-1.5 pt-1.5">
+          <div className="flex flex-1 gap-1">
+            {tour.steps.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`Go to stop ${i + 1}: ${s.title}`}
+                onClick={() => director.jump(i)}
+                className="h-1.5 flex-1 rounded-full transition-colors"
+                style={{ background: i <= idx ? C.ink : C.bandLine }}
+              />
+            ))}
+          </div>
+          <span className="shrink-0 text-[10px] font-medium tracking-wide" style={{ color: C.inkFaint }}>
+            {guided ? status || '← → step · space pause · esc end' : 'paused — click any unit on the sheet'}
+          </span>
+        </div>
+
+        {/* 3 — the transport row: the very bottom of the screen. Fades and
+              collapses away when the viewer is idle; the pause button lives
+              on the bottom edge, where every player keeps it. */}
         <div
           className="grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none"
           style={{
@@ -165,16 +220,11 @@ export function CinemaBar({ director }: { director: TourDirector }) {
           aria-hidden={chromeHidden}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="flex items-center gap-1.5 px-3 pt-2.5">
-              {/* the guide's name rides every caption — one identity, every plant */}
-              <span
-                className="rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em]"
-                style={{ borderColor: C.nh3, color: C.nh3 }}
-                title="Orion — your guide through this plant"
-              >
-                ORION
-              </span>
-              <span className="font-mono text-[10px] font-bold tracking-[0.14em]" style={{ color: C.inkFaint }}>
+            <div className="flex items-center gap-1.5 px-4 pb-2.5 pt-1">
+              {/* the guide's nameplate rides every caption — one identity,
+                  every plant; his introduction stop widens it */}
+              <OrionPlate guide={firstStop} />
+              <span className="ml-1 font-mono text-[10px] font-bold tracking-[0.14em]" style={{ color: C.inkFaint }}>
                 {stop.source === 'stop' ? `${idx + 1} / ${tour.steps.length}` : 'DETOUR'}
               </span>
               <span
@@ -248,49 +298,6 @@ export function CinemaBar({ director }: { director: TourDirector }) {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* the caption — streams in word by word as Orion speaks */}
-        <div
-          key={`${stop.ref.type}:${stop.ref.id}:${stop.source}:${stop.idx ?? 's'}`}
-          className="bd-msg-in px-3.5 pb-1 pt-2"
-        >
-          <div className="text-[14px] font-bold leading-tight" style={{ color: C.ink }}>
-            {stop.title}
-          </div>
-          <p
-            ref={textRef}
-            className="mt-1 max-h-[104px] overflow-y-auto text-[12.5px] leading-relaxed"
-            style={{ color: C.inkSoft }}
-          >
-            {shown}
-            {streaming && (
-              <span
-                className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]"
-                style={{ background: C.inkSoft }}
-                aria-hidden="true"
-              />
-            )}
-          </p>
-        </div>
-
-        {/* progress / hints — always visible (the dots are the scrubber) */}
-        <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-1.5">
-          <div className="flex flex-1 gap-1">
-            {tour.steps.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Go to stop ${i + 1}: ${s.title}`}
-                onClick={() => director.jump(i)}
-                className="h-1.5 flex-1 rounded-full transition-colors"
-                style={{ background: i <= idx ? C.ink : C.bandLine }}
-              />
-            ))}
-          </div>
-          <span className="shrink-0 text-[10px] font-medium tracking-wide" style={{ color: C.inkFaint }}>
-            {guided ? status || '← → step · space pause · esc end' : 'paused — click any unit on the sheet'}
-          </span>
         </div>
       </div>
     </div>

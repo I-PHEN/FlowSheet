@@ -422,9 +422,10 @@ export default function ProjectPage() {
             {!touring ? (
               <>
                 <p className="mt-2 text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
-                  A narrated walk down the process path — the camera flies unit to unit, captions
-                  stream at the bottom of the sheet, and you can pause anytime to explore on your
-                  own. Voice and a soft instrumental bed, just like the prebuilt plants.
+                  A narrated walk down the process path — Orion flies the camera unit to unit,
+                  captions arrive as he speaks them at the bottom of the sheet, and you can pause
+                  anytime to explore on your own. Voice and a soft instrumental bed, just like the
+                  prebuilt plants.
                 </p>
                 <button
                   type="button"

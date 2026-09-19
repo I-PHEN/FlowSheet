@@ -270,7 +270,7 @@ console.log('\nE. ANTI-DRIFT (Orion + parity wiring, pinned in source)');
   check('docentSystem embeds ORION_VOICE', /\$\{ORION_VOICE\}/.test(prompts));
   check('Orion never invents numbers', /never invent numbers/.test(prompts));
   check('Orion introduces himself once, in the first stop', /Introduce yourself by name once/.test(prompts));
-  check('the caption bar carries the ORION chip', /ORION/.test(cinema));
+  check('the caption bar carries the ORION nameplate (plate + Belt mark)', /<OrionPlate guide=\{firstStop\} \/>/.test(cinema));
 
   // parity — the saved plant has the same mode axis as the prebuilts
   check('saved plant page mounts PlantOperate', /<PlantOperate/.test(page));

@@ -74,9 +74,9 @@ function DistillTutorHome({
         The flash drum, stacked
       </h3>
       <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-        One guided walkthrough — about four minutes. It traces the feed up and over the
-        tower, then hands you six levers in Operate mode and a challenge: find the
-        pinch.
+        One guided walkthrough with Orion — about four minutes. He traces the feed up and
+        over the tower, then hands you six levers in Operate mode and a challenge: find
+        the pinch.
       </p>
       <div className="mt-4 space-y-2">
         {DISTILL_TOURS.map((t) => (

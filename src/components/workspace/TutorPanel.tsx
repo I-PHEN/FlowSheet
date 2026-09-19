@@ -27,7 +27,8 @@ export function TutorHome({
         What would you like to learn?
       </h3>
       <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-        Guided walkthroughs of the reference plant — each one moves the diagram for you.
+        Guided walkthroughs of the reference plant — Orion moves the diagram for you and talks you
+        through every unit.
       </p>
       <div className="mt-4 space-y-2">
         {TOURS.map((t) => (
@@ -74,8 +75,8 @@ export function TutorHome({
         </a>
       )}
       <p className="mt-5 text-[11px] leading-relaxed" style={{ color: C.inkFaint }}>
-        Every walkthrough is narrated — a calm voice over a soft music bed. Ask-anything tutoring
-        arrives in a later phase.
+        Every walkthrough is narrated by Orion — your guide, thirty years on the catwalks — over a
+        soft music bed. Ask-anything tutoring arrives in a later phase.
       </p>
     </div>
   );

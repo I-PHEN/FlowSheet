@@ -76,18 +76,22 @@ export function dwellFor(text: string): number {
 }
 
 /**
- * How long a caption should take to STREAM in, ms — words appear as Orion
- * says them, never dumped onto the screen all at once.
+ * How long a caption should take to STREAM in, ms.
  *
- *   voice on  → ~340 ms per word (≈176 wpm, the narrator's pace), so the
- *               caption finishes about when the voice does;
+ *   voice on  → the ESTIMATE, used only when real playback progress is
+ *               unreadable: ~600 ms per word. The voice (jam, speed 1.15)
+ *               measures ≈87 wpm at 1.0 ≈ 100 wpm effective — the old
+ *               340 ms/word (176 wpm) streamed captions nearly twice as
+ *               fast as Orion could speak them. When progress IS readable
+ *               (the normal path), useSyncedCaption ignores this number
+ *               entirely and reveals words straight off the audio clock.
  *   voice off → 60% of the reading dwell: the reveal itself is readable,
  *               and the tail gets the remaining 40% before auto-advance.
  */
 export function streamFor(text: string, opts: { voice: boolean }): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   if (words <= 1) return 600;
-  if (opts.voice) return Math.min(14000, Math.max(1600, words * 340));
+  if (opts.voice) return Math.min(20000, Math.max(1600, words * 600));
   return Math.min(9000, Math.max(1200, dwellFor(text) * 0.6));
 }
 
@@ -261,7 +265,9 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
     else jump(s.idx + 1);
   }, [jump, end]);
 
-  // voice path: advance ~0.7 s after the narrator finishes a line
+  // voice path: advance ~0.9 s after the narrator finishes a line — the
+  // caption now completes WITH the voice, so the viewer gets a breath to
+  // land the last revealed words before the camera flies on
   const prevNarr = useRef<string>('idle');
   useEffect(() => {
     const unsub = narrator.subscribe((s) => {
@@ -269,7 +275,7 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
       prevNarr.current = s;
       if (s === 'idle' && from === 'speaking') {
         clearTimer();
-        timerRef.current = window.setTimeout(advance, 700);
+        timerRef.current = window.setTimeout(advance, 900);
       }
     });
     return unsub;

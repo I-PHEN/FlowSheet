@@ -44,6 +44,29 @@ class Narrator {
     }
   }
 
+  /**
+   * The raw script the voice is currently loading or speaking, else null.
+   * The caption bar matches THIS against its stop's script — the reveal
+   * tracks the voice only when the voice is actually saying this caption.
+   */
+  scriptOn(): string | null {
+    return this.state === 'loading' || this.state === 'speaking' ? this.currentText : null;
+  }
+
+  /**
+   * Real playback position, 0..1, while audio is playing — else null.
+   * currentTime / duration of the live element: the caption bar polls this
+   * every frame and reveals words exactly as they are spoken, so captions
+   * can never drift from the voice (any voice, any speed).
+   */
+  progress(): number | null {
+    const el = this.audio;
+    if (!el || this.state !== 'speaking') return null;
+    const d = el.duration;
+    if (!Number.isFinite(d) || d <= 0) return null;
+    return Math.min(1, Math.max(0, el.currentTime / d));
+  }
+
   private el(): HTMLAudioElement {
     if (!this.audio) {
       this.audio = new Audio();

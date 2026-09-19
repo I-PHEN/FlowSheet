@@ -73,8 +73,8 @@ function FlashTutorHome({
         Your first flowsheet
       </h3>
       <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-        One guided walkthrough — about three minutes. It moves the diagram for you and ends
-        with a challenge in Operate mode.
+        One guided walkthrough with Orion — about three minutes. He moves the diagram for
+        you and ends with a challenge in Operate mode.
       </p>
       <div className="mt-4 space-y-2">
         {FLASH_TOURS.map((t) => (
