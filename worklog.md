@@ -711,3 +711,19 @@ Stage Summary:
 - main now carries a clean, fully descriptive 15-commit history (root -> mode housekeeping -> engine+families -> agent v3 -> family tuning -> flow dots -> worklog -> token economy -> flow animation -> learn merge -> Orion+operate parity -> cinema polish -> cinema dock+sync+nameplate -> recovered pre-reset features -> Builder's Room) with identical content to the verified working tree; nothing lost (the only dropped remote object was an empty merge; the superseded pre-reset line is preserved as its own branch for the push).
 - Push pending user token (previous sessions' tokens did not persist into this sandbox).
 - Queue after push: conceptual builds (function catalog, starter symbols, structural critic), then the ML layer and VR foundation discussed with the user in this session's reply.
+
+---
+Task ID: 38 (GitHub push executed: descriptive history live on all three branches)
+Agent: main (Super Z)
+Task: User supplied a fresh fine-grained PAT; push the rebuilt descriptive history to github.com/I-PHEN/FlowSheet.
+
+Work Log:
+- AUTH: token wired through a temporary credential-store file (no persistence, no token in any committed file or remote URL); remote verified still at 08a8a1e before the push.
+- PUSH main: force-with-lease (08a8a1e -> f5dfb9f) — the 16-commit fully descriptive line is now the public main (root -> engine+families -> agent v3 -> tuning -> flow dots -> worklog -> token economy -> flow animation -> learn merge -> Orion+operate parity -> cinema polish -> cinema dock+sync+nameplate -> recovered pre-reset features -> Builder's Room -> task-37 worklog).
+- ARCHAEOLOGY + REBUILD of the pre-reset lines so no UUID commit appears anywhere on GitHub: mapped every one of the 12 UUID commits in the original development line to its worklog milestone (research plan -> engine+workbench phases 1+2 -> product re-plan -> interface rebuild -> console deletion+dark mode -> minimal operate -> flowsheet-as-data D1 -> the agent MVP -> verification sweep -> Flow-style studio -> recovery research -> rollback recovery), rewrote each with an honest descriptive message preserving trees, authors, and dates byte-for-byte (scripts/git-history-branches.sh; tree identity verified for both tips before refs were created). The v3 line (42814b3 "Plant families + agent-authored tours") was rebuilt on top of main's reworded mode-housekeeping commit (0dac89d) so it chains into the shared root.
+- PUSHED history/pre-reset-builds (20 commits: the original Aug 29 -> Sep 15 development story — engine core 61/61 gate, interface pivot, Engine 2.0 flowsheet-as-data, the agent MVP, the studio, sandbox recoveries, 3D Component Viewer MVP and fixes) and history/v3-pre-reset (the previously-pushed v3 snapshot, now message-clean).
+- NOT pushed: backup/pre-push-20260920 (local safety net holding the pre-rebuild UUID-squash line; zero unique content — its tree equals main's).
+
+Stage Summary:
+- GitHub now shows: main (product, 17 commits after this entry, every message descriptive), history/pre-reset-builds (the real three-week build story), history/v3-pre-reset (the v3 snapshot line). No UUID commit messages anywhere. Everything the user asked to push is pushed.
+- Note flagged to user: the Builder's Room file is public inside the repo (user raised no objection; can be pulled out on request).
