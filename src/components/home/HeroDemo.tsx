@@ -7,11 +7,15 @@
  * renderer the project grid uses, in the builder stage's visual language:
  *
  *   the prompt types itself at a human cadence → the router picks the
- *   family → the architect drafts → the engineer places equipment (each
- *   unit settles onto the sheet, tagged like real equipment: D-101,
- *   R-102…) and wires every stream → the solver grinds the recycle loop
- *   down pass by pass (the residual SHRINKS, like the real console) →
- *   the critic scores it → the docent writes the tour in Orion's voice.
+ *   family → the architect drafts → the engineer places equipment — the
+ *   REAL silhouettes from the flowsheet symbol library, no stand-in boxes:
+ *   a bed reactor (D-101), a firebox reformer with stack and burner
+ *   flames (R-102), a three-bed quench converter (R-103), a shell-and-
+ *   tube condenser (E-201), a flashed separator with boot (V-201), each
+ *   settling onto the sheet with its tag called out beneath it — and
+ *   wires every stream → the solver grinds the recycle loop down pass
+ *   by pass (the residual SHRINKS, like the real console) → the critic
+ *   scores it → the docent writes the tour in Orion's voice.
  *
  * THE FIXED-WINDOW LAW: nothing in this demo may ever change the height
  * of anything. The session rail reserves the exact height of every zone
@@ -73,36 +77,39 @@ const CHAR_TIMES = (() => {
 })();
 const PROMPT_END = CHAR_TIMES[CHAR_TIMES.length - 1] + 120;
 
+/** the demo plant — a 500 t/d methanol loop drawn in the app's real
+ *  symbol grammar: every silhouette is the genuine UnitSymbol the
+ *  flowsheet sheet draws, at sheet-like proportions, tags underneath */
 const UNITS: MiniUnit[] = [
-  { id: 'U1', label: 'DESULFURIZER', x: 40, y: 168, w: 118, h: 52 },
-  { id: 'U2', label: 'STEAM REFORMER', x: 218, y: 148, w: 138, h: 86 },
-  { id: 'U3', label: 'METHANOL REACTOR', x: 414, y: 158, w: 126, h: 74 },
-  { id: 'U4', label: 'CONDENSER', x: 596, y: 168, w: 104, h: 52 },
-  { id: 'U5', label: 'FLASH SEPARATOR', x: 756, y: 148, w: 96, h: 92 },
+  { id: 'U1', tag: 'D-101', label: 'DESULFURIZER', kind: 'reactor', x: 44, y: 146, w: 60, h: 86 },
+  { id: 'U2', tag: 'R-102', label: 'STEAM REFORMER', kind: 'furnace', x: 170, y: 118, w: 146, h: 116 },
+  { id: 'U3', tag: 'R-103', label: 'MeOH CONVERTER', kind: 'converter', x: 396, y: 84, w: 90, h: 176 },
+  { id: 'U4', tag: 'E-201', label: 'CONDENSER', kind: 'hex', x: 566, y: 152, w: 72, h: 60 },
+  { id: 'U5', tag: 'V-201', label: 'FLASH SEPARATOR', kind: 'vdrum', x: 722, y: 120, w: 76, h: 124 },
 ];
 
 const STREAMS: MiniStream[] = [
-  // natural gas in
-  { id: 'S1', d: 'M 8 194 L 34 194', cls: 'feed', arrow: { x: 38, y: 194, angle: 0 } },
-  // desulfurizer → reformer
-  { id: 'S2', d: 'M 161 194 C 188 194, 188 191, 214 191', cls: 'feed', arrow: { x: 218, y: 191, angle: 0 } },
-  // steam in (dashed utility)
-  { id: 'S8', d: 'M 287 92 C 287 116, 287 116, 287 142', cls: 'water', arrow: { x: 287, y: 146, angle: Math.PI / 2 } },
-  // reformer → reactor
-  { id: 'S3', d: 'M 359 191 C 386 191, 386 195, 410 195', cls: 'syngas', arrow: { x: 414, y: 195, angle: 0 } },
-  // reactor → condenser
-  { id: 'S4', d: 'M 543 195 C 570 195, 570 194, 592 194', cls: 'syngas', arrow: { x: 596, y: 194, angle: 0 } },
+  // natural gas in → desulfurizer body's left face
+  { id: 'S1', d: 'M 8 189 L 42 189', cls: 'feed', arrow: { x: 49, y: 189, angle: 0 } },
+  // desulfurizer → reformer firebox
+  { id: 'S2', d: 'M 99 189 C 124 189, 148 186, 170 186', cls: 'feed', arrow: { x: 173, y: 186, angle: 0 } },
+  // steam in (dashed utility) — down onto the reformer roof
+  { id: 'S8', d: 'M 300 78 C 300 90, 300 100, 300 110', cls: 'water', arrow: { x: 300, y: 116, angle: Math.PI / 2 } },
+  // reformer → converter (into the left face, clear of the quench stubs)
+  { id: 'S3', d: 'M 313 176 C 344 176, 372 172, 399 172', cls: 'syngas', arrow: { x: 402, y: 172, angle: 0 } },
+  // converter → condenser
+  { id: 'S4', d: 'M 480 172 C 512 172, 534 182, 564 182', cls: 'syngas', arrow: { x: 567, y: 182, angle: 0 } },
   // condenser → separator
-  { id: 'S5', d: 'M 703 194 C 728 194, 728 194, 752 194', cls: 'syngas', arrow: { x: 756, y: 194, angle: 0 } },
-  // recycle: separator top → reactor top
+  { id: 'S5', d: 'M 637 182 C 664 182, 698 182, 720 182', cls: 'syngas', arrow: { x: 723, y: 182, angle: 0 } },
+  // recycle: separator top → over the roof → converter top
   {
     id: 'S7',
-    d: 'M 804 146 C 804 74, 477 74, 477 152',
+    d: 'M 760 120 C 760 58, 441 58, 441 82',
     cls: 'loopgas',
-    arrow: { x: 477, y: 156, angle: Math.PI / 2 },
+    arrow: { x: 441, y: 84, angle: Math.PI / 2 },
   },
   // methanol product out the boot
-  { id: 'S6', d: 'M 828 242 C 828 292, 828 292, 828 328', cls: 'product', arrow: { x: 828, y: 332, angle: Math.PI / 2 } },
+  { id: 'S6', d: 'M 760 246 C 760 280, 760 292, 760 316', cls: 'product', arrow: { x: 760, y: 320, angle: Math.PI / 2 } },
 ];
 
 const STREAM_NAMES: Record<string, string> = {
@@ -117,10 +124,10 @@ const STREAM_NAMES: Record<string, string> = {
 };
 
 const LABELS = [
-  { x: 96, y: 186, text: 'natural gas', anchor: 'middle' as const },
-  { x: 302, y: 112, text: 'steam', anchor: 'start' as const },
-  { x: 852, y: 300, text: 'methanol', anchor: 'start' as const },
-  { x: 640, y: 66, text: 'recycle', anchor: 'middle' as const },
+  { x: 8, y: 177, text: 'natural gas', anchor: 'start' as const },
+  { x: 308, y: 98, text: 'steam', anchor: 'start' as const },
+  { x: 770, y: 296, text: 'methanol', anchor: 'start' as const },
+  { x: 600, y: 50, text: 'recycle', anchor: 'middle' as const },
 ];
 
 /** the solver's residual, shrinking logarithmically pass by pass — the way
