@@ -92,9 +92,18 @@ function SpinControls({ spinning }: { spinning: boolean }) {
   );
 }
 
-export default function ModelStage({ model, cutaway = false }: { model: ModelEntry; cutaway?: boolean }) {
+export default function ModelStage({
+  model,
+  cutaway = false,
+  spin = true,
+}: {
+  model: ModelEntry;
+  cutaway?: boolean;
+  /** initial turntable — pass false for reduced-motion contexts */
+  spin?: boolean;
+}) {
   const theme = useStageTheme();
-  const [spinning, setSpinning] = useState(true);
+  const [spinning, setSpinning] = useState(spin);
 
   return (
     <div className="h-full w-full" style={{ background: theme.canvas }}>

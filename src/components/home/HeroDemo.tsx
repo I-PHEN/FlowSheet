@@ -1,23 +1,29 @@
 'use client';
 
 /**
- * HeroDemo — the sell, playing on a loop.
+ * HeroDemo — the sell, playing on a loop in a FIXED WINDOW.
  *
  * Not a video, not a mockup: a scripted build rendered by the same mini
- * renderer the project grid uses, in the builder stage's visual
- * language — with real choreography:
+ * renderer the project grid uses, in the builder stage's visual language:
  *
- *   the prompt types itself at a human cadence → the architect drafts →
- *   the engineer places equipment (each unit settles onto the sheet) →
- *   streams draw themselves in, arrowheads popping as they land → the
- *   solver iterates the recycle loop, counting passes → the balance
- *   converges and the numbers count up → the critic signs off.
+ *   the prompt types itself at a human cadence → the router picks the
+ *   family → the architect drafts → the engineer places equipment (each
+ *   unit settles onto the sheet, tagged like real equipment: D-101,
+ *   R-102…) and wires every stream → the solver grinds the recycle loop
+ *   down pass by pass (the residual SHRINKS, like the real console) →
+ *   the critic scores it → the docent writes the tour in Orion's voice.
  *
- * A slow camera drifts with the build (framing the placed units), then
- * pulls back to the whole sheet at convergence. Hover pauses the loop.
- * prefers-reduced-motion gets the finished plant, static. The demo plant
- * is a 500 t/d methanol loop — deliberately NOT ammonia: the product is
- * general.
+ * THE FIXED-WINDOW LAW: nothing in this demo may ever change the height
+ * of anything. The session rail reserves the exact height of every zone
+ * that fills in during the loop — the prompt box, the role chips, the
+ * three-line session feed, the verdict chips — so the page below never
+ * shifts by a pixel while the loop runs. (This replaced the old rail,
+ * whose done-lines sprouted and whose verdict row wrapped from zero to
+ * three rows, pushing the whole page downward mid-loop.)
+ *
+ * Hover pauses the loop. prefers-reduced-motion gets the finished plant,
+ * static. The demo plant is a 500 t/d methanol loop — deliberately NOT
+ * ammonia: the product is general.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -34,21 +40,26 @@ const FULL = { x: 0, y: 0, w: CANVAS.w, h: CANVAS.h };
 const T = {
   typeStart: 600,
   typeMs: 24,
-  agents: [
-    { label: 'ARCHITECT', t0: 4400, t1: 5300, done: 'plan · 5 units · 7 streams' },
-    { label: 'ENGINEER', t0: 5300, t1: 10400, done: 'mass + energy wired' },
-    { label: 'CRITIC', t0: 12600, t1: 13800, done: '92 / 100 · PASS' },
-  ],
   unitStart: 5600,
   unitStep: 560,
   streamStart: 8400,
   streamStep: 340,
   solving: 11200,
   converged: 12500,
-  fade: 14900,
-  loop: 15700,
+  fade: 16000,
+  loop: 16800,
 };
 const SOLVE_PASSES = 12;
+
+/** real equipment tags — the feed speaks the way the builder actually does */
+const UNIT_TAGS = ['D-101', 'R-102', 'R-103', 'E-201', 'V-201'];
+
+const ROLES = [
+  { label: 'ARCHITECT', t0: 4400, t1: 5300 },
+  { label: 'ENGINEER', t0: 5300, t1: 12500 },
+  { label: 'CRITIC', t0: 12600, t1: 13800 },
+  { label: 'DOCENT', t0: 13900, t1: 14900 },
+];
 
 /** per-character reveal times — a human cadence, not a metronome */
 const CHAR_TIMES = (() => {
@@ -110,6 +121,29 @@ const LABELS = [
   { x: 302, y: 112, text: 'steam', anchor: 'start' as const },
   { x: 852, y: 300, text: 'methanol', anchor: 'start' as const },
   { x: 640, y: 66, text: 'recycle', anchor: 'middle' as const },
+];
+
+/** the solver's residual, shrinking logarithmically pass by pass — the way
+ *  a damped-DS + Broyden loop actually converges */
+const resid = (p: number) => {
+  const l0 = Math.log10(2.4e-1);
+  const l1 = Math.log10(8.6e-7);
+  return Math.pow(10, l0 + ((p - 1) / (SOLVE_PASSES - 1)) * (l1 - l0)).toExponential(1);
+};
+
+/** the session feed — the crew's event log, the way the real session panel
+ *  reads. Rendered as the last three lines; the zone's height is fixed. */
+const FEED: { t: number; text: string }[] = [
+  { t: 4000, text: 'router · methanol family' },
+  { t: 4700, text: 'architect · 5 units · 7 streams' },
+  ...UNITS.map((u, i) => ({ t: T.unitStart + i * T.unitStep + 240, text: `engineer · place ${UNIT_TAGS[i]}` })),
+  ...STREAMS.map((s, i) => ({ t: T.streamStart + i * T.streamStep + 160, text: `engineer · wire ${STREAM_NAMES[s.id]}` })),
+  { t: T.solving + 100, text: `solver · pass 1 · Δ ${resid(1)}` },
+  { t: T.solving + 700, text: `solver · pass 6 · Δ ${resid(6)}` },
+  { t: T.converged - 100, text: `solver · pass ${SOLVE_PASSES} · Δ ${resid(SOLVE_PASSES)}` },
+  { t: T.converged + 150, text: 'solver · converged · 0.38 s' },
+  { t: ROLES[2].t0 + 420, text: 'critic · 92/100 · PASS' },
+  { t: ROLES[3].t0 + 420, text: 'docent · tour in Orion’s voice' },
 ];
 
 /** where the camera looks while the build runs */
@@ -203,27 +237,11 @@ export function HeroDemo() {
   const converged = tt >= T.converged;
   const faded = !reduced && tt >= T.fade;
 
-  const solvePass = Math.min(SOLVE_PASSES, 1 + Math.floor(((tt - T.solving) / (T.converged - T.solving)) * SOLVE_PASSES));
   const production = Math.round(512 * easeOut((tt - T.converged) / 700));
-  const criticScore = Math.round(92 * easeOut((tt - T.agents[2].t0 - 300) / 700));
+  const orionReady = tt >= ROLES[3].t1;
 
-  // the operator's console line — what the crew is doing right now
-  const status = (() => {
-    if (tt < T.typeStart) return '';
-    if (tt < PROMPT_END) return '▸ reading the brief…';
-    if (tt < T.unitStart) return '▸ drafting the flowsheet — 5 units · 7 streams';
-    if (tt < T.streamStart) {
-      const u = unitsShown[unitsShown.length - 1];
-      return u ? `▸ placing ${u.label}…` : '';
-    }
-    if (tt < T.solving) {
-      const idx = Math.min(streamsShown.length - 1, STREAMS.length - 1);
-      return `▸ wiring ${STREAM_NAMES[STREAMS[idx]?.id ?? 'S1']}`;
-    }
-    if (tt < T.converged) return `▸ iterating recycle loop · pass ${solvePass}/${SOLVE_PASSES}`;
-    if (tt < T.agents[2].t0) return '✓ converged · 12 passes · 0.38 s';
-    return '✓ critic 92/100 · PASS — plant is sound';
-  })();
+  // the session feed — last three events (newest at the bottom)
+  const feed = FEED.filter((e) => tt >= e.t).slice(-3);
 
   return (
     <div
@@ -255,14 +273,11 @@ export function HeroDemo() {
       </div>
 
       <div
-        className="flex flex-col md:flex-row"
         style={{ opacity: faded ? 0 : 1, transition: 'opacity 480ms ease' }}
       >
-        {/* the stage */}
-        <div
-          className="relative min-w-0 flex-1"
-          style={{ background: C.canvas }}
-        >
+        {/* THE STAGE — full width, the plant big; the KPI chips live at its
+            top-right like the real workspace's KPI bar */}
+        <div className="relative" style={{ background: C.canvas }}>
           <MiniFlow
             canvas={CANVAS}
             view={reduced ? FULL : cam}
@@ -272,99 +287,13 @@ export function HeroDemo() {
             labels={showLabels ? LABELS : []}
             className="block h-auto w-full"
           />
-          {/* the operator's console line */}
-          {status && (
-            <div
-              key={status}
-              className="bd-msg-in pointer-events-none absolute bottom-2.5 left-3 font-mono text-[10px] font-semibold tracking-wide"
-              style={{ color: C.inkSoft }}
-            >
-              {status}
-            </div>
-          )}
-          {/* sheet corner stamp */}
-          {converged && (
-            <div
-              className="mf-in absolute bottom-2.5 right-3 rounded-md border px-2 py-1 font-mono text-[9px] font-bold tracking-[0.1em]"
-              style={{ borderColor: C.bandLine, background: C.paperA95, color: C.inkSoft }}
-            >
-              METHANOL SYNTHESIS · PFD · SHEET 1 OF 1
-            </div>
-          )}
-        </div>
 
-        {/* the session rail */}
-        <div
-          className="w-full shrink-0 border-t px-3.5 py-3 md:w-[248px] md:border-l md:border-t-0"
-          style={{ borderColor: C.bandLine }}
-        >
-          <div
-            className="font-mono text-[9.5px] font-bold tracking-[0.14em]"
-            style={{ color: C.inkFaint }}
-          >
-            DESCRIBE YOUR PLANT
-          </div>
-          <div
-            className="mt-1.5 min-h-[54px] rounded-lg border px-2.5 py-2 text-[12px] leading-relaxed"
-            style={{ borderColor: C.bandLine, background: C.canvas, color: C.ink }}
-          >
-            {typed}
-            {typing && (
-              <span className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]" style={{ background: C.ink }} />
-            )}
-          </div>
-
-          {/* agent chips */}
-          <div className="mt-3 flex flex-col gap-1.5">
-            {T.agents.map((a) => {
-              const done = tt >= a.t1;
-              const active = !done && tt >= a.t0;
-              return (
-                <div
-                  key={a.label}
-                  className="rounded-lg border px-2.5 py-1.5 transition-opacity duration-300"
-                  style={{
-                    borderColor: done || active ? C.bandLine : 'transparent',
-                    background: done || active ? C.canvas : 'transparent',
-                    opacity: tt >= a.t0 ? 1 : 0.28,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bd-pulse' : ''}`}
-                      style={{ background: done ? C.nh3 : active ? C.warn : C.inkFaint }}
-                    />
-                    <span
-                      className="font-mono text-[10px] font-bold tracking-[0.12em]"
-                      style={{ color: C.ink }}
-                    >
-                      {a.label}
-                    </span>
-                    {done && (
-                      <span className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.nh3 }}>
-                        ✓
-                      </span>
-                    )}
-                  </div>
-                  {done && (
-                    <div
-                      className="bd-msg-in mt-0.5 pl-3.5 font-mono text-[9px] tracking-wide"
-                      style={{ color: C.inkFaint }}
-                    >
-                      {a.done}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* solver + verdict */}
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          {/* the verdict chips — overlaid top-right, the workspace's KPI bar */}
+          <div className="pointer-events-none absolute right-3 top-2.5 flex flex-col items-end gap-1.5">
             {solving && (
               <span
                 className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                style={{ borderColor: C.bandLine, color: C.inkSoft }}
+                style={{ borderColor: C.bandLine, background: C.paperA95, color: C.inkSoft }}
               >
                 <span className="bd-pulse h-1.5 w-1.5 rounded-full" style={{ background: C.warn }} />
                 SOLVING MASS + ENERGY
@@ -387,32 +316,113 @@ export function HeroDemo() {
               <>
                 <span
                   className="mf-in rounded-full border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                  style={{ borderColor: C.nh3, color: C.nh3 }}
+                  style={{ borderColor: C.nh3, color: C.nh3, background: C.paperA95 }}
                 >
-                  ✓ BALANCE CONVERGED
+                  ✓ {production} t/d MeOH
                 </span>
                 <span
                   className="mf-in rounded-full border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                  style={{ borderColor: C.bandLine, color: C.ink }}
+                  style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paperA95 }}
                 >
-                  {production} t/d MeOH
+                  99.2% PURITY
                 </span>
-                <span
-                  className="mf-in rounded-full border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                  style={{ borderColor: C.bandLine, color: C.inkSoft }}
-                >
-                  5 UNITS · 7 STREAMS
-                </span>
-                {tt >= T.agents[2].t0 && (
-                  <span
-                    className="mf-in rounded-full border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                    style={{ borderColor: C.nh3, color: C.nh3 }}
-                  >
-                    CRITIC {criticScore}/100 · PASS
-                  </span>
-                )}
               </>
             )}
+            {orionReady && (
+              <span
+                className="mf-in rounded-md px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
+                style={{ background: C.nh3, color: C.paper }}
+              >
+                ORION · TOUR READY
+              </span>
+            )}
+          </div>
+
+          {/* sheet corner stamp */}
+          {converged && (
+            <div
+              className="mf-in absolute bottom-2.5 right-3 rounded-md border px-2 py-1 font-mono text-[9px] font-bold tracking-[0.1em]"
+              style={{ borderColor: C.bandLine, background: C.paperA95, color: C.inkSoft }}
+            >
+              METHANOL SYNTHESIS · PFD · SHEET 1 OF 1
+            </div>
+          )}
+        </div>
+
+        {/* THE CONSOLE STRIP — the session rail under the stage. FIXED
+            WINDOW: every zone carries its full height from the first
+            frame, so the loop can never stretch the page. */}
+        <div className="flex flex-col border-t sm:flex-row" style={{ borderColor: C.bandLine }}>
+          {/* the brief */}
+          <div className="shrink-0 px-3.5 py-3 sm:w-[224px]">
+            <div
+              className="font-mono text-[9.5px] font-bold tracking-[0.14em]"
+              style={{ color: C.inkFaint }}
+            >
+              DESCRIBE YOUR PLANT
+            </div>
+            <div
+              className="mt-1.5 h-[96px] overflow-hidden rounded-lg border px-2.5 py-2 text-[12px] leading-relaxed"
+              style={{ borderColor: C.bandLine, background: C.canvas, color: C.ink }}
+            >
+              {typed}
+              {typing && (
+                <span className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]" style={{ background: C.ink }} />
+              )}
+            </div>
+          </div>
+
+          {/* the crew — role chips and the session feed */}
+          <div
+            className="min-w-0 flex-1 border-t px-3.5 py-3 sm:border-l sm:border-t-0"
+            style={{ borderColor: C.bandLine }}
+          >
+            <div className="grid grid-cols-2 gap-1.5">
+              {ROLES.map((a) => {
+                const done = tt >= a.t1;
+                const active = !done && tt >= a.t0;
+                return (
+                  <div
+                    key={a.label}
+                    className="flex h-6 items-center gap-2 rounded-lg border px-2.5 transition-opacity duration-300"
+                    style={{
+                      borderColor: done || active ? C.bandLine : 'transparent',
+                      background: done || active ? C.paper : 'transparent',
+                      opacity: tt >= a.t0 ? 1 : 0.28,
+                    }}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bd-pulse' : ''}`}
+                      style={{ background: done ? C.nh3 : active ? C.warn : C.inkFaint }}
+                    />
+                    <span
+                      className="font-mono text-[10px] font-bold tracking-[0.12em]"
+                      style={{ color: C.ink }}
+                    >
+                      {a.label}
+                    </span>
+                    {done && (
+                      <span className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.nh3 }}>
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* the session feed — the crew's event log, newest at the bottom */}
+            <div className="mt-3 h-[47px] overflow-hidden">
+              {feed.map((e, i) => (
+                <div
+                  key={`${e.t}-${e.text}`}
+                  className={`h-[15px] truncate font-mono text-[9.5px] tracking-wide ${i === feed.length - 1 ? 'bd-msg-in' : ''}`}
+                  style={{ color: i === feed.length - 1 ? C.inkSoft : C.inkFaint }}
+                >
+                  {e.text}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -166,11 +166,9 @@ export default function Home() {
             </div>
 
             <p className="mt-4 max-w-[520px] text-[13.5px] leading-relaxed" style={{ color: C.inkSoft }}>
-              Type a sentence — any route, any capacity. An architect plans it, an engineer wires
-              every unit and stream, a solver closes the mass and energy balance, and a critic
-              signs it off. Then a guide named Orion — a thirty-year shift supervisor — walks you
-              through it in voice, and every unit opens for inspection in 3D. No installs —
-              everything runs and solves in your browser.
+              Type a sentence — any route, any capacity. The agents plan it, build it, solve it —
+              then Orion walks you through it, and every unit opens in 3D. No installs: it all
+              runs in your browser.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
@@ -217,8 +215,8 @@ export default function Home() {
             action="Start learning"
             layout={FLASH_LAYOUT}
           >
-            One stream in, two phases out — the atom of every separation process. Three units,
-            four streams, one guided tour. Fifteen minutes.
+            One stream in, two phases out — the atom of every separation. One guided tour,
+            fifteen minutes.
           </PlantCard>
 
           <PlantCard
@@ -228,8 +226,7 @@ export default function Home() {
             action="Climb the tower"
             layout={DISTILLATION_LAYOUT}
           >
-            Benzene from toluene, tray by tray — the flash drum stacked into a tower. Six units,
-            nine streams, reflux and reboil. Forty minutes.
+            Benzene from toluene, tray by tray. Six units, nine streams, reflux and reboil.
           </PlantCard>
 
           <PlantCard
@@ -239,15 +236,14 @@ export default function Home() {
             action="Explore plant"
             layout={REFERENCE_LAYOUT}
           >
-            The classic route: natural gas + steam to 1,000 t/d of ammonia. 19 units, 27 streams,
-            a recycle loop, three guided tours — and every unit opens in 3D.
+            Natural gas + steam to 1,000 t/d of ammonia. 19 units, 27 streams, a recycle loop —
+            and every unit opens in 3D.
           </PlantCard>
         </div>
 
         {/* ---- the standing invitation ---- */}
         <p className="mx-auto mt-12 max-w-[560px] text-center text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
-          Or skip the curriculum entirely — open the builder, describe the plant in your head,
-          and the agents will engineer it in front of you.
+          Or skip the curriculum — describe the plant in your head and watch the agents build it.
         </p>
       </main>
 
