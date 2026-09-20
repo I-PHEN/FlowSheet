@@ -848,3 +848,18 @@ Stage Summary:
 - The shipped identity: professional charcoal dark on true black, white-in-light / charcoal-in-dark action buttons with hairline borders, clear neutral card frames, zero green outside the flowsheet canvas. One palette law, both themes, whole app.
 - Files: globals.css, tokens.ts, button.tsx + 16 component/page files; scripts: task43-contrast-audit (rewritten), task45-e2e.sh, task45-vlm.ts, task44-e2e.sh, cinema-polish-tests (law update), shots in task43/44/45-shots.
 - History note: the two UUID auto-commits (05338a0, 32759b2) were reset away and replaced by one descriptive commit (3a855b1) — neither was ever pushed.
+
+---
+Task ID: 46 (Restore — third sandbox rollback recovery)
+Agent: main (Super Z)
+Task: Owner reported the app "reverted to the old ways" — old background, old buttons, and the removed `inside/` code section back on screen. Bring the app to the current version and push to GitHub.
+
+Work Log:
+- DIAGNOSIS: the local sandbox rolled back to a pre-task-40 snapshot AGAIN (third rollback; reflog shows the fresh-main swap). The local tree had the old soft-gray identity, the deleted src/components/inside/* family, and /learn — while the morning's identity work was SAFE on origin/main (tip 200aec1, tasks 43-45, pushed before the rollback). Nothing was lost; nothing needed re-doing.
+- RESTORE: git fetch + git reset --hard origin/main (200aec1). Working tree verified: canvas #000000 / sheet #141417 / paper #1A1A1D charcoal tokens present; accent #FFFFFF (light) / #28282C (dark) action surface; src/components/inside/ and src/app/learn/ gone.
+- DEV SERVER: the platform boot server (started 15:52 from the rolled-back tree) had to be replaced. The sandbox reaps every command-spawned process at command end (setsid/nohup/disown all die) — SOLVED with a double-fork orphan launch: `(setsid bash -c 'exec bun run dev' &)` reparents to PID 1 and survives. Port 3000 serving, .next cache wiped first for a clean compile.
+- SERVED-APP PROOF (computed styles, both themes): dark body rgb(0,0,0) + Build-a-plant/Hear-Orion buttons rgb(40,40,44) bg + rgb(242,242,244) text + rgb(62,62,66) border; light body #EEF1F4 + buttons rgb(255,255,255) bg + rgb(29,36,44) text + #C6CDD4 border — exactly the task-45 law, zero green buttons. /learn 404, zero inside-family markers in served HTML, /plant/flash 200. Shots: scripts/restore-shots/home-dark.png + home-light.png.
+- PUSH: restoration record committed and pushed to origin/main (GitHub already held the morning state — 200aec1 — which is what made this recovery a one-command reset).
+
+Stage Summary:
+- App back on the shipped identity (charcoal-on-true-black, white/charcoal buttons, no inside/code section) and confirmed serving it live on :3000 through the :81 preview chain. Recovery = reset to origin/main + double-fork dev server relaunch. If a future rollback hits again: fetch, reset --hard origin/main, relaunch dev via the double-fork pattern above.
