@@ -57,7 +57,8 @@ interface Dot {
 }
 
 interface PlacedDot {
-  el: SVGCircleElement;
+  /** the dot's <g> (halo + core circles) — driven by the loop */
+  el: SVGGElement;
   d: Dot;
 }
 
@@ -133,24 +134,37 @@ export function FlowLayer({ view, streams, active, speedMul = 1, dimExcept }: Fl
     });
     const budgeted = applyBudget(counts);
 
-    // 3. one circle per dot — ours alone, never React-rendered
+    // 3. one dot per sample — ours alone, never React-rendered. Each dot
+    //    is a <g> of two circles: a soft same-color halo (`.flow-halo`,
+    //    CSS-gated to the dark control room — CanvasGlow) + the core with
+    //    its paper outline. No SVG filters: two solid fills paint far
+    //    cheaper than any blur, so the glow costs nothing per frame.
     const placed: PlacedDot[] = [];
     streams.forEach((s, i) => {
       const lut = luts.get(s.id);
       if (!lut) return;
       const n = budgeted[i];
       for (let k = 0; k < n; k++) {
-        const el = document.createElementNS(SVG_NS, 'circle');
+        const g = document.createElementNS(SVG_NS, 'g');
+        const halo = document.createElementNS(SVG_NS, 'circle');
         const r = radiusFor(s.flow, max);
+        halo.setAttribute('class', 'flow-halo');
+        halo.setAttribute('r', (r * 2.1).toFixed(2));
+        halo.setAttribute('opacity', '0.22');
+        // var() colors resolve live — theme switches need no rebuild
+        halo.style.fill = s.color;
+        const el = document.createElementNS(SVG_NS, 'circle');
         el.setAttribute('r', r.toFixed(2));
         el.setAttribute('stroke-width', '1.1');
-        // var() colors resolve live — theme switches need no rebuild
         el.style.fill = s.color;
         el.style.stroke = 'var(--fs-paper)';
-        el.style.opacity = '0';
-        host.appendChild(el);
+        g.appendChild(halo);
+        g.appendChild(el);
+        // hidden until the loop drives it (same as the old per-circle init)
+        g.style.opacity = '0';
+        host.appendChild(g);
         placed.push({
-          el,
+          el: g,
           d: {
             streamId: s.id,
             lut,

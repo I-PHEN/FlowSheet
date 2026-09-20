@@ -5,9 +5,10 @@
  * name appears: the CinemaBar nameplate, the tour index, the launch copy.
  *
  * The mark is Orion's Belt — three stars in a rising line (Alnitak,
- * Alnilam, Mintaka) — set as a solid nameplate in his signature green
- * (the ammonia hue, the plant's own product color). No animation, no
- * glow: the belt + the letterspaced name IS the identity. On the first
+ * Alnilam, Mintaka) — set as a solid nameplate in the brand accent
+ * (the luminous green; identity & action — never the chemistry sage).
+ * No animation, no glow: the belt + the letterspaced name IS the
+ * identity. On the first
  * stop of every tour — where his voice introduces him by name — the
  * plate expands to "ORION · YOUR GUIDE", so the plate and the voice
  * make the introduction together.
@@ -47,14 +48,14 @@ export function Belt({ color, size = 13 }: { color: string; size?: number }) {
 export function OrionPlate({ guide = false }: { guide?: boolean }) {
   return (
     <span
-      className="flex items-center gap-1.5 rounded-md px-2 py-1"
-      style={{ background: C.nh3 }}
+      className="flex items-center gap-1.5 rounded-md border px-2 py-1"
+      style={{ background: C.accent, borderColor: C.accentLine }}
       title="Orion — your guide. Thirty years on the catwalks; he has run every plant in this simulator."
     >
-      <Belt color={C.paper} />
+      <Belt color={C.onAccent} />
       <span
         className="font-mono text-[9px] font-extrabold tracking-[0.14em]"
-        style={{ color: C.paper }}
+        style={{ color: C.onAccent }}
       >
         ORION{guide ? ' · YOUR GUIDE' : ''}
       </span>

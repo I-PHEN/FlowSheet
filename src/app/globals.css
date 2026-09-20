@@ -44,116 +44,141 @@
 }
 
 :root {
-  /* ── flowsheet tokens · light — "soft gray studio" ──────────────────── */
-  --fs-canvas: #F1F0ED;
-  --fs-sheet: #E9E7E1;
-  --fs-band: #E9E7E1;
-  --fs-band-line: #DBD8D0;
-  --fs-paper: #FCFBF9;
-  --fs-paper-a95: rgba(252, 251, 249, 0.95);
-  --fs-ink: #26282B;
-  --fs-ink-soft: #5A5D62;
-  --fs-ink-faint: #8B8E93;
-  --fs-halo: #D9D5CB;
-  --fs-tip-shadow: 0 2px 10px rgba(38, 40, 43, 0.10);
-  --fs-card-shadow: 0 6px 28px rgba(38, 40, 43, 0.12);
-  --fs-feed: #7A5E33;
-  --fs-gas: #3A5268;
-  --fs-nh3: #3F6B4F;
-  --fs-sulfur: #A8842C;
-  --fs-utility: #8B8E93;
-  --fs-warn: #8A5A2B;
+  /* ── flowsheet tokens · light — "cool gray studio" ──────────────────────
+     Neutral professional light: cool-gray surfaces, WHITE action buttons
+     with dark text. NO green in the chrome — green lives only on the
+     flowsheet canvas as chemistry (streams, verdicts). Every pair below
+     is WCAG-proven by scripts/task43-contrast-audit.ts. */
+  --fs-canvas: #EEF1F4;
+  --fs-band: #E5EAEE;
+  --fs-band-line: #D2DAE1;
+  --fs-sheet: #E9EDF1;
+  --fs-paper: #FAFBFC;
+  --fs-paper-a95: rgba(250, 251, 252, 0.95);
+  --fs-ink: #1D242C;
+  --fs-ink-soft: #414D59;
+  --fs-ink-faint: #5C6873;
+  --fs-halo: #DCE4EA;
+  --fs-tip-shadow: 0 2px 10px rgba(29, 36, 44, 0.10);
+  --fs-card-shadow: 0 6px 28px rgba(29, 36, 44, 0.12);
+  /* action surface: white button, dark text, hairline border */
+  --fs-accent: #FFFFFF;
+  --fs-on-accent: #1D242C;
+  --fs-accent-line: #C6CDD4;
+  --fs-feed: #82653A;
+  --fs-gas: #3D5A76;
+  --fs-nh3: #377454;
+  --fs-sulfur: #7E6326;
+  --fs-utility: #5C6873;
+  --fs-warn: #8F5B2B;
+  --fs-fail: #B3452F;
 
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* shadcn surfaces live in the SAME family as the fs tokens — one
+     temperature, so toasts/dialogs/charts never clash with the chrome.
+     --primary is the action surface: white button + dark text in light. */
+  --background: #EEF1F4;
+  --foreground: #1D242C;
+  --card: #FAFBFC;
+  --card-foreground: #1D242C;
+  --popover: #FAFBFC;
+  --popover-foreground: #1D242C;
+  --primary: #FFFFFF;
+  --primary-foreground: #1D242C;
+  --secondary: #E5EAEE;
+  --secondary-foreground: #1D242C;
+  --muted: #E5EAEE;
+  --muted-foreground: #414D59;
+  --accent: #E5EAEE;
+  --accent-foreground: #1D242C;
+  --destructive: #B3452F;
+  --border: #D2DAE1;
+  --input: #D2DAE1;
+  --ring: #1D242C;
+  /* charts speak the stream language: gas · feed · sulfur · utility · fail */
+  --chart-1: #3D5A76;
+  --chart-2: #82653A;
+  --chart-3: #7E6326;
+  --chart-4: #5C6873;
+  --chart-5: #B3452F;
+  --sidebar: #FAFBFC;
+  --sidebar-foreground: #1D242C;
+  --sidebar-primary: #FFFFFF;
+  --sidebar-primary-foreground: #1D242C;
+  --sidebar-accent: #E5EAEE;
+  --sidebar-accent-foreground: #1D242C;
+  --sidebar-border: #D2DAE1;
+  --sidebar-ring: #1D242C;
 }
 
 .dark {
-  /* ── flowsheet tokens · dark — "dark studio textbook" ────────────────── */
-  /* Same grammar as light: warm-neutral canvas, ink is the brightest thing
-     on screen (~14:1), equipment paper lifts off the canvas, four muted
-     service hues brightened just enough to read on dark. High contrast,
-     not moody — no gray-on-gray. */
-  --fs-canvas: #1F1E1C;
-  --fs-sheet: #292824;
-  --fs-band: #262523;
-  --fs-band-line: #3B3A36;
-  --fs-paper: #2A2926;
-  --fs-paper-a95: rgba(42, 41, 38, 0.95);
-  --fs-ink: #EDEBE6;
-  --fs-ink-soft: #A9A79F;
-  --fs-ink-faint: #807E77;
-  --fs-halo: #37352E;
-  --fs-tip-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
-  --fs-card-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
-  --fs-feed: #C9A66B;
-  --fs-gas: #8FB2CF;
-  --fs-nh3: #85BD9A;
-  --fs-sulfur: #D9B45B;
-  --fs-utility: #96999E;
-  --fs-warn: #E0AC5E;
+  /* ── flowsheet tokens · dark — "charcoal" ──────────────────────────────
+     Professional charcoal on true black: NEUTRAL grays (no blue tint),
+     the void is #000000, panels float one step above it, card frames
+     read clearly (lighter than the old hairlines). Action buttons are
+     DARK charcoal with light text — never green, never inverted. Green
+     appears only as chemistry on the flowsheet canvas. WCAG-proven by
+     scripts/task43-contrast-audit.ts. */
+  --fs-canvas: #000000;
+  --fs-sheet: #141417;
+  --fs-band: #131315;
+  --fs-band-line: #2C2C2F;
+  --fs-paper: #1A1A1D;
+  --fs-paper-a95: rgba(26, 26, 29, 0.95);
+  --fs-ink: #ECECEE;
+  --fs-ink-soft: #A7A8AC;
+  --fs-ink-faint: #818287;
+  --fs-halo: #232326;
+  --fs-tip-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  --fs-card-shadow: 0 6px 28px rgba(0, 0, 0, 0.60);
+  /* action surface: dark charcoal button, light text, hairline border */
+  --fs-accent: #28282C;
+  --fs-on-accent: #F2F2F4;
+  --fs-accent-line: #3E3E42;
+  --fs-feed: #C9A05C;
+  --fs-gas: #7FA3C2;
+  --fs-nh3: #6FAE8C;
+  --fs-sulfur: #D4B05A;
+  --fs-utility: #8A8991;
+  --fs-warn: #D89B5C;
+  --fs-fail: #E0785F;
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* shadcn surfaces — the same NEUTRAL charcoal ramp on the true-black
+     void. --primary is the action surface: dark charcoal button + light
+     text in dark (white button + dark text in light). Ring = ink (a
+     neutral focus cue — there is no brand color in the chrome). */
+  --background: #000000;
+  --foreground: #ECECEE;
+  --card: #1A1A1D;
+  --card-foreground: #ECECEE;
+  --popover: #1A1A1D;
+  --popover-foreground: #ECECEE;
+  --primary: #28282C;
+  --primary-foreground: #F2F2F4;
+  --secondary: #131315;
+  --secondary-foreground: #ECECEE;
+  --muted: #131315;
+  --muted-foreground: #A7A8AC;
+  --accent: #131315;
+  --accent-foreground: #ECECEE;
+  --destructive: #E0785F;
+  --border: #2C2C2F;
+  --input: #2C2C2F;
+  --ring: #ECECEE;
+  /* charts speak the stream language: gas · feed · sulfur · utility · fail */
+  --chart-1: #7FA3C2;
+  --chart-2: #C9A05C;
+  --chart-3: #D4B05A;
+  --chart-4: #8A8991;
+  --chart-5: #E0785F;
+  --sidebar: #131315;
+  --sidebar-foreground: #ECECEE;
+  --sidebar-primary: #28282C;
+  --sidebar-primary-foreground: #F2F2F4;
+  --sidebar-accent: #131315;
+  --sidebar-accent-foreground: #ECECEE;
+  --sidebar-border: #2C2C2F;
+  --sidebar-ring: #ECECEE;
 }
 
 @layer base {
@@ -234,6 +259,16 @@
 }
 .op-slider:focus-visible::-moz-range-thumb {
   box-shadow: 0 0 0 2px var(--fs-canvas), 0 0 0 4px var(--fs-ink);
+}
+
+/* CanvasGlow — each flow dot carries a soft same-color halo circle (built
+   imperatively in FlowLayer). In the dark control room the halos show and
+   the streams read luminous; in light they stay hidden (a smear on paper). */
+.flow-halo {
+  display: none;
+}
+.dark .flow-halo {
+  display: inline;
 }
 
 @media (prefers-reduced-motion: reduce) {

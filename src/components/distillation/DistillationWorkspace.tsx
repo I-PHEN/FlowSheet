@@ -554,7 +554,7 @@ export function DistillationWorkspace() {
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
               style={
                 mode === 'learn'
-                  ? { background: C.ink, color: C.paper }
+                  ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine }
                   : { color: C.inkSoft }
               }
             >
@@ -567,7 +567,7 @@ export function DistillationWorkspace() {
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
               style={
                 mode === 'operate'
-                  ? { background: C.ink, color: C.paper }
+                  ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine }
                   : { color: C.inkSoft }
               }
             >

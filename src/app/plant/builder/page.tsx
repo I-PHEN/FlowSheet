@@ -385,8 +385,8 @@ export default function BuilderPage() {
           {status === 'finished' && tour && graph && (
             <button
               onClick={() => void takeTour()}
-              className="hidden items-center rounded-full px-3.5 py-1.5 text-[11.5px] font-bold sm:flex"
-              style={{ background: C.ink, color: C.canvas }}
+              className="hidden items-center rounded-full border px-3.5 py-1.5 text-[11.5px] font-bold sm:flex"
+              style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               title="Save the plant and play the docent's guided tour — voice and music"
             >
               ▶ Take the tour

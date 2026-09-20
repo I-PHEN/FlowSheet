@@ -23,7 +23,7 @@ export function TourIndex({ director }: { director: TourDirector }) {
         className="flex items-center gap-1.5 font-mono text-[9.5px] font-bold tracking-[0.16em]"
         style={{ color: C.inkFaint }}
       >
-        <Belt color={C.nh3} size={15} />
+        <Belt color={C.inkSoft} size={15} />
         ORION ON TOUR — {tour.title.toUpperCase()}
       </div>
       <div className="mt-2 space-y-1">

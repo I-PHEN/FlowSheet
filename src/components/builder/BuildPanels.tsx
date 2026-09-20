@@ -30,9 +30,9 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_COLOR: Record<string, string> = {
-  architect: C.feed,
-  engineer: C.gas,
-  critic: C.nh3,
+  architect: C.inkSoft,
+  engineer: C.inkSoft,
+  critic: C.inkSoft,
   system: C.inkFaint,
 };
 
@@ -186,7 +186,7 @@ export function KpiPanel({ solve }: { solve: SolveSummary }) {
 }
 
 export function VerdictCard({ verdict }: { verdict: CriticVerdict }) {
-  const color = verdict.verdict === 'pass' ? C.nh3 : verdict.verdict === 'revise' ? C.warn : '#B3452F';
+  const color = verdict.verdict === 'pass' ? C.nh3 : verdict.verdict === 'revise' ? C.warn : C.fail;
   return (
     <div className="border-t px-4 py-3" style={{ background: C.paper }}>
       <div className="flex items-center gap-2">

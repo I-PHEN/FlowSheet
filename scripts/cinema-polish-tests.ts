@@ -218,8 +218,8 @@ console.log('\nF. GUIDE LAW (Orion sticks — a mark, not a label)');
 
   // the Belt — three stars, one mark, zero animation
   check('the Belt is three stars (Alnitak, Alnilam, Mintaka)', (mark.match(/star\(/g) ?? []).length >= 3);
-  check('the nameplate is solid — his signature ammonia green', /background: C\.nh3/.test(mark));
-  check('the name reads on the plate (paper on green)', /ORION\{guide \? ' · YOUR GUIDE' : ''\}/.test(mark));
+  check('the nameplate is a neutral action surface (white-in-light / charcoal-in-dark — no brand color)', /background: C\.accent, borderColor: C\.accentLine/.test(mark));
+  check('the name reads on the plate (onAccent ink on the action surface)', /ORION\{guide \? ' · YOUR GUIDE' : ''\}/.test(mark));
 
   // the plate rides every caption, and widens on his introduction stop
   check('the bar mounts the nameplate', /<OrionPlate guide=\{firstStop\} \/>/.test(cinema));
@@ -227,7 +227,7 @@ console.log('\nF. GUIDE LAW (Orion sticks — a mark, not a label)');
 
   // the identity travels: the panel header carries the Belt
   check('the tour index header reads ORION ON TOUR', /ORION ON TOUR/.test(index));
-  check('the tour index carries the Belt mark', /<Belt color=\{C\.nh3\}/.test(index));
+  check('the tour index carries the Belt mark (neutral ink — no green in chrome)', /<Belt color=\{C\.inkSoft\}/.test(index));
 
   // and every launch point says his name
   const tutor = src('components', 'workspace', 'TutorPanel.tsx');

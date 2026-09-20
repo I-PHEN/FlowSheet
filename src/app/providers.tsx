@@ -3,15 +3,16 @@
 import { ThemeProvider } from 'next-themes';
 
 /**
- * Class-based theming on <html>: "light" (soft gray studio, default) or
- * "dark" (dark studio textbook). All flowsheet tokens are CSS variables in
- * globals.css that flip with the class — see src/lib/design/tokens.ts.
- * First visit follows the system preference; the toggle persists a choice.
+ * Class-based theming on <html>: "dark" (control room — the default; the
+ * plant at 3am) or "light" (cool gray studio). All flowsheet tokens are
+ * CSS variables in globals.css that flip with the class — see
+ * src/lib/design/tokens.ts. Dark is the brand on first visit; the toggle
+ * persists a choice.
  */
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
       {children}
     </ThemeProvider>
   );

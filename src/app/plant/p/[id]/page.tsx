@@ -169,7 +169,7 @@ export default function ProjectPage() {
           It may have been deleted in this browser, or the link belongs to another browser&apos;s
           library. Exported plants travel as files — import one from the home page.
         </p>
-        <Link href="/" className="mt-1 rounded-full px-5 py-2.5 text-[13px] font-bold" style={{ background: C.ink, color: C.canvas }}>
+        <Link href="/" className="mt-1 rounded-full border px-5 py-2.5 text-[13px] font-bold" style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}>
           Back to Flowsheet
         </Link>
       </div>
@@ -229,7 +229,7 @@ export default function ProjectPage() {
               aria-selected={mode === 'learn'}
               onClick={enterLearn}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={mode === 'learn' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+              style={mode === 'learn' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Learn
             </button>
@@ -238,7 +238,7 @@ export default function ProjectPage() {
               aria-selected={mode === 'operate'}
               onClick={enterOperate}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={mode === 'operate' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+              style={mode === 'operate' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Operate
             </button>
@@ -431,8 +431,8 @@ export default function ProjectPage() {
                   type="button"
                   onClick={startTour}
                   disabled={!tour}
-                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-bold disabled:opacity-40"
-                  style={{ background: C.ink, color: C.canvas }}
+                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-bold disabled:opacity-40"
+                  style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
                 >
                   <span aria-hidden="true">▶</span>
                   {tour ? tour.chip : 'No tour available'}

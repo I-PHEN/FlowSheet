@@ -87,8 +87,8 @@ export default function Unit3dPage() {
           </p>
           <Link
             href="/"
-            className="mt-1 rounded-full px-5 py-2.5 text-[13px] font-bold"
-            style={{ background: C.ink, color: C.canvas }}
+            className="mt-1 rounded-full border px-5 py-2.5 text-[13px] font-bold"
+            style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
           >
             Back to Flowsheet
           </Link>
@@ -134,8 +134,8 @@ export default function Unit3dPage() {
           )}
           <Link
             href={plant.home}
-            className="mt-2 rounded-full px-5 py-2.5 text-[13px] font-bold"
-            style={{ background: C.ink, color: C.canvas }}
+            className="mt-2 rounded-full border px-5 py-2.5 text-[13px] font-bold"
+            style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
           >
             Back to the flowsheet
           </Link>
@@ -190,8 +190,9 @@ export default function Unit3dPage() {
                 aria-pressed={cutaway === mode}
                 className="px-3 py-1.5 transition-colors"
                 style={{
-                  background: cutaway === mode ? C.ink : 'transparent',
-                  color: cutaway === mode ? C.canvas : C.inkSoft,
+                  background: cutaway === mode ? C.accent : 'transparent',
+                  color: cutaway === mode ? C.onAccent : C.inkSoft,
+                  borderColor: cutaway === mode ? C.accentLine : 'transparent',
                 }}
               >
                 {label}

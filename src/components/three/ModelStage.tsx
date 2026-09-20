@@ -26,15 +26,17 @@ import { ShellAndTubeModel } from './models/ShellAndTube';
 function useStageTheme() {
   const read = () => {
     if (typeof window === 'undefined') {
-      return { canvas: '#F1F0ED', inkSoft: '#5A5D62', bandLine: '#DBD8D0', ink: '#26282B' };
+      // light "cool gray studio" fallbacks — the canvas itself is ssr:false,
+      // so these only matter for type safety (dark is the default theme)
+      return { canvas: '#EEF1F4', inkSoft: '#414D59', bandLine: '#D2DAE1', ink: '#1D242C' };
     }
     const cs = getComputedStyle(document.documentElement);
     const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
     return {
-      canvas: v('--fs-canvas', '#F1F0ED'),
-      ink: v('--fs-ink', '#26282B'),
-      inkSoft: v('--fs-ink-soft', '#5A5D62'),
-      bandLine: v('--fs-band-line', '#DBD8D0'),
+      canvas: v('--fs-canvas', '#EEF1F4'),
+      ink: v('--fs-ink', '#1D242C'),
+      inkSoft: v('--fs-ink-soft', '#414D59'),
+      bandLine: v('--fs-band-line', '#D2DAE1'),
     };
   };
   const [theme, setTheme] = useState(read);

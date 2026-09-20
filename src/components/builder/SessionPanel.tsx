@@ -65,13 +65,16 @@ export const PHASE_LABEL: Record<BuildPhase, string> = {
   done: 'Done',
 };
 
+/** phase colors — the control-room discipline: steel = the crew at work,
+ * accent = complete. Agent identity is carried by the LABEL, not a hue;
+ * color on this rail means state, never personality. */
 export const PHASE_COLOR: Record<BuildPhase, string> = {
-  architect: C.feed,
+  architect: C.gas,
   engineer: C.gas,
-  solver: C.inkSoft,
-  critic: C.nh3,
-  docent: C.utility,
-  done: C.nh3,
+  solver: C.gas,
+  critic: C.gas,
+  docent: C.gas,
+  done: C.ink,
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -83,10 +86,10 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_COLOR: Record<string, string> = {
-  architect: C.feed,
-  engineer: C.gas,
-  critic: C.nh3,
-  docent: C.utility,
+  architect: C.inkSoft,
+  engineer: C.inkSoft,
+  critic: C.inkSoft,
+  docent: C.inkSoft,
   system: C.inkFaint,
 };
 
@@ -395,7 +398,7 @@ function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
         <span
           className="inline-block h-2 w-2 shrink-0 rounded-full"
           style={{
-            background: anyFlagged ? C.warn : live ? PHASE_COLOR[phases[lastIdx].phase] : C.nh3,
+            background: anyFlagged ? C.warn : live ? PHASE_COLOR[phases[lastIdx].phase] : C.ink,
             ...(live ? { animation: 'bd-pulse-kf 1.1s ease-in-out infinite' } : {}),
           }}
         />
@@ -1007,8 +1010,8 @@ export function SessionPanel({
                 onClick={onStart}
                 disabled={!brief.trim()}
                 aria-label={remixing ? 'Start the remix' : 'Start the build'}
-                className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl transition-opacity disabled:opacity-35"
-                style={{ background: C.ink, color: C.paper }}
+                className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border transition-opacity disabled:opacity-35"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
                 <ArrowUp size={16} strokeWidth={2.5} />
               </button>
@@ -1035,8 +1038,8 @@ export function SessionPanel({
               <button
                 onClick={onTakeTour}
                 disabled={!tourReady}
-                className="hover-band flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold disabled:opacity-40"
-                style={{ background: C.ink, color: C.paper }}
+                className="hover-band flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[12px] font-bold disabled:opacity-40"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
                 title="Save the plant and play the docent's guided tour — voice and music"
               >
                 <Play size={12} strokeWidth={3} />
@@ -1062,8 +1065,8 @@ export function SessionPanel({
               </button>
               <button
                 onClick={onReset}
-                className="hover-band ml-auto flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold"
-                style={{ background: C.ink, color: C.paper }}
+                className="hover-band ml-auto flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[12px] font-bold"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
                 <RotateCcw size={12} />
                 New session

@@ -66,9 +66,9 @@ export function BuildFab() {
         pulsed ? '' : 'fab-pulse'
       }`}
       style={{
-        borderColor: C.ink,
-        background: C.ink,
-        color: C.canvas,
+        borderColor: C.accentLine,
+        background: C.accent,
+        color: C.onAccent,
         opacity: ducked ? 0.55 : 1,
         transform: ducked ? 'translateY(10px) scale(0.92)' : 'none',
         pointerEvents: ducked ? 'none' : 'auto',
@@ -77,7 +77,7 @@ export function BuildFab() {
     >
       <span
         className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-extrabold"
-        style={{ background: C.canvas, color: C.ink }}
+        style={{ background: C.onAccent, color: C.accent }}
         aria-hidden="true"
       >
         ✦

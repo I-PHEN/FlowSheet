@@ -95,14 +95,14 @@ export function MeetOrion() {
           Meet your guide
         </span>
         <span
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1"
-          style={{ background: C.nh3 }}
+          className="flex items-center gap-1.5 rounded-md border px-2.5 py-1"
+          style={{ background: C.accent, borderColor: C.accentLine }}
           title="Orion — your guide. Thirty years on the catwalks; he has run every plant in this simulator."
         >
-          <Belt color={C.paper} />
+          <Belt color={C.onAccent} />
           <span
             className="font-mono text-[11px] font-extrabold tracking-[0.16em]"
-            style={{ color: C.paper }}
+            style={{ color: C.onAccent }}
           >
             ORION
           </span>
@@ -156,8 +156,8 @@ export function MeetOrion() {
             <button
               type="button"
               onClick={onButton}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-[13px] font-bold"
-              style={{ background: C.ink, color: C.canvas }}
+              className="flex h-10 shrink-0 items-center gap-2 rounded-full border px-5 text-[13px] font-bold"
+              style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
             >
               {label}
             </button>

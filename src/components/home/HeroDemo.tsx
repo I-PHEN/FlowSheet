@@ -337,8 +337,8 @@ export function HeroDemo() {
             )}
             {orionReady && (
               <span
-                className="mf-in rounded-md px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                style={{ background: C.nh3, color: C.paper }}
+                className="mf-in rounded-md border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
                 ORION · TOUR READY
               </span>
@@ -400,7 +400,7 @@ export function HeroDemo() {
                   >
                     <span
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bd-pulse' : ''}`}
-                      style={{ background: done ? C.nh3 : active ? C.warn : C.inkFaint }}
+                      style={{ background: done ? C.ink : active ? C.warn : C.inkFaint }}
                     />
                     <span
                       className="font-mono text-[10px] font-bold tracking-[0.12em]"
@@ -409,7 +409,7 @@ export function HeroDemo() {
                       {a.label}
                     </span>
                     {done && (
-                      <span className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.nh3 }}>
+                      <span className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.ink }}>
                         ✓
                       </span>
                     )}

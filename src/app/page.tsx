@@ -29,7 +29,7 @@ function LevelBadge({ text, solid }: { text: string; solid?: boolean }) {
       className="rounded-full border px-2 py-0.5 font-mono text-[9px] font-bold tracking-[0.12em]"
       style={
         solid
-          ? { background: C.ink, color: C.canvas, borderColor: C.ink }
+          ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine }
           : { borderColor: C.bandLine, color: C.inkSoft, background: C.paperA95 }
       }
     >
@@ -81,7 +81,7 @@ function PlantCard({
             style={{ borderColor: C.bandLine, background: C.paper, color: C.inkSoft }}
             title="Narrated by Orion — your guide"
           >
-            <Belt color={C.nh3} size={11} />
+            <Belt color={C.inkSoft} size={11} />
             <span className="font-mono text-[8px] font-extrabold tracking-[0.12em]">ORION</span>
           </span>
         </div>
@@ -150,10 +150,10 @@ export default function Home() {
               </span>
               <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
               <span
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1"
-                style={{ background: C.nh3, color: C.paper }}
+                className="flex items-center gap-1.5 rounded-md border px-2.5 py-1"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
-                <Belt color={C.paper} size={12} />
+                <Belt color={C.onAccent} size={12} />
                 TAUGHT BY ORION
               </span>
               <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
@@ -173,8 +173,8 @@ export default function Home() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 href="/plant/builder"
-                className="flex h-11 items-center gap-2 rounded-full px-5 text-[13.5px] font-bold"
-                style={{ background: C.ink, color: C.canvas }}
+                className="flex h-11 items-center gap-2 rounded-full border px-5 text-[13.5px] font-bold"
+                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
                 <span aria-hidden="true">✦</span>
                 Build a plant with AI

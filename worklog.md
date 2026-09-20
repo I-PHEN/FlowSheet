@@ -795,3 +795,56 @@ Stage Summary:
 - The hero now builds the plant with the same equipment the app draws: real silhouettes settle onto the sheet, tags underneath, streams wiring face-to-face — the demo and the product speak one grammar, and the card thumbnails inherited it for free.
 - Files: CHANGED src/components/home/MiniFlow.tsx (symbol rendering + kinded miniLayout), src/components/home/HeroDemo.tsx (real-symbol methanol loop). ADDED scripts/task42-* (mini-layout law check, seed maker, E2E drivers, VLM review) + verification shots.
 - Queue unchanged: Session B remainder (OG/meta + footer beat), then structural critic → surrogate S0/S1 ∥ VR V0.
+---
+Task ID: 43 (Identity: "Control Room" — UI master plan · PLANNING ONLY, no build)
+Agent: main (Super Z)
+Task: Owner feedback: the UI "really sucks", especially light mode — the green and the white don't complement each other; plan a massive professional refinement to a (probably dark) UI. Plan only. Owner answered five structured design questions; decisions locked.
+
+Work Log:
+- DIAGNOSIS (confirmed in code): (1) temperature clash — warm cream light palette (canvas #F1F0ED, paper #FCFBF9) vs COOL forest green #3F6B4F → green reads muddy-olive; (2) two neutral families fighting — warm fs-* tokens vs cold pure-white shadcn defaults (oklch(1 0 0)) in toasts/dialogs/chart tooltips; (3) C.nh3 double duty — chemistry semantics + Orion brand accent (~30 usages across 40+ files); (4) dark mode already reads better (#85BD9A sage on #1F1E1C) — and real plant control rooms are dark; the domain-native aesthetic is a DCS screen.
+- OWNER DECISIONS (locked): Direction A "Control Room" (cool blue-black + luminous green) · KEEP light mode as a re-tuned cool secondary, dark becomes default · SPLIT the green (bright brand accent + muted semantic sage) · PAINT FIRST (reskin before any further hero work — note Tasks 41/42 hero work already done and pushed as d9f5463/533fe62) · boldness "CanvasGlow" (quiet professional chrome, the flowsheet canvas is where the color lives).
+- TOKEN LAW: NEW C.accent (--fs-accent) = identity & action (Orion moments, primary "alive" states, focus ring). C.nh3 UNCHANGED in role = chemistry & state (product streams, pass verdicts, good-deltas, NH3 legend). NEW C.fail (--fs-fail) replaces hardcoded #B3452F. One-line rule: accent = identity & action; sage = chemistry & state.
+- DRAFT PALETTES (exact hexes finalized by the contrast audit at build time):
+  · DARK "Control Room" (primary): canvas #0B0E12 · band #131920 · bandLine #242E38 · sheet #151C24 · paper #1A222B · halo #1E2833 · ink #E8EDF2 (~15.7:1) · inkSoft #9AA8B5 (~7.5:1) · inkFaint #75828F (~4.6:1) · accent #4CC38A (~8.4:1) · nh3 #6FAE8C · gas #7FA3C2 · feed #C9A05C · sulfur #D4B05A · utility #8A939C · warn #D89B5C · fail #E0785F · shadows pure-black based.
+  · LIGHT "Cool Gray Studio" (secondary, re-tuned COOL — this kills the warm/cool clash): canvas #EEF1F4 · band #E5EAEE · bandLine #D2DAE1 · sheet #E9EDF1 · paper #FAFBFC · halo #DCE4EA · ink #1D242C (~13.8:1) · inkSoft #47535F (~7:1) · inkFaint #66727E (~4.5:1) · accent #0E7A4A (~4.7:1) · nh3 #3E7D5C · gas #3D5A76 · feed #82653A · sulfur #97782E · utility #66727E · warn #96602E · fail #B3452F.
+- SHADCN ALIGNMENT: --background/--card/--popover/--secondary/--muted/--sidebar-* mapped onto the same cool ramp in BOTH themes (one temperature family — clash ② dead); --border/--input = bandLine; --ring = accent; --chart-1..5 = accent/gas/feed/sulfur/utility (charts speak stream language); --destructive = fail.
+- THEME DEFAULT: providers.tsx defaultTheme "dark", enableSystem dropped (dark = the brand on first visit); ThemeToggle STAYS (light remains supported).
+- ACCENT MIGRATION (~8 surgical spots, the rest of the ~30 nh3 usages stay semantic): page.tsx TAUGHT-BY-ORION pill + card ORION belt → accent · OrionMark.tsx belt bg → accent · MeetOrion.tsx voice dot → accent · TourIndex.tsx belt → accent · HeroDemo.tsx ORION·TOUR-READY plate → accent · SessionPanel/BuildPanels role chips go neutral steel, "done" phase → accent; verdicts/solve-converged/deltas/legends/flowAnim stay C.nh3.
+- CANVASGLOW (dark): flow dots gain a soft drop-shadow glow; the stream hues above ARE the +chroma brightened set; ModelStage 3D scene bg/fog inherits the canvas token so 3D sits inside the room.
+- FILES (Phase 1, ~9): globals.css (both palette blocks + shadcn vars — the heart) · tokens.ts (accent/fail tokens + docs) · providers.tsx (default) · page.tsx, OrionMark.tsx, MeetOrion.tsx, TourIndex.tsx, HeroDemo.tsx (accent swaps) · SessionPanel/BuildPanels/SavedPlants (fail token + neutral role colors) · ModelStage.tsx (scene bg). Legacy page left as-is (already control-room, isolated).
+- PHASES: 1 "The Flip" (above, one commit — whole app transforms) → 2 "Polish" (hover/focus states, toasts, chart palette, per-surface passes: builder rail, plant page, workspaces) → 3 "Proof" (NEW scripts/contrast-audit.ts — computed WCAG ratios for every token pair in BOTH themes; E2E screenshots dark+light across home/builder/plant/flash/distill + fixed-window law 414px re-check both themes; VLM review dark (primary) + light (secondary); 7 gates; tsc/eslint; worklog; push via temp-PAT pattern, credential file deleted after).
+- SEQUENCING: reskin BEFORE Session-B OG/meta tags (marketing shots must show the new identity). Queue after 43: OG/meta + footer beat line → structural critic → surrogate S0/S1 ∥ VR V0.
+
+Stage Summary:
+- Identity locked: "Control Room" dark-first (blue-black #0B0E12 + luminous green #4CC38A), cool-gray light secondary, split-green token law (accent = identity/action, sage = chemistry/state), CanvasGlow boldness. Zero code written — planning session per owner instruction. Next session opens with Phase 1 "The Flip".
+
+---
+Task ID: 44 (The Flip executed + true black — superseded same session by task 45)
+Agent: main (Super Z)
+Task: Execute task 43 Phase 1 "The Flip"; owner then supplied a pure-black reference image and asked for that darkness.
+
+Work Log:
+- Executed the full task 43 plan: both palettes through tokens.ts/globals.css, shadcn alignment, dark default (providers.tsx), accent migration, CanvasGlow flow halos, ModelStage scene bg, contrast-audit script.
+- Owner's reference image measured 100% #000000 → dark canvas flipped to true black; surfaces retuned; every formerly-inverted ink button (17 sites: Build CTAs, Hear Orion, ASSEMBLED toggles, START HERE, mode toggles, tour buttons, submit arrow) migrated to a green accent fill with a new onAccent text token; shadcn --primary = accent.
+- Full verification chain ran green (audit, E2E probes, VLM SHIP, gates, fixed-window law 414/572 constant).
+
+Stage Summary:
+- Superseded within the session: owner rejected green buttons outright and the blue-tinted panels ("stupid blue black") → task 45 reworked both. This entry records the intermediate state honestly; the shipped result is task 45.
+
+---
+Task ID: 45 (Charcoal + neutral actions — the owner's final identity call)
+Agent: main (Super Z)
+Task: Owner: "make the green button white in white mode, and dark in dark mode, I don't wanna see any green… an actual professional charcoal dark mode… card frames less dark, not the current stupid blue black, everywhere across the app."
+
+Work Log:
+- TOKEN LAW REWRITTEN: there is NO brand color in the chrome. `accent` is now the ACTION SURFACE — #FFFFFF white with dark text in light, #28282C charcoal with light text in dark — every action button pairs accent bg + onAccent ink + NEW accentLine hairline border (light #C6CDD4, dark #3E3E42). Green (nh3) survives ONLY as chemistry & state on the flowsheet canvas (product streams, PASS verdicts, good deltas).
+- DARK "CHARCOAL": every surface de-blued — canvas #000000 · sheet #141417 · band #131315 · paper #1A1A1D · halo #232326 (B-R ≤ 3 on every panel; the old blue-black was B-R +11). Card frames LIGHTER + neutral: bandLine #1F2933→#2C2C2F (the "less dark frames" ask), accentLine for action edges. Ink ramp #ECECEE/#A7A8AC/#818287.
+- LIGHT: surfaces unchanged (cool gray studio); action buttons WHITE + ink text + hairline; ring = ink (neutral focus cue); chart ramps drop green (gas/feed/sulfur/utility/fail).
+- SWEEP: all 20 action sites gained accentLine borders (hero CTA, TAUGHT BY ORION, START HERE, Hear Orion, both ASSEMBLED/CUTAWAY toggles, Learn/Operate toggles ×4 workspaces, Take the tour ×3, submit arrow, New session, Back links ×4, BuildFab, Orion plates); chrome-green killed at every remaining site (card + tour-index Belts → inkSoft, role-chip done dots → ink, TOUR READY → action surface, PHASE_COLOR done → ink, shadcn --primary/--ring/--chart-1/sidebar-* neutralized; button.tsx default variant gained a border so the white Save button reads on white dialogs).
+- PROOF: contrast audit rebuilt for the new law — every pair passes both themes (worst 4.53:1, onAccent/accent 13-15:1, ink 17.4:1 on the void). E2E computed-style probe: dark buttons rgb(40,40,44)+rgb(242,242,244) on rgb(0,0,0), light buttons rgb(255,255,255)+rgb(29,36,44), greenButtons=0 in BOTH themes. Pixel audit: dark hero 61.7% pure #000000, panels B-R=3, saturated green 0.006% (chemistry only). VLM review of 10 shots: SHIP — no green chrome, neutral charcoal confirmed, white/charcoal buttons confirmed, no defects. Fixed-window law 414/573 constant. tsc 0 errors (src), eslint clean.
+- GATES: cinema-polish 93/93 (two green-law assertions updated to the no-green law), operate-parity 52/52, learn-merge 43/43, agent 63/63, engine 62/62, flow-anim 53/53, graph identity holds.
+
+Stage Summary:
+- The shipped identity: professional charcoal dark on true black, white-in-light / charcoal-in-dark action buttons with hairline borders, clear neutral card frames, zero green outside the flowsheet canvas. One palette law, both themes, whole app.
+- Files: globals.css, tokens.ts, button.tsx + 16 component/page files; scripts: task43-contrast-audit (rewritten), task45-e2e.sh, task45-vlm.ts, task44-e2e.sh, cinema-polish-tests (law update), shots in task43/44/45-shots.
+- History note: the two UUID auto-commits (05338a0, 32759b2) were reset away and replaced by one descriptive commit (3a855b1) — neither was ever pushed.

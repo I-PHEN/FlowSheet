@@ -42,7 +42,7 @@ export function SavedPlants() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {plants.map((p) => {
           const v = p.verdict?.verdict ?? 'revise';
-          const color = v === 'pass' ? C.nh3 : v === 'revise' ? C.warn : '#B3452F';
+          const color = v === 'pass' ? C.nh3 : v === 'revise' ? C.warn : C.fail;
           return (
             <Link
               key={p.slug}

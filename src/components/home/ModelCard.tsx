@@ -107,8 +107,9 @@ export function ModelCard() {
               aria-pressed={cutaway === mode}
               className="px-3 py-1 font-mono text-[9.5px] font-bold tracking-[0.12em]"
               style={{
-                background: cutaway === mode ? C.ink : 'transparent',
-                color: cutaway === mode ? C.canvas : C.inkSoft,
+                background: cutaway === mode ? C.accent : 'transparent',
+                color: cutaway === mode ? C.onAccent : C.inkSoft,
+                borderColor: cutaway === mode ? C.accentLine : 'transparent',
               }}
             >
               {mode ? 'CUTAWAY' : 'ASSEMBLED'}

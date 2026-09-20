@@ -178,7 +178,7 @@ export function Workspace() {
               aria-selected={mode === 'learn'}
               onClick={enterLearn}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={mode === 'learn' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+              style={mode === 'learn' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Learn
             </button>
@@ -187,7 +187,7 @@ export function Workspace() {
               aria-selected={mode === 'operate'}
               onClick={enterOperate}
               className="rounded-full px-3.5 py-1 text-[12px] font-bold"
-              style={mode === 'operate' ? { background: C.ink, color: C.paper } : { color: C.inkSoft }}
+              style={mode === 'operate' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Operate
             </button>
