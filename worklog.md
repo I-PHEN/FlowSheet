@@ -727,3 +727,17 @@ Work Log:
 Stage Summary:
 - GitHub now shows: main (product, 17 commits after this entry, every message descriptive), history/pre-reset-builds (the real three-week build story), history/v3-pre-reset (the v3 snapshot line). No UUID commit messages anywhere. Everything the user asked to push is pushed.
 - Note flagged to user: the Builder's Room file is public inside the repo (user raised no objection; can be pulled out on request).
+
+---
+Task ID: 39 (Builder's Room pulled from the public repo)
+Agent: main (Super Z)
+Task: Owner: pull the Builder's Room file out of GitHub — it is private study material, not part of the public story.
+
+Work Log:
+- Rebuilt the three commits that carried the tutor artifacts (the task 35-36 commit and both worklog commits) with the 16 builders-room paths excluded from their trees; the task 35-36 message adjusted to stay honest — the tutor was built, the artifact is intentionally not published, it lives offline with the owner.
+- .gitignore guards added (download/Flowsheet_The_Builders_Room.html, scripts/builders-room/) so no future commit re-adds them; the owner's local copy on disk is untouched and now ignored.
+- Verified before moving the branch: zero commits on the new line touch the dropped paths; the only diff old-tip -> new-tip is the 16 deletions plus the .gitignore guard.
+- Old line (with the file) preserved locally on backup/builders-room-20260920 — local safety net, never pushed.
+
+Stage Summary:
+- The public repo now carries no copy of the tutor or its build scaffolding anywhere in main's history; pushed with force-with-lease after verification. Owner keeps the offline file.

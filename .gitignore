@@ -65,3 +65,7 @@ upload/pasted_image_*
 
 # sandbox artifacts (agent tooling, screenshots, VLM results)
 tool-results/
+
+# Owner's private study material — never publish
+download/Flowsheet_The_Builders_Room.html
+scripts/builders-room/
