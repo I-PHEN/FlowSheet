@@ -741,3 +741,21 @@ Work Log:
 
 Stage Summary:
 - The public repo now carries no copy of the tutor or its build scaffolding anywhere in main's history; pushed with force-with-lease after verification. Owner keeps the offline file.
+
+---
+Task ID: 40 (Session A — the hero sells Orion too: three beats, Meet Orion section, card chips)
+Agent: main (Super Z)
+Task: Owner: now that Orion exists, the hero must market him (and the 3D) — the app's two invisible magics. Plan first (approved), then build Session A. Law: NOT cumbersome — tight copy, one compact section, no bloat.
+
+Work Log:
+- HERO: three-beat chip row under the H1 (BUILT BY AI → TAUGHT BY ORION → EXPLORED IN 3D) in the app's mono-chip language — the middle chip is Orion's solid ammonia-green plate with the Belt, the outer two are quiet bordered chips; all three claims true today. Body paragraph revised: the weak "narrated, scored tour" clause replaced with the two magics — "a guide named Orion — a thirty-year shift supervisor — walks you through it in voice, and every unit opens for inspection in 3D." H1 and CTAs untouched (tested, tight).
+- MEET ORION (NEW components/home/MeetOrion.tsx): compact two-column section between hero and projects. Left: MEET YOUR GUIDE kicker, the large nameplate (Belt + ammonia-green ORION), bio line "Thirty years on the catwalks. Now he lives in your browser.", three one-line law bullets, text CTA into the reference tour. Right: the voice card — marketing by demonstration: one button plays his introduction through the REAL pipeline (narrator singleton → /api/tts → useSyncedCaption sync law), the caption streaming word-by-word with the caret exactly as he speaks; player semantics on one button (▶ Hear Orion → ■ Stop → ↺ Replay; Stop returns to the resting invite — no half-frozen lines in a marketing card); honest states (warming/voice-unavailable-reading-instead); leaving the page cuts his line; blob cache makes the sample cost once. His intro is written to the ORION_VOICE spec (plain words, operator senses, name once, no formulas).
+- CARD CHIPS: every learning-path card carries a tiny Belt+ORION chip beside its title (all three plants are narrated by him); the reference card description now ends "— and every unit opens in 3D."
+- VLM REVIEW: took one suggestion — the voice-card header now reads ORION'S INTRODUCTION (stands alone when cropped for a deck). The other two suggestions targeted pre-existing hero elements (paper card in dark mode, hero spacing) — the established visual language, left alone.
+- LIVE VERIFICATION (agent-browser): chips render (3 beats); Hear Orion clicked → warming holds → caption streams with caret ("Name's Orion. Thirty" → "…catwalks — I've" at 3s intervals, voice pace) → completes exactly at voice end → button becomes Replay; Replay re-streams from word 1; Stop returns to invite; zero page errors; mobile 390px no overflow (one transient SVG rect mid-refresh, re-check clean); console clean.
+- GATES: cinema-polish 93/93, operate-parity 52/52, learn-merge 43/43, agent 63/63, engine 62/62, flow-anim 53/53, graph identity holds; tsc (src) 0 errors; eslint clean.
+
+Stage Summary:
+- The landing page now tells the whole story in one scan — three beats in the hero, Orion introduced with his real voice a scroll away, every card carrying his name. Marketing by demonstration, zero new animation, zero bloat: one section, one button, three chips.
+- Files: NEW src/components/home/MeetOrion.tsx. CHANGED src/app/page.tsx (chips + paragraph + MeetOrion mount + card chips + reference 3D copy).
+- Session B (queued): the 3D marketing section (lazy viewer + the 2D→3D "same unit, two views" pairing) + OG/meta tags + footer beat line.

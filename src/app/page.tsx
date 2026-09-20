@@ -20,6 +20,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { HeroDemo } from '@/components/home/HeroDemo';
 import { ProjectsGrid } from '@/components/home/ProjectsGrid';
 import { BuildFab } from '@/components/home/BuildFab';
+import { MeetOrion } from '@/components/home/MeetOrion';
+import { Belt } from '@/components/learn/OrionMark';
 
 function LevelBadge({ text, solid }: { text: string; solid?: boolean }) {
   return (
@@ -69,8 +71,19 @@ function PlantCard({
         </div>
       </div>
       <div className="border-t p-4" style={{ borderColor: C.bandLine }}>
-        <div className="text-[15px] font-bold" style={{ color: C.ink }}>
-          {title}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[15px] font-bold" style={{ color: C.ink }}>
+            {title}
+          </div>
+          {/* every plant's tour is narrated by Orion — say so on the card */}
+          <span
+            className="flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5"
+            style={{ borderColor: C.bandLine, background: C.paper, color: C.inkSoft }}
+            title="Narrated by Orion — your guide"
+          >
+            <Belt color={C.nh3} size={11} />
+            <span className="font-mono text-[8px] font-extrabold tracking-[0.12em]">ORION</span>
+          </span>
         </div>
         <div className="mt-1 text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
           {children}
@@ -126,10 +139,37 @@ export default function Home() {
               <br />
               <span style={{ color: C.inkSoft }}>Watch AI engineer it</span> — live.
             </h1>
+
+            {/* the three beats — the whole product in one scan */}
+            <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono text-[9.5px] font-bold tracking-[0.12em]">
+              <span
+                className="rounded-full border px-2.5 py-1"
+                style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paper }}
+              >
+                BUILT BY AI
+              </span>
+              <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
+              <span
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1"
+                style={{ background: C.nh3, color: C.paper }}
+              >
+                <Belt color={C.paper} size={12} />
+                TAUGHT BY ORION
+              </span>
+              <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
+              <span
+                className="rounded-full border px-2.5 py-1"
+                style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paper }}
+              >
+                EXPLORED IN 3D
+              </span>
+            </div>
+
             <p className="mt-4 max-w-[520px] text-[13.5px] leading-relaxed" style={{ color: C.inkSoft }}>
               Type a sentence — any route, any capacity. An architect plans it, an engineer wires
               every unit and stream, a solver closes the mass and energy balance, and a critic
-              signs it off. Then walk your plant with a narrated, scored tour. No installs —
+              signs it off. Then a guide named Orion — a thirty-year shift supervisor — walks you
+              through it in voice, and every unit opens for inspection in 3D. No installs —
               everything runs and solves in your browser.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -152,6 +192,9 @@ export default function Home() {
           </div>
           <HeroDemo />
         </section>
+
+        {/* ---- the guide gets a face: his nameplate and his real voice ---- */}
+        <MeetOrion />
 
         {/* ---- your projects (appears when the store has one) ---- */}
         <ProjectsGrid />
@@ -197,7 +240,7 @@ export default function Home() {
             layout={REFERENCE_LAYOUT}
           >
             The classic route: natural gas + steam to 1,000 t/d of ammonia. 19 units, 27 streams,
-            a recycle loop, and three guided tours.
+            a recycle loop, three guided tours — and every unit opens in 3D.
           </PlantCard>
         </div>
 
