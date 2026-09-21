@@ -123,6 +123,7 @@ export function generateTour(rec: PlantRecord): Tour {
     : '';
   steps.push({
     ref: firstUnit ? { type: 'unit', id: firstUnit.id } : { type: 'unit', id: '' },
+    framing: 'fit', // the whole sheet while the narrator gives the overview
     title: `${rec.name}`,
     text: [
       `This is ${rec.name}, built by the AI agents from your brief.`,
@@ -176,6 +177,7 @@ export function generateTour(rec: PlantRecord): Tour {
     ref: graph.units[graph.units.length - 1]
       ? { type: 'unit', id: graph.units[graph.units.length - 1].id }
       : { type: 'unit', id: '' },
+    framing: 'fit', // land the close over the whole plant, and stay there
     title: pick(OUTRO, unitCount + streamCount),
     text: [
       'That is the whole plant on one sheet.',
@@ -210,9 +212,20 @@ export function safeTour(t: unknown): Tour | null {
     const text = typeof st.text === 'string' ? st.text : '';
     if (!ref || typeof ref.id !== 'string' || !title || !text) continue;
     if (text.length < 20 || text.length > 900) continue;
-    steps.push({ ref: { type: 'unit', id: ref.id }, title: title.slice(0, 80), text });
+    steps.push({
+      ref: { type: 'unit', id: ref.id },
+      title: title.slice(0, 80),
+      text,
+      // a docent may frame a middle stop wide (a map beat) — keep it
+      ...(st.framing === 'fit' || st.framing === 'unit' ? { framing: st.framing } : {}),
+    });
   }
   if (steps.length < 3) return null;
+  // the owner's choreography law: every tour opens wide (the narrator's
+  // overview of the whole plant) and lands wide (the close over the full
+  // sheet) — AI-authored tours get it for free, hand edits included
+  steps[0].framing = 'fit';
+  steps[steps.length - 1].framing = 'fit';
   return {
     id: o.id.slice(0, 64),
     chip: typeof o.chip === 'string' ? o.chip.slice(0, 32) : 'Guided tour',

@@ -11,6 +11,11 @@
  *   stay in sync; double-mounting a step dedupes to a single voice-over
  *   ("same text already loading/speaking" is a no-op).
  * - The tour layer wires "speaking" to music ducking.
+ * - The element is lazily routed through an AnalyserNode so the voice can
+ *   be SEEN: amplitude() exposes its live loudness (0..1) for the hero
+ *   voice card's waveform. If the graph cannot run (no gesture yet, no
+ *   WebAudio), playback stays native and amplitude() is null — callers
+ *   animate a fallback instead.
  */
 
 export type NarrationState = 'idle' | 'loading' | 'speaking' | 'blocked' | 'error';
@@ -24,6 +29,14 @@ class Narrator {
   private token = 0;
   private currentText: string | null = null; // text being loaded/spoken
   private listeners = new Set<(s: NarrationState) => void>();
+  // the analyser graph (the hero voice card's waveform):
+  // element → analyser → destination, wired once, after the first
+  // successful play (a user gesture is on the stack)
+  private actx: AudioContext | null = null;
+  private elemSrc: MediaElementAudioSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private analysBuf: Uint8Array<ArrayBuffer> | null = null;
+  private analyserDead = false; // wiring failed once → native playback forever
   state: NarrationState = 'idle';
 
   subscribe(fn: (s: NarrationState) => void): () => void {
@@ -74,6 +87,68 @@ class Narrator {
       this.audio.volume = 0.95;
     }
     return this.audio;
+  }
+
+  /** the listener's level for the voice itself (the hero card's slider) */
+  setVolume(v: number): void {
+    this.el().volume = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.95));
+  }
+
+  /** the voice element's current level, 0..1 */
+  volume(): number {
+    return this.el().volume;
+  }
+
+  /**
+   * Live loudness of the voice, 0..1, or null when the voice is not
+   * speaking or the analyser graph is unavailable. The hero voice card
+   * draws its waveform from THIS — the ribbon is Orion's actual voice,
+   * not a looping animation.
+   */
+  amplitude(): number | null {
+    if (this.state !== 'speaking' || !this.analyser || !this.analysBuf) return null;
+    this.analyser.getByteTimeDomainData(this.analysBuf);
+    let sum = 0;
+    for (let i = 0; i < this.analysBuf.length; i++) {
+      const d = (this.analysBuf[i] - 128) / 128;
+      sum += d * d;
+    }
+    const rms = Math.sqrt(sum / this.analysBuf.length);
+    return Math.min(1, rms * 3.4); // speech RMS ≈ 0.03..0.3 → a 0..1 envelope
+  }
+
+  /**
+   * Wire the analyser graph on the first successful play — from then on
+   * the element's sound flows element → analyser → destination (same
+   * volume, now readable). Built only when the AudioContext can actually
+   * run: routing through a suspended context would SILENCE the element,
+   * so no-gesture situations stay on native playback.
+   */
+  private async attachAnalyser(): Promise<void> {
+    if (this.analyser || this.analyserDead) return;
+    const el = this.audio;
+    if (!el) return;
+    try {
+      const AC: typeof AudioContext | undefined =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      const ctx = this.actx ?? new AC();
+      this.actx = ctx;
+      if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
+      if (ctx.state !== 'running') return;
+      if (!this.elemSrc) {
+        this.elemSrc = ctx.createMediaElementSource(el);
+        this.analyser = ctx.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.analyser.smoothingTimeConstant = 0.55;
+        this.elemSrc.connect(this.analyser);
+        this.analyser.connect(ctx.destination);
+        this.analysBuf = new Uint8Array(this.analyser.fftSize);
+      }
+    } catch {
+      this.analyserDead = true; // stay on the native path forever
+    }
   }
 
   /** warm the cache for a step the user is likely to open next */
@@ -154,6 +229,8 @@ class Narrator {
     try {
       await el.play();
       if (my === this.token) this.setState('speaking');
+      // let the voice be SEEN — wire the waveform graph on this gesture
+      void this.attachAnalyser();
     } catch {
       // autoplay policy or decode failure — offer a manual tap instead
       if (my === this.token) {

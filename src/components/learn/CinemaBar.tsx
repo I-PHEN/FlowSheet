@@ -20,11 +20,12 @@
  *      word k onto the audio element's actual currentTime/duration, so
  *      captions can never outrun the voice; pausing freezes them where
  *      the voice cut, and a resumed line re-streams as it is re-read.
- *   2. THE DOCK LAW — the bar is flush with the bottom edge of the
- *      stage, player-chrome style: the caption leads, the scrubber dots
- *      ride under it, and the transport row (pause included) is the LAST
- *      row, at the very bottom of the screen. The bar never floats over
- *      the plant; it IS the bottom of the player.
+ *   2. THE CARD LAW — the player is a BOUNDED card, centered near the
+ *      bottom of the stage with air on every side: it never touches the
+ *      screen edges, because a strip across the whole screen reads as
+ *      chrome, not as a player. Inside, the same player order: caption,
+ *      scrubber dots, transport last. The legend and zoom cluster yield
+ *      beneath it for the length of the tour.
  *   3. THE YOUTUBE LAW — the transport row fades and collapses after a
  *      few idle seconds; any pointer move, key, wheel, or touch brings it
  *      back instantly. Hovering or focusing the bar keeps it up; pausing
@@ -35,7 +36,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
+import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume1, Volume2, VolumeX, X } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import type { TourDirector } from '@/lib/ui/tourDirector';
 import { useSyncedCaption } from '@/lib/ui/useSyncedCaption';
@@ -43,6 +44,86 @@ import { OrionPlate } from '@/components/learn/OrionMark';
 
 /** idle time before the transport row vanishes — YouTube's beat */
 const CHROME_HIDE_MS = 2800;
+
+/** the music bed's volume — a CONTROL, not just a switch. Click opens the
+ *  level popover; the icon reads the level (muted / low / full); dragging
+ *  rides a smooth ramp on the running bed, zero stops it, and the choice
+ *  persists like every other audio pref. The open state is LIFTED so the
+ *  bar can yield the keyboard-hint line under the popover. */
+function MusicLevel({
+  audio,
+  open,
+  setOpen,
+}: {
+  audio: TourDirector['audio'];
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  const popRef = useRef<HTMLDivElement>(null);
+  const level = audio.prefs.musicLevel;
+
+  // click-outside and Escape close the popover
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const pct = Math.round(level * 100);
+  return (
+    <div className="relative" ref={popRef}>
+      <CtrlBtn
+        label={level === 0 ? 'Music muted — open the level control' : `Music level ${pct}%`}
+        onClick={() => setOpen(!open)}
+        on={level > 0}
+      >
+        {level === 0 ? (
+          <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : level < 0.5 ? (
+          <Volume1 className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
+      </CtrlBtn>
+      {open && (
+        <div
+          className="absolute bottom-full right-0 z-40 mb-2 w-40 rounded-lg border p-2.5 shadow-xl"
+          style={{ background: C.paper, borderColor: C.bandLine }}
+          role="group"
+          aria-label="Music volume"
+        >
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={pct}
+            onChange={(e) => audio.setMusicLevel(Number(e.target.value) / 100)}
+            className="vc-range w-full"
+            aria-label="Music volume"
+          />
+          <div
+            className="mt-1 flex items-center justify-between font-mono text-[9px] font-bold tracking-[0.1em]"
+            style={{ color: C.inkFaint }}
+          >
+            <span>MUSIC</span>
+            <span>{level === 0 ? 'MUTED' : `${pct}%`}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CtrlBtn({
   label,
@@ -95,6 +176,8 @@ export function CinemaBar({ director }: { director: TourDirector }) {
   const [idle, setIdle] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
+  // the music popover's open state — lifted so the hint line can yield to it
+  const [volOpen, setVolOpen] = useState(false);
 
   useEffect(() => {
     let t: number | null = null;
@@ -151,11 +234,13 @@ export function CinemaBar({ director }: { director: TourDirector }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
-      {/* THE DOCK: flush with the bottom edge of the stage, full width —
-          player chrome, never a card hovering over the plant. The legend
-          and zoom cluster yield beneath it for the length of the tour. */}
+      {/* THE PLAYER CARD — bounded, centered, never edge-to-edge: a player
+          is an OBJECT, so it gets margins, corners, and a full frame — not
+          a strip across the screen. Same player order inside: caption,
+          scrubber, transport. The legend and zoom cluster still yield
+          beneath it for the length of the tour. */}
       <div
-        className="pointer-events-auto w-full border-t shadow-2xl"
+        className="pointer-events-auto mx-auto mb-3 w-[calc(100%-1.5rem)] max-w-[880px] overflow-hidden rounded-xl border shadow-2xl sm:mb-4 sm:w-[calc(100%-3rem)]"
         style={{ background: C.paperA95, borderColor: C.bandLine }}
         role="region"
         aria-label={`Guided tour — stop ${idx + 1} of ${tour.steps.length}`}
@@ -202,7 +287,10 @@ export function CinemaBar({ director }: { director: TourDirector }) {
               />
             ))}
           </div>
-          <span className="shrink-0 text-[10px] font-medium tracking-wide" style={{ color: C.inkFaint }}>
+          <span
+            className="shrink-0 text-[10px] font-medium tracking-wide transition-opacity duration-200"
+            style={{ color: C.inkFaint, opacity: volOpen ? 0 : 1 }}
+          >
             {guided ? status || '← → step · space pause · esc end' : 'paused — click any unit on the sheet'}
           </span>
         </div>
@@ -277,15 +365,7 @@ export function CinemaBar({ director }: { director: TourDirector }) {
                     <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
                 </CtrlBtn>
-                <CtrlBtn
-                  label={audio.prefs.music ? 'Music on' : 'Music off'}
-                  onClick={audio.toggleMusic}
-                  on={audio.prefs.music}
-                >
-                  <span className="text-[12px]" aria-hidden="true">
-                    ♪
-                  </span>
-                </CtrlBtn>
+                <MusicLevel audio={audio} open={volOpen} setOpen={setVolOpen} />
                 <CtrlBtn
                   label={guided ? 'Replay narration' : 'Narrate this card'}
                   onClick={guided ? audio.replay : director.speakCurrent}

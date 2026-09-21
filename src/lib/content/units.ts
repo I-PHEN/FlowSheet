@@ -181,6 +181,11 @@ export interface TourStep {
   ref: Ref;
   title: string;
   text: string;
+  /** camera framing while this stop speaks. 'unit' (the default) dives to
+   *  the step's ref; 'fit' holds the WHOLE sheet — the overview that opens
+   *  a tour and the outro that lands it, so the narrator can point at the
+   *  entire plant before (and after) walking through it. */
+  framing?: 'unit' | 'fit';
 }
 
 export interface Tour {
@@ -196,6 +201,12 @@ export const TOURS: Tour[] = [
     chip: 'Walk me through the plant',
     title: 'The plant, end to end',
     steps: [
+      {
+        ref: { type: 'unit', id: 'M1' },
+        framing: 'fit',
+        title: 'The plant at a glance',
+        text: 'Here is the whole plant on one sheet. Natural gas enters on the left; by the right edge it has become liquid ammonia, and the long return line at the bottom carries the unreacted gas around for another pass. Every unit, front to back — walk them with me.',
+      },
       {
         ref: { type: 'unit', id: 'M1' },
         title: 'Two ingredients',
@@ -258,6 +269,7 @@ export const TOURS: Tour[] = [
       },
       {
         ref: { type: 'unit', id: 'SP1' },
+        framing: 'fit',
         title: 'Purge, then go around again',
         text: 'A few percent of loop gas is purged to the fuel system — the only exit for argon and methane. Everything else is pushed by the circulator along the long return line at the bottom of the diagram, back to the loop mixer. That returning line is why this is a loop.',
       },
@@ -270,6 +282,7 @@ export const TOURS: Tour[] = [
     steps: [
       {
         ref: { type: 'stream', id: 'S01' },
+        framing: 'fit',
         title: 'You arrive in a methane molecule',
         text: 'You are bonded to a carbon atom in natural gas entering at ~30 bar. Four hydrogen atoms share your molecule. For now, you are a fuel — but this plant has other plans for you.',
       },
@@ -310,6 +323,7 @@ export const TOURS: Tour[] = [
       },
       {
         ref: { type: 'stream', id: 'S23' },
+        framing: 'fit',
         title: '…and the 85% who went around again',
         text: 'Not every atom converts on the first pass. The unreacted gas follows this long return line — cooled, separated, recompressed, and sent back through the converter. After several laps, overall conversion exceeds 95%. The loop is patience made visible.',
       },
@@ -322,6 +336,7 @@ export const TOURS: Tour[] = [
     steps: [
       {
         ref: { type: 'unit', id: 'R6' },
+        framing: 'fit',
         title: 'The uncomfortable truth',
         text: 'Ammonia synthesis is equilibrium-limited. Even at 150–200 bar, only ~15% of the gas converts per pass through the converter. A once-through plant would throw away 85% of its hydrogen — economically absurd.',
       },
@@ -347,6 +362,7 @@ export const TOURS: Tour[] = [
       },
       {
         ref: { type: 'stream', id: 'S23' },
+        framing: 'fit',
         title: 'The payoff',
         text: 'Follow this line with your eyes: circulator → return line → mixer → converter → condenser → separator → back again. Each lap converts another slice of gas. A 15%-per-pass reactor becomes a plant with better than 95% overall conversion. That closed circuit is the single most important idea in the flowsheet.',
       },

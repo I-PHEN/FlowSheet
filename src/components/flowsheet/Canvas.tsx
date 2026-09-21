@@ -197,7 +197,31 @@ export const FlowsheetCanvas = forwardRef<CanvasHandle, CanvasProps>(function Fl
 
   const fit = useCallback(() => {
     stopAnim();
-    setView({ x: 0, y: 0, w: L.canvas.w, h: L.canvas.h });
+    // a flight, not a cut — the tour's breathing camera pulls back to the
+    // whole sheet between stops, so fit eases like panTo does (reduced
+    // motion lands instantly)
+    const target: View = { x: 0, y: 0, w: L.canvas.w, h: L.canvas.h };
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      setView(target);
+      return;
+    }
+    const from = viewRef.current;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / 560);
+      const e = 1 - Math.pow(1 - p, 3);
+      setView({
+        x: from.x + (target.x - from.x) * e,
+        y: from.y + (target.y - from.y) * e,
+        w: from.w + (target.w - from.w) * e,
+        h: from.h + (target.h - from.h) * e,
+      });
+      if (p < 1) animRef.current = requestAnimationFrame(step);
+    };
+    animRef.current = requestAnimationFrame(step);
   }, [stopAnim, L]);
 
   const panTo = useCallback(

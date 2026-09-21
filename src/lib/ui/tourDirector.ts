@@ -23,12 +23,20 @@
  *   - Camera intent is DATA ({ kind: 'fly' | 'fit', seq }): each surface
  *     maps it to its own canvas (reference panTo / builder flyToRef), so
  *     the director never knows which canvas it is driving.
+ *   - THE BREATHING LAW — a tour is not a slide deck. Stops marked
+ *     framing 'fit' hold the whole sheet (the overview that opens a tour,
+ *     the outro that lands it); every other stop dives to its unit; and
+ *     BETWEEN stops the camera pulls back to the full flowsheet, holds it
+ *     for a beat, then dives into the next unit — the viewer re-orients
+ *     ("that is where we are") before every new close-up. Any user action
+ *     (jump, roam, pause, end) cancels pending camera phases: the user
+ *     always owns the camera.
  *   - Everything depends on the graph + script, never on a solve —
  *     conceptual plants (no engine) will get Learn on day one.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Ref, Tour } from '@/lib/content/units';
+import type { Ref, Tour, TourStep } from '@/lib/content/units';
 import { narrator } from '@/lib/audio/narration';
 import { stepScript, useTourAudio, unlockAudio } from '@/lib/audio/tourAudio';
 import { setTourActive } from '@/lib/ui/tourBus';
@@ -50,6 +58,19 @@ export interface DirectorStop {
 export type CamIntent =
   | { kind: 'fly'; ref: Ref; seq: number }
   | { kind: 'fit'; seq: number };
+
+/** a stop's camera framing — 'fit' holds the whole sheet, 'unit' (the
+ *  default) dives to the stop's ref */
+export function framingOf(step: TourStep | undefined): 'unit' | 'fit' {
+  return step?.framing === 'fit' ? 'fit' : 'unit';
+}
+
+/** the breathing law's timings — the pull-back to the whole flowsheet,
+ *  the beat it stays on screen, and the plain breath between two
+ *  consecutive wide stops (nothing to pull back from) */
+const PULL_MS = 560;
+const DWELL_MS = 500;
+const BREATH_MS = 650;
 
 /** a synthesized roam caption (page-provided: unit stories, registry facts) */
 export interface RoamCaption {
@@ -128,42 +149,79 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
     setCam({ kind: 'fit', seq: ++seqRef.current });
   }, []);
 
+  /** point the camera at a step — 'fit' stops hold the whole sheet, the
+   *  rest dive to their ref (the framing law) */
+  const aim = useCallback(
+    (step: TourStep | undefined) => {
+      if (!step) return;
+      if (framingOf(step) === 'fit') fit();
+      else fly(step.ref);
+    },
+    [fit, fly],
+  );
+
+  // ---- camera phases (the breathing law) ----------------------------------
+  // the pull-back → dwell → dive sequence is a TIMER, not state: any user
+  // action clears it and takes the camera immediately.
+  const camTimerRef = useRef<number | null>(null);
+  const clearCamPhase = useCallback(() => {
+    if (camTimerRef.current != null) {
+      window.clearTimeout(camTimerRef.current);
+      camTimerRef.current = null;
+    }
+  }, []);
+
+  // the auto-advance timer (voice-gap / reading dwell) — same cancellation
+  // contract as the camera phases; declared here so every thread action
+  // below can clear both
+  const timerRef = useRef<number | null>(null);
+  const clearTimer = useCallback(() => {
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   // ---- thread control -----------------------------------------------------
 
   const start = useCallback(
     (t: Tour, at = 0) => {
       unlockAudio(); // audio needs a user gesture — the click that got us here
+      clearTimer();
+      clearCamPhase();
       const i = Math.max(0, Math.min(t.steps.length - 1, at));
       setTour(t);
       setIdx(i);
       setPace('guided');
       setPlaying(true);
       setRoamStop(null);
-      const step = t.steps[i];
-      if (step) fly(step.ref);
+      aim(t.steps[i]); // an overview stop opens wide — the whole plant first
     },
-    [fly],
+    [aim, clearTimer, clearCamPhase],
   );
 
   const end = useCallback(() => {
     if (!tour) return; // nothing to end — don't yank the camera either
+    clearTimer();
+    clearCamPhase();
     setTour(null);
     setRoamStop(null);
-    fit();
-  }, [tour, fit]);
+    fit(); // the tour lands on the whole plant, and stays there
+  }, [tour, fit, clearTimer, clearCamPhase]);
 
   const jump = useCallback(
     (i: number) => {
       if (!tour) return;
+      clearTimer();
+      clearCamPhase(); // the user took the thread — pending phases die
       const c = Math.max(0, Math.min(tour.steps.length - 1, i));
       setIdx(c);
       setPace('guided'); // jumping is a thread action — playback continues
       setPlaying(true);
       setRoamStop(null);
-      const step = tour.steps[c];
-      if (step) fly(step.ref);
+      aim(tour.steps[c]);
     },
-    [tour, fly],
+    [tour, aim, clearTimer, clearCamPhase],
   );
 
   const next = useCallback(() => {
@@ -178,24 +236,24 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
   }, [tour, idx, jump]);
 
   const pause = useCallback(() => {
+    clearCamPhase(); // a pending dive must not fire into a paused tour
     setPace('roam');
     setPlaying(false); // pause = silence, like any video
-  }, []);
+  }, [clearCamPhase]);
 
   const resume = useCallback(() => {
+    clearCamPhase();
     setPace('guided');
     setPlaying(true);
     setRoamStop(null);
-    if (tour) {
-      const step = tour.steps[idx];
-      if (step) fly(step.ref);
-    }
-  }, [tour, idx, fly]);
+    if (tour) aim(tour.steps[idx]);
+  }, [tour, idx, aim, clearCamPhase]);
 
   /** free roam: the user clicked something on the sheet */
   const roamTo = useCallback(
     (ref: Ref) => {
       if (!tour) return;
+      clearCamPhase(); // the user owns the camera now
       setPace('roam');
       setPlaying(false);
       const hit = findStopIndex(tour, ref);
@@ -219,7 +277,7 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
       }
       fly(ref);
     },
-    [tour, idx, synthesize],
+    [tour, idx, synthesize, clearCamPhase, fly],
   );
 
   /** roam: narrate the card on the screen (optional by design) */
@@ -246,24 +304,50 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
 
   // ---- auto-advance (the guided thread) -------------------------------------
 
-  const advanceRef = useRef({ idx, pace, playing, tourLen: tour?.steps.length ?? 0 });
+  const advanceRef = useRef({
+    idx,
+    pace,
+    playing,
+    tourLen: tour?.steps.length ?? 0,
+    framing: framingOf(tour?.steps[idx]),
+  });
   useEffect(() => {
-    advanceRef.current = { idx, pace, playing, tourLen: tour?.steps.length ?? 0 };
+    advanceRef.current = {
+      idx,
+      pace,
+      playing,
+      tourLen: tour?.steps.length ?? 0,
+      framing: framingOf(tour?.steps[idx]),
+    };
   }, [idx, pace, playing, tour]);
-  const timerRef = useRef<number | null>(null);
-  const clearTimer = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
 
   const advance = useCallback(() => {
     const s = advanceRef.current;
     if (s.pace !== 'guided' || !s.playing) return; // the user took over
-    if (s.idx >= s.tourLen - 1) end();
-    else jump(s.idx + 1);
-  }, [jump, end]);
+    if (s.idx >= s.tourLen - 1) {
+      end(); // the last stop ends over the whole plant (end() fits and stays)
+      return;
+    }
+    clearTimer();
+    clearCamPhase();
+    // THE BREATHING LAW — after a stop, pull back to the whole flowsheet
+    // so the viewer re-orients, hold it for a beat, then dive into the
+    // next unit. From a stop that was already wide (the opening overview,
+    // a map stop) there is nothing to pull back from — just a breath.
+    const armPhase = (ms: number) => {
+      camTimerRef.current = window.setTimeout(() => {
+        camTimerRef.current = null;
+        const now = advanceRef.current;
+        if (now.pace !== 'guided' || !now.playing) return; // belt + braces
+        jump(now.idx + 1);
+      }, ms);
+    };
+    if (s.framing === 'fit') armPhase(BREATH_MS);
+    else {
+      fit(); // the pull-back (an eased flight on every canvas)
+      armPhase(PULL_MS + DWELL_MS);
+    }
+  }, [jump, end, fit, clearTimer, clearCamPhase]);
 
   // voice path: advance ~0.9 s after the narrator finishes a line — the
   // caption now completes WITH the voice, so the viewer gets a breath to
@@ -280,7 +364,13 @@ export function useTourDirector(synthesize?: (ref: Ref) => RoamCaption | null) {
     });
     return unsub;
   }, [advance]);
-  useEffect(() => () => clearTimer(), []);
+  useEffect(
+    () => () => {
+      clearTimer();
+      clearCamPhase();
+    },
+    [clearTimer, clearCamPhase],
+  );
 
   // dwell path: voice off (or TTS failed/blocked) → reading-time dwell
   useEffect(() => {

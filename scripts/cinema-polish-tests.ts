@@ -11,9 +11,10 @@
  *   B. SYNC LAW    — the narrator is the clock: word k appears when the
  *      audio element reaches it (real currentTime/duration), pauses freeze
  *      the caption, resumed lines re-stream, a finished voice completes it
- *   C. DOCK LAW    — the bar is flush with the bottom edge of the stage
- *      (caption → scrubber → transport), so it never hovers over the
- *      plant and the pause button is at the very bottom of the screen
+ *   C. CARD LAW    — the player is a BOUNDED card near the bottom of the
+ *      stage: centered, max-w-880, air on every side — never a strip
+ *      edge-to-edge across the screen. Same player order inside: caption,
+ *      scrubber, transport last.
  *   D. CHROME LAW  — the transport row vanishes on idle and wakes on any
  *      activity, exactly like a video player
  *   E. PANEL LAW   — starting a tour collapses the side panel on every
@@ -23,6 +24,10 @@
  *      on his introduction stop, and his name recurs at every launch point
  *   G. WIRING      — all four tour surfaces carry the cinema system, and
  *      the caption renders the SYNCED stream (not the whole stop text)
+ *   H. FIX PACK A  — the music bed is a VOLUME (not a switch), the camera
+ *      BREATHES between stops (pull back → dwell → dive, overview stops
+ *      wide), fit is a flight not a cut, and the hero voice card is a
+ *      fixed-dark player whose waveform is the REAL voice
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -130,15 +135,23 @@ console.log('\nB. SYNC LAW (the narrator is the clock)');
 }
 
 // ---------------------------------------------------------------------------
-console.log('\nC. DOCK LAW (flush bottom — never hovering over the plant)');
+console.log('\nC. CARD LAW (a bounded player — never a strip across the screen)');
 // ---------------------------------------------------------------------------
 {
   const cinema = src('components', 'learn', 'CinemaBar.tsx');
 
-  check('the bar docks at the bottom edge (absolute inset-x-0 bottom-0)', /absolute inset-x-0 bottom-0/.test(cinema));
-  check('the dock is flush — no float above the legend (pb-14 is gone)', !/pb-14/.test(cinema));
-  check('full-width player chrome, not a floating card', /w-full border-t/.test(cinema) && !/max-w-\[720px\] rounded-2xl/.test(cinema));
-  check('caption text keeps a readable measure inside the full-width bar', /max-h-\[104px\] max-w-\[720px\]/.test(cinema));
+  check('the player sits at the bottom of the stage (absolute inset-x-0 bottom-0)', /absolute inset-x-0 bottom-0/.test(cinema));
+  check(
+    'the player is a BOUNDED card: max-w-880 with side insets',
+    /max-w-\[880px\]/.test(cinema) &&
+      /w-\[calc\(100%-1\.5rem\)\]/.test(cinema) &&
+      /sm:w-\[calc\(100%-3rem\)\]/.test(cinema),
+  );
+  check(
+    'a card, not a dock — full frame, corners, air below (never edge-to-edge)',
+    /rounded-xl border shadow-2xl/.test(cinema) && /mb-3/.test(cinema) && !/w-full border-t/.test(cinema),
+  );
+  check('caption text keeps a readable measure inside the card', /max-h-\[104px\] max-w-\[720px\]/.test(cinema));
 
   // the row order is the player order: caption, scrubber, transport LAST
   const captionAt = cinema.indexOf('bd-msg-in');
@@ -148,7 +161,7 @@ console.log('\nC. DOCK LAW (flush bottom — never hovering over the plant)');
   check('the caption leads the bar (row 1)', captionAt !== -1 && captionAt < dotsAt && captionAt < transportAt);
   check('the scrubber rides under the caption (row 2)', dotsAt !== -1 && dotsAt < transportAt);
   check('the transport row is the LAST row of the bar (row 3)', transportAt !== -1 && transportAt > dotsAt);
-  check('the pause button lives at the very bottom of the screen', pauseAt !== -1 && pauseAt > dotsAt && pauseAt > transportAt);
+  check('the pause button lives in the transport row, under the dots', pauseAt !== -1 && pauseAt > dotsAt && pauseAt > transportAt);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +268,49 @@ console.log('\nG. WIRING (the synced caption streams on every surface)');
   const css = src('app', 'globals.css');
   const reducedBlock = css.match(/@media \(prefers-reduced-motion: reduce\) \{[^}]*\.bd-unit-in[^}]*\}/);
   check('the caret blink is disabled under reduced motion', !!reducedBlock && /\.caret/.test(reducedBlock[0]));
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nH. FIX PACK A (music level · breathing camera · the hero player)');
+// ---------------------------------------------------------------------------
+{
+  const audio = src('lib', 'audio', 'tourAudio.ts');
+  const music = src('lib', 'audio', 'music.ts');
+  const narr = src('lib', 'audio', 'narration.ts');
+  const dir = src('lib', 'ui', 'tourDirector.ts');
+  const units = src('lib', 'content', 'units.ts');
+  const tour = src('lib', 'projects', 'tour.ts');
+  const build = src('components', 'builder', 'BuildCanvas.tsx');
+  const fcanvas = src('components', 'flowsheet', 'Canvas.tsx');
+  const hero = src('components', 'home', 'MeetOrion.tsx');
+
+  // the bed is a VOLUME, not a switch
+  check('prefs carry a music level 0..1 (the old boolean migrates)', /musicLevel/.test(audio) && /p\.music === false/.test(audio));
+  check('level 0 IS off — the bed effect keys on the derived boolean', /const musicOn = prefs\.musicLevel > 0/.test(audio));
+  check('dragging the level never restarts the bed (separate effects)', /\}, \[active, musicOn\]\);/.test(audio) && /\}, \[prefs\.musicLevel\]\);/.test(audio));
+  check('TourMusic.setLevel ramps the master gain smoothly', /setLevel\(v: number\)/.test(music) && /linearRampToValueAtTime\(Math\.max\(lv, 0\.0001\)/.test(music));
+  check('ducking stays proportional (the duck node sits before the level)', /this\.duck\.connect\(this\.out\)/.test(music));
+
+  // the breathing camera
+  check("TourStep framing: 'fit' stops hold the whole sheet", /framing\?: 'unit' \| 'fit'/.test(units));
+  check('the director breathes: pull back → dwell → dive', /PULL_MS/.test(dir) && /DWELL_MS/.test(dir) && /BREATH_MS/.test(dir));
+  check('user actions cancel pending camera phases (the user owns the camera)', /clearCamPhase/.test(dir));
+  check('wide stops skip the pull-back — a breath, then the dive', /s\.framing === 'fit'/.test(dir));
+  check('auto-tours open wide (overview) and land wide (outro)', /framing: 'fit'/.test(tour));
+  check('safeTour forces open-wide/land-wide on AI tours too', /steps\[0\]\.framing = 'fit'/.test(tour) && /steps\[steps\.length - 1\]\.framing = 'fit'/.test(tour));
+  check('BuildCanvas.fit is a flight, not a cut (shared tween)', /tweenView\(viewRef\.current, to/.test(build));
+  check('FlowsheetCanvas.fit is a flight, not a cut (eased rAF)', /\/ 560\)/.test(fcanvas) && /from\.w \+ \(target\.w - from\.w\) \* e/.test(fcanvas));
+
+  // the narrator's voice can be SEEN
+  check('narrator.amplitude() exposes the live loudness (0..1)', /amplitude\(\): number \| null/.test(narr));
+  check('amplitude only exists while the voice is speaking', /this\.state !== 'speaking' \|\| !this\.analyser/.test(narr));
+  check('the analyser is wired only when the context can run (else native playback)', /ctx\.state !== 'running'/.test(narr) && /analyserDead/.test(narr));
+
+  // the hero voice card is a dark player object with the real ribbon
+  check('the hero card is a fixed-dark player object (both themes)', /const P = \{/.test(hero) && /#0B0B0D/.test(hero));
+  check('the hero waveform is driven by the REAL voice amplitude', /narrator\.amplitude\(\)/.test(hero));
+  check('no caption streaming in the hero — the player is the demo', !/useSyncedCaption/.test(hero));
+  check('the hero transport: nameplate + play/pause + replay + volume + space', /ORION · YOUR GUIDE/.test(hero) && /· space/.test(hero) && /vc-btn--primary/.test(hero));
 }
 
 // ---------------------------------------------------------------------------

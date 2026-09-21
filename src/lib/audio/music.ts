@@ -14,7 +14,9 @@
  *
  * Architecture: the classic lookahead scheduler — a setInterval clock
  * schedules 16th-notes ~0.2 s ahead of the audio clock, so timing is
- * sample-accurate even if the main thread stutters.
+ * sample-accurate even if the main thread stutters. Gain chain:
+ * voices → duck (1 ↔ 0.3 under narration) → out (the listener's level,
+ * 0..1) → compressor → destination.
  */
 
 export type MusicState = 'stopped' | 'running';
@@ -54,8 +56,8 @@ const PROGRESSIONS: { tones: number[]; root: number }[][] = [
 
 class TourMusic {
   private ctx: AudioContext | null = null;
-  private out: GainNode | null = null; // fade in/out envelope (master level)
-  private duck: GainNode | null = null; // narration ducking (1 ↔ 0.3)
+  private out: GainNode | null = null; // the listener's level (master gain, 0..1)
+  private duck: GainNode | null = null; // narration ducking (1 ↔ 0.3, before the level)
   private comp: DynamicsCompressorNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private noise: AudioBufferSourceNode | null = null;
@@ -133,7 +135,10 @@ class TourMusic {
     this.stopNoiseBed();
   }
 
-  /** smooth dip while the narrator speaks, release when they finish */
+  /** smooth dip while the narrator speaks, release when they finish.
+   *  The duck node sits BEFORE the master level, so ducking stays
+   *  proportional at every listener level — a quiet bed still dips to a
+   *  whisper under the voice (never a hard silence). */
   setDuck(ducked: boolean): void {
     if (this.ducked === ducked) return;
     this.ducked = ducked;
@@ -144,6 +149,26 @@ class TourMusic {
     this.duck.gain.cancelScheduledValues(now);
     this.duck.gain.setValueAtTime(Math.max(this.duck.gain.value, 0.0001), now);
     this.duck.gain.linearRampToValueAtTime(target, now + (ducked ? 0.35 : 0.9));
+  }
+
+  /** the listener's chosen level for the bed, 0..1 — a VOLUME, not just a
+   *  switch. Zero stops the bed entirely. Ramps the master gain smoothly
+   *  (0.25 s) so dragging a slider is a glide, never a step; remembers the
+   *  target for the next fade-in even while stopped. */
+  setLevel(v: number): void {
+    const lv = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.5));
+    this.baseVolume = lv;
+    const ctx = this.ctx;
+    if (!ctx || !this.out || this.state !== 'running') return;
+    const now = ctx.currentTime;
+    this.out.gain.cancelScheduledValues(now);
+    this.out.gain.setValueAtTime(Math.max(this.out.gain.value, 0.0001), now);
+    this.out.gain.linearRampToValueAtTime(Math.max(lv, 0.0001), now + 0.25);
+  }
+
+  /** the level the listener chose (0..1) — the slider's remembered value */
+  level(): number {
+    return this.baseVolume;
   }
 
   // ------------------------------------------------------------------

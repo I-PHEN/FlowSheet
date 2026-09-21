@@ -457,6 +457,41 @@
   animation: caret-kf 840ms steps(1) infinite;
 }
 
+/* ---- audio players (Fix Pack A) ---- */
+/* volume sliders — the music-level popover in CinemaBar and the hero voice
+   card's control. Native range, inked by the theme (or fixed light on the
+   fixed-dark hero card via a local override). */
+.vc-range {
+  accent-color: var(--fs-ink);
+  cursor: pointer;
+}
+.vc-range--dark {
+  accent-color: #ececee;
+}
+
+/* the hero voice card's buttons — the card is a FIXED-dark player object
+   (same in both themes), so its hovers are fixed-dark too */
+.vc-btn {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+.vc-btn:hover {
+  background: #323236;
+  border-color: #4a4a4f;
+  color: #f2f2f4;
+}
+.vc-btn--primary {
+  background: #28282c;
+  border-color: #3e3e42;
+  color: #f2f2f4;
+}
+.vc-btn--primary:hover {
+  background: #323236;
+  border-color: #4a4a4f;
+}
+
 /* ---- builder canvas: streams draw themselves in (Task 21) ---- */
 .bd-draw {
   stroke-dasharray: 1;

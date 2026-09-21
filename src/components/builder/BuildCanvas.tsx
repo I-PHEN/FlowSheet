@@ -454,8 +454,25 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
   const fit = useCallback(() => {
     stopAnim();
     setHinted(false);
-    setView(null);
-  }, [stopAnim]);
+    // a flight, not a cut — the tour's breathing camera pulls back to the
+    // whole sheet between stops, so fit eases like every other move
+    // (reduced motion: the shared tween lands instantly). It ends by
+    // handing the frame back to the auto-fit contract (null view), so a
+    // growing canvas keeps auto-fitting exactly like the old hard cut.
+    const to = fitView();
+    const cancel = tweenView(viewRef.current, to, {
+      ms: 560,
+      onUpdate: (v) => setView(v),
+    });
+    const done = window.setTimeout(() => {
+      animRef.current = null;
+      setView(null);
+    }, 580);
+    animRef.current = () => {
+      cancel();
+      window.clearTimeout(done); // the user took the camera mid-flight
+    };
+  }, [stopAnim, fitView]);
 
   /** Learn-mode camera: fly to a unit's node or a stream's routed line.
    *  Same math as the reference canvas's panTo — pad, aspect, clamp, tween —
