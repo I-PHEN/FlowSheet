@@ -1,19 +1,19 @@
 /**
- * POST /api/agent/remix — edit an existing plant with the agent team,
- * streaming BuildEvents over Server-Sent Events.
+ * POST /api/agent/remix — START a remix job, return its id immediately.
  *
- * One request = one remix session (engineer edit loop → solver → critic →
- * docent). The browser sends the plant's FlowGraph (it lives in IndexedDB,
- * client-side) plus the student's instruction; the workspace is SEEDED with
- * that graph, so the engineer starts from a working plant and makes the
- * smallest edit that honors the request. Same event protocol as /build —
- * the builder page consumes both identically.
+ * Same job architecture as POST /api/agent/build (see that route for the
+ * why: the preview proxy cuts long responses; the build must survive any
+ * single connection). The browser sends the plant's FlowGraph (it lives in
+ * IndexedDB, client-side) plus the student's instruction; the workspace is
+ * SEEDED with that graph, so the engineer starts from a working plant and
+ * makes the smallest edit that honors the request. Events stream from GET
+ * /api/agent/build/events?id=… — same protocol, same resumability.
  */
 
 import { NextRequest } from 'next/server';
 import { runAgentRemix } from '@/lib/agent/orchestrator';
 import { CachedLlm, TokenMeter, ZaiLlm } from '@/lib/agent/llm';
-import type { BuildEvent } from '@/lib/agent/protocol';
+import { createJob, MAX_RUNNING_JOBS, runningJobCount } from '@/lib/agent/jobStore';
 import type { FlowGraph } from '@/lib/engine/graph';
 
 export const runtime = 'nodejs';
@@ -42,44 +42,34 @@ export async function POST(req: NextRequest) {
   if (typeof instruction !== 'string' || instruction.trim().length === 0) {
     return Response.json({ error: 'a non-empty "instruction" string is required' }, { status: 400 });
   }
+  if (runningJobCount() >= MAX_RUNNING_JOBS) {
+    return Response.json(
+      { error: 'too many builds are running right now — try again in a minute' },
+      { status: 429 },
+    );
+  }
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let closed = false;
-      const send = (event: BuildEvent) => {
-        if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        } catch {
-          closed = true; // client disconnected
-        }
-      };
-      try {
-        // same economy as /build: metered calls + the zero-token reply cache
-        const meter = new TokenMeter();
-        const llm = new CachedLlm(new ZaiLlm(meter), meter);
-        await runAgentRemix(graph, instruction, { llm, emit: send, meter });
-      } catch (e) {
-        send({ type: 'error', message: (e as Error).message || 'agent failure' });
-        send({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });
-      } finally {
-        closed = true;
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
-      }
-    },
-  });
+  const trimmed = instruction.trim();
+  const job = createJob(trimmed); // the store keys jobs by id; the brief is descriptive
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      'X-Accel-Buffering': 'no',
-      Connection: 'keep-alive',
-    },
-  });
+  // detached run — buffered + broadcast into the job, connection-independent
+  void (async () => {
+    // same economy as /build: metered calls + the zero-token reply cache
+    const meter = new TokenMeter();
+    const llm = new CachedLlm(new ZaiLlm(meter), meter);
+    try {
+      await runAgentRemix(graph, trimmed, {
+        llm,
+        emit: (e) => job.emit(e),
+        meter,
+        shouldStop: () => job.aborted,
+      });
+    } catch {
+      // runAgentRemix never throws (its own top-level catch emits done)
+      job.emit({ type: 'error', message: 'the remix crashed unexpectedly' });
+      job.emit({ type: 'done', success: false, graph: null, unitCount: 0, streamCount: 0 });
+    }
+  })();
+
+  return Response.json({ jobId: job.id });
 }

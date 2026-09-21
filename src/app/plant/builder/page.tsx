@@ -59,6 +59,9 @@ export default function BuilderPage() {
   // source updates to the latest graph after each run, so changes chain.
   const [remixSource, setRemixSource] = useState<{ name: string; graph: FlowGraph } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const jobIdRef = useRef<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
+  const finishRef = useRef<(() => void) | null>(null);
   const keyRef = useRef(0);
   const canvasRef = useRef<BuildCanvasHandle>(null);
 
@@ -134,9 +137,22 @@ export default function BuilderPage() {
       case 'message':
         addEntry({ kind: 'message', role: ev.role, text: ev.text });
         break;
-      case 'tool':
-        addEntry({ kind: 'tool', tool: ev.name, ok: ev.ok, seq: ev.seq, text: ev.summary });
+      case 'tool': {
+        // the target id (unit/stream/controller) powers the one-line
+        // "Placing R1 — primary reformer" status on the work card
+        const a = (ev.args ?? {}) as Record<string, unknown>;
+        const target =
+          typeof a.id === 'string'
+            ? a.id
+            : typeof a.unit === 'string'
+              ? a.unit
+              : typeof a.stream === 'string'
+                ? a.stream
+                : '';
+        const utype = typeof a.type === 'string' ? a.type : '';
+        addEntry({ kind: 'tool', tool: ev.name, ok: ev.ok, seq: ev.seq, text: ev.summary, target, utype });
         break;
+      }
       case 'graph':
         setGraph(ev.graph);
         break;
@@ -222,36 +238,70 @@ export default function BuilderPage() {
     setChatOpen(true);
     const ac = new AbortController();
     abortRef.current = ac;
+    jobIdRef.current = null;
     try {
+      // 1 — START the job: a quick POST that returns { jobId }; the run
+      //     lives on the server, decoupled from any single connection
       const res = await fetch(remixSource ? '/api/agent/remix' : '/api/agent/build', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(remixSource ? { graph: remixSource.graph, instruction: brief } : { brief }),
         signal: ac.signal,
       });
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(err?.error ?? `server responded ${res.status}`);
       }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buf.indexOf('\n\n')) >= 0) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          if (!frame.startsWith('data: ')) continue;
+      const started = (await res.json()) as { jobId?: string };
+      if (!started.jobId) throw new Error('the server did not accept the build');
+      jobIdRef.current = started.jobId;
+
+      // 2 — CONSUME the run over resumable SSE: heartbeats keep the proxy
+      //     warm, and a dropped stream reconnects itself with Last-Event-ID
+      //     — zero lost events, no more “network error” mid-build
+      await new Promise<void>((resolve) => {
+        const es = new EventSource(`/api/agent/build/events?id=${encodeURIComponent(started.jobId!)}`);
+        esRef.current = es;
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          es.close();
+          esRef.current = null;
+          finishRef.current = null;
+          resolve();
+        };
+        finishRef.current = finish;
+        es.onmessage = (m) => {
+          let ev: BuildEvent;
           try {
-            handleEvent(JSON.parse(frame.slice(6)) as BuildEvent);
+            ev = JSON.parse(m.data) as BuildEvent;
           } catch {
-            // skip malformed frame
+            return; // skip malformed frame
           }
-        }
-      }
+          if (ev.type === 'done') {
+            handleEvent(ev);
+            finish(); // the stream is over — close before EventSource reconnects
+          } else {
+            handleEvent(ev);
+          }
+        };
+        es.addEventListener('gone', () => {
+          // the job is no longer live on the server (expired) — say it
+          // plainly instead of retrying forever
+          addEntry({
+            kind: 'error',
+            text: 'This build session is no longer live on the server — start it again.',
+          });
+          setStatus('finished');
+          setDoneOk((ok) => ok ?? false);
+          finish();
+        });
+        es.onerror = () => {
+          // EventSource retries automatically (same URL, Last-Event-ID
+          // header) — nothing to do here; 'gone' ends it if the job is gone
+        };
+      });
     } catch (e) {
       const err = e as Error;
       if (err.name === 'AbortError') {
@@ -265,8 +315,37 @@ export default function BuilderPage() {
   }
 
   function stopBuild() {
+    // stop the START call if it is still in flight
     abortRef.current?.abort();
+    // stop the SERVER-side run (honest partial done) and close the stream
+    const id = jobIdRef.current;
+    esRef.current?.close();
+    esRef.current = null;
+    jobIdRef.current = null;
+    finishRef.current?.(); // unblock the awaiting startBuild, if any
+    addEntry({ kind: 'note', text: 'Build stopped.' });
+    setStatus('finished');
+    setDoneOk((ok) => ok ?? false);
+    if (id) {
+      void fetch('/api/agent/build/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: id }),
+      }).catch(() => {
+        /* the sweeper catches an orphaned job anyway */
+      });
+    }
   }
+
+  // leaving the page closes the stream (the server-side run finishes into
+  // the job buffer on its own — nothing dangles client-side)
+  useEffect(
+    () => () => {
+      esRef.current?.close();
+      esRef.current = null;
+    },
+    [],
+  );
 
   function resetToIdle() {
     setStatus('idle');
@@ -451,7 +530,7 @@ export default function BuilderPage() {
         {/* session — the chat */}
         {chatOpen ? (
           <aside
-            className="flex h-[56dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:w-[420px] lg:border-l lg:border-t-0"
+            className="flex h-[56dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0"
             style={{ borderColor: 'var(--fs-band-line)' }}
             aria-label="Build session"
           >

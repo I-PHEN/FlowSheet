@@ -65,12 +65,15 @@ export function framingOf(step: TourStep | undefined): 'unit' | 'fit' {
   return step?.framing === 'fit' ? 'fit' : 'unit';
 }
 
-/** the breathing law's timings — the pull-back to the whole flowsheet,
- *  the beat it stays on screen, and the plain breath between two
- *  consecutive wide stops (nothing to pull back from) */
-const PULL_MS = 560;
-const DWELL_MS = 500;
-const BREATH_MS = 650;
+/** the breathing law's timings — the pull-back to the whole flowsheet, the
+ *  beat it stays on screen, and the plain breath between two consecutive
+ *  wide stops (nothing to pull back from). The dwell is deliberately
+ *  generous (~1.5 s): the viewer must actually SEE the whole plant and
+ *  re-orient between close-ups — a half-second flash reads as "it zoomed
+ *  into one component and stayed there". */
+const PULL_MS = 680;
+const DWELL_MS = 1500;
+const BREATH_MS = 900;
 
 /** a synthesized roam caption (page-provided: unit stories, registry facts) */
 export interface RoamCaption {

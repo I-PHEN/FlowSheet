@@ -11,9 +11,10 @@
  *   row 1  the line's title + REAL VOICE mono tag
  *   row 2  ONE live status line with a block cursor — no caption
  *          streaming; the player itself is the demo
- *   row 3  THE WAVEFORM — a glowing ribbon driven by Orion's ACTUAL voice
- *          (narrator.amplitude(): an analyser on the narrator's own audio
- *          element; a gentle synthetic fallback when the graph cannot run)
+ *   row 3  THE WAVEFORM — a live signal: one new loudness sample per
+ *          frame (his REAL voice via the analyser; a speech-cadence
+ *          simulation before it wires), drawn as mirrored bars with the
+ *          newest at the right — every bar moves with the syllables
  *   row 4  the transport — his avatar + ORION · YOUR GUIDE + NARRATED,
  *          and to the right: play/pause, replay, the voice's volume, and
  *          the · space hint
@@ -56,18 +57,23 @@ const P = {
 };
 
 // ---------------------------------------------------------------------------
-// the waveform — a mirrored ribbon, glowing, driven by the real voice
+// the waveform — a live signal, not a blob
 // ---------------------------------------------------------------------------
 
-/** fixed per-point texture: the ribbon has organic structure (like a real
- *  speech envelope), not a single bouncing sine */
-const N = 64;
-const TEX = Array.from({ length: N }, (_, i) => {
-  const h = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
-  return 0.35 + 0.65 * h;
-});
+/**
+ * A rolling history of the voice's loudness, drawn as mirrored bars: every
+ * frame takes ONE new sample — the narrator's REAL amplitude when the
+ * analyser is live, a speech-cadence simulation while it is not — and the
+ * bars carry the last ~44 samples left→right, newest at the right edge.
+ *
+ * That time dimension is the whole point: each bar moves independently with
+ * the syllables actually being spoken (fast attack, slow release), so it
+ * reads instantly as a real voice signal — the voice-memo grammar everyone
+ * knows — instead of one uniformly breathing shape.
+ */
+const BARS = 44;
 
-function VoiceRibbon({ speaking }: { speaking: boolean }) {
+function VoiceWave({ speaking }: { speaking: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -79,9 +85,37 @@ function VoiceRibbon({ speaking }: { speaking: boolean }) {
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-    let raf = 0;
-    let env = 0; // the smoothed envelope: fast attack, slow release
-    const t0 = performance.now();
+    const hist = new Float32Array(BARS); // raw amplitude history, newest last
+    const bars = new Float32Array(BARS); // smoothed bars, what is drawn
+
+    // the synthetic cadence (before the analyser can run): bursts, gaps and
+    // phrase pauses at speech rates — believable rhythm, not a sine
+    let mode: 'burst' | 'gap' | 'pause' = 'burst';
+    let modeEnd = 0;
+    let level = 0.4;
+    let bursts = 0;
+    const synth = (t: number): number => {
+      if (t >= modeEnd) {
+        if (mode === 'burst') {
+          bursts++;
+          if (bursts >= 3 + Math.floor(Math.random() * 5)) {
+            mode = 'pause'; // a phrase boundary — he breathes
+            bursts = 0;
+            modeEnd = t + 280 + Math.random() * 420;
+            level = 0.02 + Math.random() * 0.03;
+          } else {
+            mode = 'gap';
+            modeEnd = t + 40 + Math.random() * 100;
+            level = 0.05 + Math.random() * 0.1;
+          }
+        } else {
+          mode = 'burst';
+          modeEnd = t + 90 + Math.random() * 130;
+          level = 0.22 + Math.random() * 0.58;
+        }
+      }
+      return level;
+    };
 
     const draw = (t: number) => {
       const dpr = window.devicePixelRatio || 1;
@@ -95,62 +129,65 @@ function VoiceRibbon({ speaking }: { speaking: boolean }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      // the target envelope: the voice's real loudness when the analyser
-      // is wired; a gentle synthetic breath while it is not (loading, or
-      // the graph could not run)
-      let target = 0;
+      // 1 — this frame's sample: his actual loudness, or the cadence
+      let sample = 0;
       if (speaking) {
         const a = narrator.amplitude();
-        target =
-          a != null
-            ? a
-            : 0.26 + 0.16 * Math.sin(t / 260) + 0.1 * Math.sin(t / 97);
+        sample = a != null ? a : synth(t);
       }
-      env += (Math.max(0, Math.min(1, target)) - env) * (target > env ? 0.55 : 0.1);
+      hist.copyWithin(0, 1);
+      hist[BARS - 1] = Math.max(0, Math.min(1, sample));
+
+      // 2 — per-bar smoothing: fast attack, slow release — syllables punch,
+      //     tails settle
+      for (let i = 0; i < BARS; i++) {
+        const target = hist[i];
+        const k = target > bars[i] ? 0.55 : 0.16;
+        bars[i] += (target - bars[i]) * k;
+      }
 
       const mid = h / 2;
-      const half = Math.max(1, (env * (h / 2 - 2)) | 0);
-
-      if (env <= 0.02) {
+      const maxHalf = h / 2 - 3;
+      let alive = false;
+      for (let i = 0; i < BARS; i++) if (bars[i] > 0.015) { alive = true; break; }
+      if (!alive) {
         // resting: a faint hairline — the player is on, nobody is talking
         ctx.fillStyle = 'rgba(236,236,238,0.22)';
         ctx.fillRect(0, mid - 0.75, w, 1.5);
         return;
       }
 
-      // the ribbon: top edge left→right, mirrored bottom edge right→left
-      ctx.beginPath();
-      for (let i = 0; i <= N; i++) {
-        const x = (i / N) * w;
-        const win = Math.sin((i / N) * Math.PI); // taper at both ends
-        const amp = Math.max(1, half * TEX[i % N] * win);
-        const y = mid - amp;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      // 3 — the bars: ONE path, ONE glow fill; the linear gradient carries
+      //     the live-signal feel (soft past → bright now, newest at right)
+      const pad = 2;
+      const step = (w - pad * 2) / BARS;
+      const bw = Math.max(1.5, step * 0.52);
+      const path = new Path2D();
+      for (let i = 0; i < BARS; i++) {
+        const bh = Math.max(1.4, bars[i] * maxHalf);
+        const x = pad + i * step + (step - bw) / 2;
+        if (typeof path.roundRect === 'function') path.roundRect(x, mid - bh, bw, bh * 2, bw / 2);
+        else path.rect(x, mid - bh, bw, bh * 2);
       }
-      for (let i = N; i >= 0; i--) {
-        const x = (i / N) * w;
-        const win = Math.sin((i / N) * Math.PI);
-        const amp = Math.max(1, half * TEX[i % N] * win);
-        ctx.lineTo(x, mid + amp);
-      }
-      ctx.closePath();
-      // white core + soft glow on near-black — the reference aesthetic
+      const grad = ctx.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, 'rgba(236,236,238,0.38)');
+      grad.addColorStop(1, 'rgba(236,236,238,0.96)');
       ctx.save();
-      ctx.shadowColor = 'rgba(236,236,238,0.55)';
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = 'rgba(236,236,238,0.92)';
-      ctx.fill();
+      ctx.shadowColor = 'rgba(236,236,238,0.5)';
+      ctx.shadowBlur = 9;
+      ctx.fillStyle = grad;
+      ctx.fill(path);
       ctx.restore();
     };
 
     if (reduced) {
-      // no motion: one static, mid-level ribbon (still a waveform, never
+      // no motion: one static, mid-level waveform (still a waveform, never
       // animated) — redrawn only if the speaking flag flips
-      env = speaking ? 0.4 : 0;
-      draw(t0);
+      bars.fill(speaking ? 0.4 : 0);
+      draw(0);
       return;
     }
+    let raf = 0;
     const tick = (t: number) => {
       draw(t);
       raf = requestAnimationFrame(tick);
@@ -159,7 +196,7 @@ function VoiceRibbon({ speaking }: { speaking: boolean }) {
     return () => cancelAnimationFrame(raf);
   }, [speaking]);
 
-  return <canvas ref={ref} className="h-16 w-full" style={{ display: 'block' }} aria-hidden="true" />;
+  return <canvas ref={ref} className="h-[72px] w-full" style={{ display: 'block' }} aria-hidden="true" />;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,9 +419,10 @@ export function MeetOrion() {
             )}
           </div>
 
-          {/* row 3 — THE WAVEFORM: his actual voice, a glowing ribbon */}
+          {/* row 3 — THE WAVEFORM: his actual voice, bar by bar, newest
+              at the right — a live signal, not a looping animation */}
           <div className="mt-3 flex min-h-[96px] flex-1 items-center py-2">
-            <VoiceRibbon speaking={playing} />
+            <VoiceWave speaking={playing} />
           </div>
 
           {/* row 4 — the transport */}

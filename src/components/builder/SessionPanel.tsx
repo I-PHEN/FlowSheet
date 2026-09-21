@@ -51,6 +51,10 @@ export interface LogEntry {
   tool?: string;
   ok?: boolean;
   seq?: number;
+  /** the id the action touched (unit / stream / controller) — powers the now-line */
+  target?: string;
+  /** for add_unit: the unit type ("primary-reformer") — powers the now-line */
+  utype?: string;
   solve?: SolveSummary;
   verdict?: CriticVerdict;
   usage?: RunUsage;
@@ -96,7 +100,7 @@ const ROLE_COLOR: Record<string, string> = {
 // ── chat derivation: one "agent work" card per RUN; every phase is a
 // section inside it; the run's outputs render after the card ────────────────
 
-type ToolLine = { key: number; tool: string; ok: boolean; seq: number; text: string };
+type ToolLine = { key: number; tool: string; ok: boolean; seq: number; text: string; target: string; utype: string };
 type ThinkLine = { key: number; role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string };
 type SolveLine = { key: number; solve: SolveSummary };
 type PhaseBody = { think: ThinkLine[]; tools: ToolLine[]; solves: SolveLine[] };
@@ -219,7 +223,7 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
         continue;
       }
       if (pending && e.kind === 'tool') {
-        pending.body.tools.push({ key: e.key, tool: e.tool ?? '?', ok: e.ok !== false, seq: e.seq ?? 0, text: e.text ?? '' });
+        pending.body.tools.push({ key: e.key, tool: e.tool ?? '?', ok: e.ok !== false, seq: e.seq ?? 0, text: e.text ?? '', target: e.target ?? '', utype: e.utype ?? '' });
         continue;
       }
       if (pending && e.kind === 'solve' && e.solve) {
@@ -253,6 +257,55 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
 
 // ── small pieces ──────────────────────────────────────────────────────────────
 
+/** the live one-liner — what the agent is doing RIGHT NOW. The ChatGPT/
+ *  Claude convention: one quiet line ("Placing R1 — primary reformer…"),
+ *  all the thinking one click away. */
+const TOOL_VERB: Record<string, string> = {
+  add_unit: 'Placing',
+  connect: 'Wiring',
+  disconnect: 'Unwiring',
+  remove_unit: 'Removing',
+  set_spec: 'Tuning',
+  add_controller: 'Controlling',
+  remove_controller: 'Releasing control on',
+  declare_product: 'Declaring the product',
+  validate: 'Validating the flowsheet',
+  solve: 'Solving the plant',
+  read_stream: 'Reading',
+  get_graph: 'Checking the graph',
+};
+
+const humanType = (t: string): string =>
+  t.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+function nowLine(phase: BuildPhase, body: PhaseBody): string {
+  const last = body.tools[body.tools.length - 1];
+  if (last) {
+    const verb = TOOL_VERB[last.tool];
+    if (verb) {
+      if (!last.target) return `${verb}…`;
+      const what =
+        last.tool === 'add_unit' && last.utype ? `${last.target} — ${humanType(last.utype)}` : last.target;
+      return `${verb} ${what}…`;
+    }
+    return `${humanType(last.tool)}${last.target ? ` ${last.target}` : ''}…`;
+  }
+  switch (phase) {
+    case 'architect':
+      return 'Planning the flowsheet…';
+    case 'engineer':
+      return 'Building the plant…';
+    case 'solver':
+      return 'Verifying & solving…';
+    case 'critic':
+      return 'Reviewing against the brief…';
+    case 'docent':
+      return 'Writing your guided tour…';
+    default:
+      return 'Working…';
+  }
+}
+
 /** one phase inside the work card — a mini collapsible section */
 function PhaseSectionView({
   phase,
@@ -267,13 +320,9 @@ function PhaseSectionView({
   live: boolean;
   last: boolean;
 }) {
-  const [open, setOpen] = useState(live);
-  // prop-change reset during render (React's recommended pattern — no effect)
-  const [prevLive, setPrevLive] = useState(live);
-  if (live !== prevLive) {
-    setPrevLive(live);
-    if (live) setOpen(true);
-  }
+  // QUIET BY DEFAULT: sections never auto-open — the live one-liner on the
+  // card header carries the state; the detail is one click away, forever
+  const [open, setOpen] = useState(false);
   const flagged = body.tools.filter((l) => !l.ok).length;
   return (
     <div
@@ -367,16 +416,12 @@ function PhaseSectionView({
   );
 }
 
-/** ONE card for a whole agent run — all phases live inside it. Open (with the
- *  live phase's section open) while the run happens; collapses to a single
- *  summary line when the run ends; expandable forever after. */
+/** ONE card for a whole agent run — all phases live inside it. Collapsed
+ * to a single line by default (the live NOW line while it runs, the summary
+ * line after); expandable forever after. The build is watched on the CANVAS
+ * — the session stays quiet, like every modern agent chat. */
 function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
-  const [open, setOpen] = useState(live);
-  const [prevLive, setPrevLive] = useState(live);
-  if (live !== prevLive) {
-    setPrevLive(live);
-    setOpen(live);
-  }
+  const [open, setOpen] = useState(false);
   const anyFlagged = phases.some((p) => p.body.tools.some((l) => !l.ok));
   const lastIdx = phases.length - 1;
   const liveIdx = live ? lastIdx : -1;
@@ -406,7 +451,7 @@ function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
           AGENT WORK
         </span>
         <span className="min-w-0 flex-1 truncate text-[11.5px]" style={{ color: C.inkSoft }} title={headline}>
-          {live ? `${PHASE_LABEL[phases[lastIdx].phase]}…` : truncated}
+          {live ? nowLine(phases[lastIdx].phase, phases[lastIdx].body) : truncated}
         </span>
         <ChevronDown
           size={14}

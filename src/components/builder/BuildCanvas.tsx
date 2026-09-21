@@ -41,14 +41,38 @@ import { UnitSymbol } from '@/components/flowsheet/Symbols';
 import { FlowLayer } from '@/components/flowsheet/FlowLayer';
 
 const it_flowActiveColor = 'var(--fs-gas)';
-const NODE_W = 168;
-const NODE_H = 96; // room for the equipment glyph + tag block
+/** the routing obstacle — the glyph bounds plus a small pad. Lines stop at
+ *  the equipment, not at a card edge: units are drawn as BARE P&ID symbols
+ *  (the reference Diagram grammar), never boxed. */
+const OB_W = 116;
+const OB_H = 64;
 const GLYPH_W = 96;
-const GLYPH_H = 50;
-const COL_W = 236;
-const ROW_H = 146; // NODE_H + breathing room
+const GLYPH_H = 52;
+const COL_W = 200; // obstacle + routing corridor
+const ROW_H = 132; // obstacle + the label below + breathing room
 const PAD = 48;
-const BAND_COLS = 8; // wrap the chain into readable bands
+const BAND_GAP = 56;
+
+/** choose the band count whose sheet aspect sits closest to a wide reading
+ *  frame (~1.9:1). The stage is a wide pane — a near-square wrapped layout
+ *  letterboxes into a small central block, which reads as “narrow canvas”.
+ *  One band = a single left-to-right train (small plants stay one wide
+ *  line); longer chains wrap into stacked bands that still fill the pane. */
+function pickBands(cols: number, maxColLen: number): number {
+  const TARGET = 1.9;
+  let best = 1;
+  let bestScore = Infinity;
+  for (let b = 1; b <= cols; b++) {
+    const w = PAD * 2 + Math.ceil(cols / b) * COL_W;
+    const h = PAD * 2 + b * (maxColLen * ROW_H) + (b - 1) * BAND_GAP + 48;
+    const score = Math.abs(Math.log(w / h / TARGET));
+    if (score < bestScore) {
+      bestScore = score;
+      best = b;
+    }
+  }
+  return best;
+}
 
 interface Placed {
   id: string;
@@ -117,21 +141,24 @@ function computeLayout(graph: FlowGraph): Layout {
   const maxDepth = Math.max(...byDepth.keys());
   const maxColLen = Math.max(...[...byDepth.values()].map((v) => v.length), 1);
 
-  const bandCount = Math.floor(maxDepth / BAND_COLS) + 1;
-  const bandGap = 64;
+  // adaptive banding — the sheet aims for a wide frame (see pickBands)
+  const cols = maxDepth + 1;
+  const bandCount = pickBands(cols, maxColLen);
+  const bandCols = Math.ceil(cols / bandCount);
+  const bandGap = BAND_GAP;
   const placed = new Map<string, Placed>();
   for (const u of units) {
     const d = depth.get(u.id) ?? 0;
     const col = byDepth.get(d)!.indexOf(u.id);
-    const band = Math.floor(d / BAND_COLS);
+    const band = Math.floor(d / bandCols);
     // wrap the chain into bands: column position within the band, band rows
-    // stacked vertically — keeps the canvas near-square instead of 20-wide
-    const x = PAD + (d % BAND_COLS) * COL_W;
+    // stacked vertically — a long train stays readable and WIDE
+    const x = PAD + (d % bandCols) * COL_W;
     const y = PAD + band * (maxColLen * ROW_H + bandGap) + col * ROW_H + (band % 2 === 1 ? 24 : 0);
     placed.set(u.id, { id: u.id, x, y, depth: d, col, band });
   }
 
-  const width = PAD * 2 + Math.min(maxDepth + 1, BAND_COLS) * COL_W;
+  const width = PAD * 2 + bandCols * COL_W;
   const height = PAD * 2 + bandCount * (maxColLen * ROW_H) + (bandCount - 1) * bandGap + 48;
   return { width: Math.max(width, 900), height: Math.max(height, 360), units: placed, bandCount };
 }
@@ -328,7 +355,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
     const pos = layout.units;
     const rects: RRect[] = graph.units.map((u) => {
       const p = pos.get(u.id)!;
-      return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+      return { x: p.x, y: p.y, w: OB_W, h: OB_H };
     });
     const grid = buildGrid(rects, layout.width, layout.height);
     const pairSeen = new Map<string, number>();
@@ -340,7 +367,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       if (!a) return null;
       const rectOf = (id: string): RRect => {
         const p = pos.get(id)!;
-        return { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+        return { x: p.x, y: p.y, w: OB_W, h: OB_H };
       };
       let d = '';
       let endX = 0;
@@ -352,8 +379,8 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       if (s.to && s.to.unit === s.from.unit) {
         // self-loop (internal recycle, e.g. separator letdown)
         selfLoop = true;
-        const x0 = a.x + NODE_W - 26;
-        const y0 = a.y + NODE_H;
+        const x0 = a.x + OB_W - 26;
+        const y0 = a.y + OB_H;
         const x1 = a.x + 26;
         d = `M ${x0} ${y0} C ${x0 + 26} ${y0 + 34}, ${x1 - 26} ${y0 + 34}, ${x1} ${y0}`;
         endX = x1;
@@ -483,7 +510,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       let box: Box | null = null;
       if (f.type === 'unit') {
         const p = layout.units.get(f.id);
-        if (p) box = { x: p.x, y: p.y, w: NODE_W, h: NODE_H };
+        if (p) box = { x: p.x, y: p.y, w: OB_W, h: OB_H + 30 }; // glyph + its label
       } else if (routed) {
         const it = routed.find((r) => r && r.s.id === f.id);
         if (it) {
@@ -491,7 +518,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           else {
             // self-loop bezier hugs its own unit's bottom edge
             const p = layout.units.get(it.s.from.unit);
-            if (p) box = { x: p.x, y: p.y, w: NODE_W, h: NODE_H + 44 };
+            if (p) box = { x: p.x, y: p.y, w: OB_W, h: OB_H + 74 };
           }
         }
       }
@@ -751,6 +778,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           const p = pos.get(u.id)!;
           const def = getUnitType(u.type);
           const sel = selected === u.id;
+          const cx = OB_W / 2;
           return (
             <g
               key={u.id}
@@ -762,40 +790,47 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
               onPointerEnter={() => setHover({ type: 'unit', id: u.id })}
               onPointerLeave={() => setHover((h) => (h?.id === u.id ? null : h))}
             >
-              {/* transparent hit area — visuals below are pointer-events:none */}
-              <rect x={-10} y={-10} width={NODE_W + 20} height={NODE_H + 20} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
+              {/* transparent hit area — visuals below are pointer-events:none
+                  (covers the glyph AND its label block) */}
+              <rect x={-12} y={-12} width={OB_W + 24} height={OB_H + 52} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
               <g
                 className={fresh.has(u.id) ? 'bd-unit-in' : undefined}
                 style={{ pointerEvents: 'none' }}
               >
-                {sel && <rect x={-9} y={-9} width={NODE_W + 18} height={NODE_H + 18} rx={14} style={{ fill: C.halo }} />}
-                <rect
-                  width={NODE_W}
-                  height={NODE_H}
-                  rx={11}
-                  strokeWidth={sel ? 2.6 : 1.8}
-                  style={{ fill: C.paper, stroke: sel ? C.ink : hover?.id === u.id ? C.inkSoft : C.inkFaint }}
-                />
-                {/* the equipment silhouette — same grammar as the reference
-                    canvas, so a plant keeps its shape wherever it renders */}
-                <g transform={`translate(${(NODE_W - GLYPH_W) / 2}, 13)`}>
+                {/* selection halo wraps glyph + label, like the reference sheet */}
+                {sel && (
+                  <rect x={-10} y={-10} width={OB_W + 20} height={OB_H + 48} rx={12} style={{ fill: C.halo }} />
+                )}
+                {/* THE EQUIPMENT — a bare P&ID symbol, never a boxed card:
+                    the same grammar as the reference canvas, so a plant keeps
+                    its shape wherever it renders (library → builder → tour) */}
+                <g transform={`translate(${cx - GLYPH_W / 2}, ${(OB_H - GLYPH_H) / 2})`}>
                   <UnitSymbol node={glyphNode(u.id, u.type, GLYPH_W, GLYPH_H)} hi={hover?.id === u.id} sel={sel} />
                 </g>
+                {/* tag + name below the symbol — a sheet-colored mask lets a
+                    residual line pass BEHIND the words (drawing-office rule) */}
+                <rect x={cx - 80} y={OB_H + 4} width={160} height={31} style={{ fill: C.sheet }} />
                 <text
-                  x={NODE_W / 2}
-                  y={NODE_H - 22}
+                  x={cx}
+                  y={OB_H + 16}
                   textAnchor="middle"
-                  fontSize={13}
+                  fontSize={12}
                   fontWeight={800}
                   style={{ fill: C.ink, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
                 >
                   {u.id}
                 </text>
-                <text x={NODE_W / 2} y={NODE_H - 8} textAnchor="middle" fontSize={10} fontWeight={600} style={{ fill: C.inkSoft }}>
-                  {(def?.name ?? u.type).slice(0, 26)}
+                <text
+                  x={cx}
+                  y={OB_H + 29}
+                  textAnchor="middle"
+                  fontSize={8.5}
+                  fontWeight={700}
+                  letterSpacing={1.1}
+                  style={{ fill: C.inkSoft }}
+                >
+                  {(def?.name ?? u.type).slice(0, 24).toUpperCase()}
                 </text>
-                <circle cx={0} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
-                <circle cx={NODE_W} cy={NODE_H / 2} r={4} style={{ fill: C.inkFaint }} />
               </g>
             </g>
           );

@@ -970,3 +970,52 @@ Stage Summary:
 - All four owner fixes are live: the player is a bounded card (never edge-to-edge), tours breathe (overview → dive → pull-back → dive…, wide open, wide close), the music bed is a real volume with proportional ducking, and the hero voice card is a dark player whose waveform is Orion's actual voice.
 - The camera phase machine + TourStep.framing is the spine task 47's beat choreographer layers onto; the bounded card is the shell its count-up/cue surfaces mount into.
 - Push still blocked (PAT revoked): 4 local commits pending (46, 47, 47-PRE plan, this one).
+
+---
+Task ID: 48 (Fix Pack B — network error at the root, live one-by-one assembly, quiet thinking, P&ID stage, breathing dwell, voice waveform v3)
+Agent: main (Super Z)
+Task: Owner pass on the builder: "always getting a network error when building", "5 components appear at once — everything should show live as the AI thinks", "thinking mode collapse by default, one line of what the agent is doing" (ChatGPT/Claude style), "why are components all in this rectangular frame", "canvas pane is very narrow", "walk me through still zooms into one component", "the voice animation sucks".
+
+DIAGNOSIS (from the code, all confirmed):
+- NETWORK ERROR: the preview proxy kills long HTTP responses (~30s). jobStore.ts + /api/agent/build/events (resumable SSE, 10s heartbeats, Last-Event-ID) + /stop ALL EXIST — but POST /api/agent/build and the builder page still use the OLD direct stream. The fix was built and never wired. Silent LLM stages (critic/docent, plus 429 backoff up to 2min) guarantee the proxy cut → client fetch reader throws → bare "network error".
+- 5-AT-ONCE: orchestrator emits a graph event after EVERY mutation, but a turn's action batch (up to 12) executes in a tight synchronous loop — 5 add_units land in milliseconds. CachedLlm re-runs replay the whole build instantly, same effect.
+- THINKING UI: WorkCard + PhaseSectionView auto-open while live (useState(live) + live→setOpen(true)).
+- BOXES: BuildCanvas draws every unit as a paper rounded-rect card (168×96) with the glyph INSIDE; the reference Diagram.tsx draws bare P&ID symbols + masked labels — the grammar exists, the builder just doesn't use it.
+- NARROW CANVAS: near-square banded layout (BAND_COLS=8 fixed) + fit-to-view letterboxes a tall drawing into a wide pane; plus 420px session panel.
+- CAMERA: breathing law EXISTS in tourDirector and works (E2E-proven) — but DWELL_MS=500: the full sheet flashes ~1s out of every ~20s stop = "it just zooms into one component".
+- VOICE: VoiceRibbon is ONE uniform envelope (single smoothed RMS) over a STATIC texture — the whole blob breathes in sync. Not a waveform. That's why it looks fake.
+
+THE PLAN (Fix Pack B):
+- B1 JOB-BASED BUILD/REMIX: POST /api/agent/build|remix → createJob (jobStore gains remix seed) → orchestrator runs detached, emitting into the job → immediate {jobId} JSON. Client: EventSource /api/agent/build/events?id= with auto-reconnect + heartbeat; close on done/gone; stop via POST /stop {jobId}; orchestrator gains shouldStop polling at phase/turn boundaries (honest partial-graph done). MAX_RUNNING_JOBS guard → 429.
+- B2 PACED MUTATIONS: tool() becomes async; after each mutated action, sleep by kind (add_unit 320ms, connect 240ms, remove 260ms, set_spec/others 140ms) → one-by-one live assembly, cached replays included.
+- B3 QUIET THINKING: WorkCard + phases collapsed by DEFAULT (even live); header shows the NOW line: last engineer tool humanized ("Placing R1 — primary reformer", "Wiring stream S3"…) or phase default ("Planning the flowsheet…"); expandable forever.
+- B4 P&ID STAGE: BuildCanvas units become bare UnitSymbol glyphs (96×52) + masked tag/name labels below (Diagram grammar, no per-unit boxes); routing obstacle shrinks to the glyph bounds (112×64); adaptive band count targeting sheet aspect ≈1.9 (was fixed 8 columns → near-square); session panel 420→380px.
+- B5 DWELL: PULL 560→680ms, DWELL 500→1500ms, BREATH 650→900ms — the whole flowsheet is visibly held between unit dives.
+- B6 WAVEFORM v3: rolling amplitude HISTORY (real per-frame narrator.amplitude(); synthetic syllable-train fallback), ~48 mirrored bars, white core + soft glow, newest at right — per-bar motion, not one uniform blob.
+- VERIFY: tsc/eslint, live E2E via headless browser (job stream, paced appearance, collapsed card, camera dwell poll, hero waveform), VLM review, both themes, 414px.
+
+---
+Task ID: 48-B (Fix Pack B EXECUTED — network error rooted out, live one-by-one assembly, quiet thinking, P&ID stage, breathing dwell, voice waveform v3)
+Agent: main (Super Z)
+Task: Execute the six fixes planned in task 48 (the owner's builder/tour/voice pass).
+
+Work Log:
+- B1 JOB-BASED BUILD/REMIX (network error, root cause): POST /api/agent/build + /api/agent/remix rewritten — createJob → orchestrator detached, emitting into the job → immediate {jobId}. Client (builder page) consumes GET /api/agent/build/events over EventSource: 10s heartbeats, automatic reconnect with Last-Event-ID, client-side close on done/gone, stopBuild POSTs /stop + resolves the await; unmount closes the stream. Orchestrator gains shouldStop (cooperative cancel at phase/turn/action boundaries → honest partial done). MAX_RUNNING_JOBS guard → 429.
+- B2 PACED MUTATIONS: tool() is async; after each MUTATING action sleeps by kind (add_unit 320ms / connect 240 / remove 260 / set_spec+others 140) — one unit, one stream, one spec at a time; cached zero-token re-runs replay with the same rhythm.
+- B3 QUIET THINKING: WorkCard + PhaseSectionView collapsed by DEFAULT (live included — no auto-open). Header live line = nowLine(): last tool humanized ("Placing V1 — Ko Drum Shift…", "Wiring S07…", "Unwiring S23…", "Validating the flowsheet…") or phase default ("Planning the flowsheet…"). LogEntry/ToolLine carry target/utype (extracted from tool args in the page).
+- B4 P&ID STAGE (BuildCanvas): units are BARE UnitSymbol glyphs (96×52) + masked tag/name labels below (drawing-office rule: residual lines pass behind words) — the boxed 168×96 paper cards are GONE; routing obstacle = glyph bounds (116×64); selection halo wraps glyph+label; adaptive banding pickBands() targets sheet aspect ≈1.9 (fixed 8-column near-square wrap removed) — the sheet fills the wide pane; session panel 420→380px.
+- B5 DWELL: PULL 560→680ms, DWELL 500→1500ms, BREATH 650→900ms — the whole flowsheet is visibly held between unit dives.
+- B6 WAVEFORM v3 (MeetOrion VoiceWave): rolling loudness HISTORY, 44 mirrored bars, one new sample per frame (real narrator.amplitude() once the analyser wires; speech-cadence synth — bursts/gaps/phrase pauses — before), fast-attack/slow-release per bar, one Path2D + linear-gradient fill (soft past → bright now) + single glow pass; idle hairline; reduced-motion static.
+
+VERIFICATION:
+- tsc: 0 errors in src/. eslint: clean on all 8 touched files.
+- LIVE API PROOF (scripts/b-sse-watch.py on a fresh methanol build): POST returned {jobId} in <1s; full pipeline survived — router→architect→engineer→solver→critic(429! two full minutes of retry backoff, heartbeats every 10.0s carried the stream)→docent→DONE success, 15 units / 20 streams / tour written / 164k tokens ledgered. Under the old direct-stream route this exact run was the guaranteed "network error".
+- PACING PROOF: unit-count changes in the SSE stream at exactly 0.32s intervals (×11, then the turn-2 LLM gap, then 0.32 ×3).
+- UI E2E (agent-browser, scripts/fixb-e2e-1/2.sh + manual rounds): cached replay consumed via EventSource; LIVE FLOWSHEET chip climbed 7→12→14→15 units and 0→7→12→17→20 streams across polls (one-by-one); now-line rolled Placing/Wiring/Tuning/Unwiring/Validating; work card aria-expanded=false + 0 open sections for the WHOLE run; panel 380px.
+- CAMERA PROOF (saved plant /plant/p/pmubmgmsqoaonqj, "Walk my plant"): viewBox polled 541×304 (dive) → 1296×728 (FULL SHEET, held ~2s) → 541×304 (next dive) → 1296×728 — the breathing is now visible, not a flash.
+- WAVEFORM PROOF: narrator state speaking, real amplitude 0.17 sampled live; VLM on before/after shots: "bar-style… time-varying… dynamically driven by the audio signal, not a static looping animation… premium and alive".
+- VLM full review (8 shots incl. light theme + 414px mobile): bare P&ID symbols confirmed (no boxes), layout "wide and expansive, filling the pane", light theme "no significant contrast issues", mobile usable; thinking detail confirmed hidden. Console: zero errors (only a pre-existing THREE.Clock deprecation).
+- OBSERVED, DEFERRED to Wave 2 (task 49): critic verdict variance — the same solved plant got pass-85 (facts fallback after a 429) on the live run and fail-0 from a live critic call on the cached replay; the repair loop + critic calibration should address it. Minor: mobile composer bottom padding, architect-message wrapping — pre-existing cosmetics.
+
+Stage Summary:
+- The builder is now watchable and unbreakable: the run survives any connection cut (job store + resumable SSE), assembles one piece at a time (paced mutations, cache replays included), stays quiet while it thinks (collapsed card + the now-line), draws a real P&ID on a wide sheet (bare symbols, adaptive bands), the tour breathes visibly (1.5s full-sheet dwell), and the hero voice card is a live signal (amplitude-history bars).

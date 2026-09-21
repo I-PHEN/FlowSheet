@@ -80,9 +80,36 @@ interface OrchestratorOpts {
   emit: (e: BuildEvent) => void;
   /** the run's token ledger — snapshotted into a `usage` event before done */
   meter?: TokenMeter;
+  /** cooperative cancel — polled at phase/turn/action boundaries; a stop
+   *  keeps everything built so far and lands an honest partial `done` */
+  shouldStop?: () => boolean;
 }
 
-export async function runAgentBuild(brief: string, { llm, emit, meter }: OrchestratorOpts): Promise<void> {
+/** thrown internally on a user stop — caught at the top level, which emits
+ *  the partial graph. Never escapes runAgentBuild/runAgentRemix. */
+class StopRequested extends Error {}
+
+/** per-tool pacing: after a MUTATING action the orchestrator pauses briefly
+ *  so the client canvas assembles one piece at a time — the build is WATCHED,
+ * not dumped. A turn's action batch is decided in one LLM call, but the plant
+ * should still rise board by board (and a zero-token cached re-run replays
+ * with the same rhythm instead of flashing in all at once). */
+const PACE_MS: Record<string, number> = {
+  add_unit: 320,
+  connect: 240,
+  remove_unit: 260,
+  disconnect: 200,
+  set_spec: 140,
+  add_controller: 140,
+  remove_controller: 140,
+  declare_product: 120,
+};
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+export async function runAgentBuild(
+  brief: string,
+  { llm, emit, meter, shouldStop }: OrchestratorOpts,
+): Promise<void> {
   const trimmedBrief = brief.trim().slice(0, 2000);
   if (trimmedBrief.length < 10) {
     emit({ type: 'error', message: 'The design brief is too short — describe the plant you want in a sentence or two.' });
@@ -92,11 +119,15 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
 
   let seq = 0;
   const ws = new AgentWorkspace();
-  const tool = (name: string, args: Record<string, unknown>) => {
+  const tool = async (name: string, args: Record<string, unknown>) => {
+    if (shouldStop?.()) throw new StopRequested(); // cancel lands mid-batch
     seq++;
     const res = ws.execute({ tool: name, args });
     emit({ type: 'tool', seq, name, args, ok: res.ok, summary: res.summary });
-    if (ws.mutated) emit({ type: 'graph', graph: ws.snapshot() });
+    if (ws.mutated) {
+      emit({ type: 'graph', graph: ws.snapshot() });
+      await sleep(PACE_MS[name] ?? 120); // the canvas assembles one piece at a time
+    }
     if (name === 'solve' && res.ok) {
       const s = ws.solveSummary();
       if (s) emit({ type: 'solve', seq, solve: s });
@@ -162,6 +193,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
     // a family route, so they get recovery room in the turn budget
     const maxTurns = family.id === 'general' ? MAX_GENERAL_TURNS : MAX_ENGINEER_TURNS;
     for (let turn = 1; turn <= maxTurns; turn++) {
+      if (shouldStop?.()) throw new StopRequested();
       const isLast = turn === maxTurns;
       let raw: Record<string, unknown>;
       try {
@@ -213,7 +245,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
 
       const results: { tool: string; ok: boolean; summary: string }[] = [];
       for (const a of actions) {
-        const res = tool(a.tool, a.args);
+        const res = await tool(a.tool, a.args);
         results.push({ tool: a.tool, ok: res.ok, summary: res.summary });
       }
 
@@ -235,7 +267,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
               const call = a as Record<string, unknown>;
               const { tool: t, args } = normalizeAction(call);
               if (!t) continue;
-              const res = tool(t, args);
+              const res = await tool(t, args);
               results.push({ tool: t, ok: res.ok, summary: res.summary });
             }
           }
@@ -269,12 +301,13 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
     }
 
     // ------------------------------------------------ 3. solver — the truth
+    if (shouldStop?.()) throw new StopRequested();
     emit({ type: 'phase', phase: 'solver', label: 'Solver — final validation and simulation' });
-    const finalValidate = tool('validate', {});
+    const finalValidate = await tool('validate', {});
     let solvedOk = false;
     let solveSummary: SolveSummary | null = null;
     if (finalValidate.ok) {
-      const finalSolve = tool('solve', {});
+      const finalSolve = await tool('solve', {});
       solvedOk = finalSolve.ok;
       solveSummary = ws.solveSummary();
     } else if (ws.lastResult) {
@@ -285,6 +318,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
     }
 
     // ---------------------------------------------------------- 4. critic
+    if (shouldStop?.()) throw new StopRequested();
     emit({ type: 'phase', phase: 'critic', label: 'Critic — reviewing the plant against the brief' });
     const facts = solveFacts(solveSummary);
     let verdict: CriticVerdict;
@@ -304,6 +338,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
 
     // ------------------------------------------- 5. docent — the guided tour
     if (solvedOk && finalValidate.ok && verdict.verdict !== 'fail') {
+      if (shouldStop?.()) throw new StopRequested();
       emit({ type: 'phase', phase: 'docent', label: 'Docent — writing the guided tour' });
       try {
         const tourRaw = await chatJson(llm, [
@@ -333,7 +368,15 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
       streamCount: ws.graph.streams.length,
     });
   } catch (e) {
-    emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    if (e instanceof StopRequested) {
+      emit({
+        type: 'message',
+        role: 'system',
+        text: 'Stopped at your request — the plant as built so far stays on the canvas.',
+      });
+    } else {
+      emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    }
     if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
   }
@@ -350,7 +393,7 @@ export async function runAgentBuild(brief: string, { llm, emit, meter }: Orchest
 export async function runAgentRemix(
   initialGraph: FlowGraph,
   instruction: string,
-  { llm, emit, meter }: OrchestratorOpts,
+  { llm, emit, meter, shouldStop }: OrchestratorOpts,
 ): Promise<void> {
   const trimmed = instruction.trim().slice(0, 1000);
   if (trimmed.length < 3) {
@@ -364,13 +407,15 @@ export async function runAgentRemix(
   const ws = new AgentWorkspace(initialGraph); // seeded with the working plant
   const family = getFamily(ws.graph.family && isFamilyId(ws.graph.family) ? ws.graph.family : 'ammonia');
   const changeLog: string[] = [];
-  const tool = (name: string, args: Record<string, unknown>) => {
+  const tool = async (name: string, args: Record<string, unknown>) => {
+    if (shouldStop?.()) throw new StopRequested(); // cancel lands mid-batch
     seq++;
     const res = ws.execute({ tool: name, args });
     emit({ type: 'tool', seq, name, args, ok: res.ok, summary: res.summary });
     if (ws.mutated) {
       changeLog.push(`${name}: ${res.summary}`);
       emit({ type: 'graph', graph: ws.snapshot() });
+      await sleep(PACE_MS[name] ?? 120); // the canvas assembles one piece at a time
     }
     if (name === 'solve' && res.ok) {
       const s = ws.solveSummary();
@@ -383,7 +428,7 @@ export async function runAgentRemix(
     // ---------------------------------------- 0. baseline — solve as loaded
     // the remix critic diffs against this; also proves the seed is live
     emit({ type: 'phase', phase: 'engineer', label: 'Engineer — remixing your plant' });
-    const baselineOk = tool('solve', {});
+    const baselineOk = await tool('solve', {});
     let baselineFacts = 'baseline: the loaded plant did not solve (the remix must also repair it)';
     if (!baselineOk.ok && ws.lastResult) baselineFacts = 'baseline: loaded plant solved earlier but the last solve failed';
     if (baselineOk.ok && ws.solveSummary()) baselineFacts = solveFacts(ws.solveSummary());
@@ -400,6 +445,7 @@ export async function runAgentRemix(
     };
 
     for (let turn = 1; turn <= MAX_REMIX_TURNS; turn++) {
+      if (shouldStop?.()) throw new StopRequested();
       const isLast = turn === MAX_REMIX_TURNS;
       let raw: Record<string, unknown>;
       try {
@@ -437,7 +483,7 @@ export async function runAgentRemix(
 
       const results: { tool: string; ok: boolean; summary: string }[] = [];
       for (const a of actions) {
-        const res = tool(a.tool, a.args);
+        const res = await tool(a.tool, a.args);
         results.push({ tool: a.tool, ok: res.ok, summary: res.summary });
       }
 
@@ -459,7 +505,7 @@ export async function runAgentRemix(
                 if (a === null || typeof a !== 'object') continue;
                 const { tool: t, args } = normalizeAction(a as Record<string, unknown>);
                 if (!t) continue;
-                const res = tool(t, args);
+                const res = await tool(t, args);
                 results.push({ tool: t, ok: res.ok, summary: res.summary });
               }
             }
@@ -483,12 +529,13 @@ export async function runAgentRemix(
     }
 
     // ------------------------------------ 2. solver — the truth, re-run
+    if (shouldStop?.()) throw new StopRequested();
     emit({ type: 'phase', phase: 'solver', label: 'Solver — re-running the remixed plant' });
-    const finalValidate = tool('validate', {});
+    const finalValidate = await tool('validate', {});
     let solvedOk = false;
     let solveSummary: SolveSummary | null = null;
     if (finalValidate.ok) {
-      const finalSolve = tool('solve', {});
+      const finalSolve = await tool('solve', {});
       solvedOk = finalSolve.ok;
       solveSummary = ws.solveSummary();
     } else if (ws.lastResult) {
@@ -497,6 +544,7 @@ export async function runAgentRemix(
     }
 
     // -------------------------- 3. critic — judges the EDIT, not the textbook
+    if (shouldStop?.()) throw new StopRequested();
     emit({ type: 'phase', phase: 'critic', label: 'Critic — reviewing the remix' });
     const newFacts = solveFacts(solveSummary);
     let verdict: CriticVerdict;
@@ -514,6 +562,7 @@ export async function runAgentRemix(
 
     // --------------------------------- 4. docent — a fresh tour for the remix
     if (solvedOk && finalValidate.ok && verdict.verdict !== 'fail') {
+      if (shouldStop?.()) throw new StopRequested();
       emit({ type: 'phase', phase: 'docent', label: 'Docent — writing the remixed plant tour' });
       try {
         const tourRaw = await chatJson(llm, [
@@ -543,7 +592,15 @@ export async function runAgentRemix(
       streamCount: ws.graph.streams.length,
     });
   } catch (e) {
-    emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    if (e instanceof StopRequested) {
+      emit({
+        type: 'message',
+        role: 'system',
+        text: 'Stopped at your request — the plant as edited so far stays on the canvas.',
+      });
+    } else {
+      emit({ type: 'error', message: (e as Error).message || 'unexpected agent failure' });
+    }
     if (meter) emit({ type: 'usage', usage: meter.snapshot() });
     emit({ type: 'done', success: false, graph: ws.snapshot(), unitCount: ws.graph.units.length, streamCount: ws.graph.streams.length });
   }
