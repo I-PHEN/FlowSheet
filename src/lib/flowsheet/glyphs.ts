@@ -61,6 +61,33 @@ export function glyphFor(type: string): UnitKind {
   return KIND_TO_GLYPH[type] ?? 'reactor';
 }
 
+/** how far each symbol's INK sits inside its 96×52 glyph box, per side —
+ *  [leftInset, rightInset] in glyph-box units. Streams terminate at the
+ *  INK edge, not the box edge, so lines visibly touch the equipment: a
+ *  mixer's triangle tip ends at 58% of the box, a source's circle at ~74%,
+ *  while a furnace fills the box almost edge to edge. Derived from the
+ *  symbol geometry in Symbols.tsx — keep the two in sync. */
+export const INK_INSET: Record<string, [number, number]> = {
+  mixer: [3, 40], // triangle points right; tip at 0.58w
+  splitter: [40, 3], // mirror of the mixer
+  furnace: [4, 4],
+  secondary: [25, 25], // shell spans 0.26w..0.74w
+  hex: [2, 4],
+  reactor: [10, 10], // vessel spans 0.1w..0.9w
+  column: [4, 4],
+  drum: [2, 4],
+  vdrum: [2, 4],
+  compressor: [3, 3],
+  converter: [8, 8], // vessel spans 0.08w..0.92w
+  source: [25, 25], // sphere r=23 centered in the 96-wide box
+  dcolumn: [5, 10],
+};
+
+/** insets for an engine unit TYPE (vessel default). */
+export function inkInsetsFor(type: string): [number, number] {
+  return INK_INSET[glyphFor(type)] ?? [2, 2];
+}
+
 /** a UnitNode-shaped prop for <UnitSymbol/> — geometry only, no layout role. */
 export function glyphNode(id: string, type: string, w: number, h: number): UnitNode {
   return { id, tag: id, label: '', x: 0, y: 0, w, h, kind: glyphFor(type) };

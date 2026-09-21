@@ -36,7 +36,7 @@ import { buildGrid, routeStream, roundedPath, type RRect } from '@/lib/flowsheet
 import { pointAt, bboxOf, boxToAspect, type Box } from '@/lib/flowsheet/geom';
 import { tweenView } from '@/lib/flowsheet/camera';
 import { dotColor, type FlowSpec } from '@/lib/flowsheet/flowAnim';
-import { glyphNode } from '@/lib/flowsheet/glyphs';
+import { glyphNode, inkInsetsFor } from '@/lib/flowsheet/glyphs';
 import { UnitSymbol } from '@/components/flowsheet/Symbols';
 import { FlowLayer } from '@/components/flowsheet/FlowLayer';
 
@@ -88,11 +88,13 @@ interface Layout {
   height: number;
   units: Map<string, Placed>;
   bandCount: number;
+  /** rows per band — needed to compute each band's bottom lane */
+  maxColLen: number;
 }
 
 function computeLayout(graph: FlowGraph): Layout {
   const units = graph.units;
-  if (units.length === 0) return { width: 900, height: 360, units: new Map(), bandCount: 1 };
+  if (units.length === 0) return { width: 900, height: 360, units: new Map(), bandCount: 1, maxColLen: 1 };
 
   // adjacency (unit digraph, self-loops ignored)
   const preds = new Map<string, Set<string>>();
@@ -160,7 +162,63 @@ function computeLayout(graph: FlowGraph): Layout {
 
   const width = PAD * 2 + bandCols * COL_W;
   const height = PAD * 2 + bandCount * (maxColLen * ROW_H) + (bandCount - 1) * bandGap + 48;
-  return { width: Math.max(width, 900), height: Math.max(height, 360), units: placed, bandCount };
+  return {
+    width: Math.max(width, 900),
+    height: Math.max(height, 360),
+    units: placed,
+    bandCount,
+    maxColLen,
+  };
+}
+
+/** the free lane below a band's content — band flips and blocked sinks run
+ *  their horizontals here (one uniform serpentine convention) */
+function bandBottomLane(band: number, layout: Layout): number {
+  const bandTop = PAD + band * (layout.maxColLen * ROW_H + BAND_GAP);
+  return bandTop + layout.maxColLen * ROW_H + BAND_GAP / 2;
+}
+
+/** pull a route's terminal points from the OBSTACLE edge in to the symbol
+ *  INK edge — lines and arrowheads visibly touch the equipment. The per-kind
+ *  insets know each symbol's silhouette (a mixer's tip, a source's sphere). */
+const KISS_X = (OB_W - GLYPH_W) / 2;
+const KISS_Y = (OB_H - GLYPH_H) / 2;
+function kissTerminals(
+  pts: Array<[number, number]>,
+  ra: RRect,
+  inkA: [number, number],
+  rb: RRect | null,
+  inkB: [number, number] | null,
+): Array<[number, number]> {
+  if (pts.length < 2) return pts;
+  const out = pts.map((p) => [p[0], p[1]] as [number, number]);
+  const f = out[0];
+  if (Math.abs(f[0] - (ra.x + ra.w)) < 0.5) f[0] = ra.x + ra.w - KISS_X - inkA[1];
+  else if (Math.abs(f[0] - ra.x) < 0.5) f[0] = ra.x + KISS_X + inkA[0];
+  if (Math.abs(f[1] - (ra.y + ra.h)) < 0.5) f[1] = ra.y + ra.h - KISS_Y;
+  else if (Math.abs(f[1] - ra.y) < 0.5) f[1] = ra.y + KISS_Y;
+  if (rb && inkB) {
+    const l = out[out.length - 1];
+    if (Math.abs(l[0] - rb.x) < 0.5) l[0] = rb.x + KISS_X + inkB[0];
+    else if (Math.abs(l[0] - (rb.x + rb.w)) < 0.5) l[0] = rb.x + rb.w - KISS_X - inkB[1];
+    if (Math.abs(l[1] - rb.y) < 0.5) l[1] = rb.y + KISS_Y;
+    else if (Math.abs(l[1] - (rb.y + rb.h)) < 0.5) l[1] = rb.y + rb.h - KISS_Y;
+  }
+  return out;
+}
+
+/** a pill sits on the calmest stretch: the midpoint of the LONGEST segment */
+function pillAt(pts: Array<[number, number]>): { x: number; y: number } {
+  let best = 0;
+  let bestLen = -1;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const len = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+    if (len > bestLen) {
+      bestLen = len;
+      best = i;
+    }
+  }
+  return { x: (pts[best][0] + pts[best + 1][0]) / 2, y: (pts[best][1] + pts[best + 1][1]) / 2 };
 }
 
 function Arrow({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
@@ -355,7 +413,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
     const pos = layout.units;
     const rects: RRect[] = graph.units.map((u) => {
       const p = pos.get(u.id)!;
-      return { x: p.x, y: p.y, w: OB_W, h: OB_H };
+      return { x: p.x, y: p.y, w: OB_W, h: OB_H, bandBottom: bandBottomLane(p.band, layout) };
     });
     const grid = buildGrid(rects, layout.width, layout.height);
     const pairSeen = new Map<string, number>();
@@ -367,7 +425,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       if (!a) return null;
       const rectOf = (id: string): RRect => {
         const p = pos.get(id)!;
-        return { x: p.x, y: p.y, w: OB_W, h: OB_H };
+        return { x: p.x, y: p.y, w: OB_W, h: OB_H, bandBottom: bandBottomLane(p.band, layout) };
       };
       let d = '';
       let endX = 0;
@@ -398,17 +456,34 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
         pairSeen.set(key, pairIndex + 1);
         const laneIndex = forward ? 0 : recycleLanes++;
         const r = routeStream(ra, rb, grid, forward, { pairIndex, laneIndex });
-        d = roundedPath(r.pts, 10);
-        pts = r.pts;
-        const last = r.pts[r.pts.length - 1];
+        // terminals kiss the symbol INK, not the invisible obstacle pad
+        const inkA = inkInsetsFor(graph.units.find((u) => u.id === s.from.unit)?.type ?? '');
+        const inkB = s.to
+          ? inkInsetsFor(graph.units.find((u) => u.id === s.to!.unit)?.type ?? '')
+          : null;
+        pts = kissTerminals(r.pts, ra, inkA, rb, inkB);
+        d = roundedPath(pts, 10);
+        const last = pts[pts.length - 1];
         endX = last[0];
         endY = last[1];
         endAngle = r.endAngle;
-        pill = pointAt(r.pts, 0.5);
+        pill = pillAt(pts);
       }
       const pillW = 12 + s.id.length * 8;
       return { s, st, d, pts, endX, endY, endAngle, pill, pillW, selfLoop };
     });
+
+    // one collision pass: pills that landed on top of each other get a
+    // vertical nudge (labels never share a lane silently)
+    const placedPills: Array<{ x: number; y: number }> = [];
+    for (const it of out) {
+      if (!it || it.selfLoop) continue;
+      const p = it.pill;
+      if (placedPills.some((q) => Math.abs(q.x - p.x) < 30 && Math.abs(q.y - p.y) < 22)) {
+        p.y += p.y > layout.height / 2 ? -18 : 18;
+      }
+      placedPills.push({ x: p.x, y: p.y });
+    }
     return out;
   }, [graph, layout]);
 

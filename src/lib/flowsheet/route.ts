@@ -32,6 +32,11 @@ export interface RRect {
   y: number;
   w: number;
   h: number;
+  /** y of the free lane BELOW this rect's BAND (the inter-band gap) —
+   *  banded layouts pass it so band-flip streams run in the gap under the
+   *  whole band, one uniform serpentine convention. Optional: plain grids
+   *  simply omit it. */
+  bandBottom?: number;
 }
 
 export interface RouteGrid {
@@ -115,6 +120,23 @@ function verticalClear(x: number, y0: number, y1: number, g: RouteGrid, skip: RR
   return true;
 }
 
+/** is the horizontal run at y, from x0 to x1, free of unit boxes? */
+function horizontalClear(x0: number, x1: number, y: number, g: RouteGrid, skip: RRect[]): boolean {
+  const lo = Math.min(x0, x1);
+  const hi = Math.max(x0, x1);
+  for (const r of g.rects) {
+    if (skip.includes(r)) continue;
+    if (y > r.y - 3 && y < r.y + r.h + 3 && hi > r.x + 3 && lo < r.x + r.w - 3) return false;
+  }
+  return true;
+}
+
+/** the nearest clear vertical jog x between a and the next column right */
+function jogRight(a: RRect, g: RouteGrid): number {
+  const next = g.colXs.find((x) => x > a.x + eps);
+  return next === undefined ? a.x + a.w + 26 : (a.x + a.w + next) / 2;
+}
+
 /** columns strictly between two x positions */
 function columnsBetween(x0: number, x1: number, g: RouteGrid): number[] {
   const lo = Math.min(x0, x1);
@@ -142,7 +164,25 @@ export function routeStream(
   // ---- sink: leaves the plant toward the margin ----
   if (!b) {
     const ex = Math.min(a.x + a.w + 64, g.width - 8);
-    return { pts: [[a.x + a.w, sy], [ex, sy]], endAngle: 0 };
+    // direct right run is fine when the lane ahead is genuinely empty —
+    // the +30 lookahead also catches the near miss, an arrow pointing
+    // straight at a neighbor 20px away (reads as a wrong connection)
+    if (horizontalClear(a.x + a.w, ex + 30, sy, g, [a])) {
+      return { pts: [[a.x + a.w, sy], [ex, sy]], endAngle: 0 };
+    }
+    // blocked (a unit sits in the next column): drop to the band-bottom
+    // lane and exit along it — an arrow must never stab a neighbor
+    const xc = jogRight(a, g);
+    const ly = a.bandBottom ?? laneBelow(a.y, g).y;
+    return {
+      pts: [
+        [a.x + a.w, sy],
+        [xc, sy],
+        [xc, ly],
+        [Math.max(ex, xc + 24), ly],
+      ],
+      endAngle: 0,
+    };
   }
 
   const ey = b.y + b.h / 2;
@@ -161,7 +201,7 @@ export function routeStream(
 
     const rightward = b.x > a.x + eps;
     if (rightward) {
-      const xc = (a.x + a.w + b.x) / 2 + pairIndex * 14;
+      const xc = (a.x + a.w + b.x) / 2 + pairIndex * 20;
       if (columnsBetween(a.x, b.x, g).length === 0) {
         // adjacent column — one corridor jog
         return { pts: [[a.x + a.w, sy], [xc, sy], [xc, ey], [b.x, ey]], endAngle: 0 };
@@ -183,14 +223,17 @@ export function routeStream(
       };
     }
 
-    // leftward forward (serpentine band flip): mirror of the above
-    const xc = (b.x + b.w + a.x) / 2 - pairIndex * 14;
+    // leftward forward (serpentine band flip): the horizontal runs in the
+    // lane below the source's WHOLE BAND when the layout says which band it
+    // is in — end of band → down → back along the band gap → up into the
+    // next band's first unit. One uniform convention, no mid-band treks.
+    const xc = (b.x + b.w + a.x) / 2 - pairIndex * 20;
     if (columnsBetween(b.x, a.x, g).length === 0) {
       return { pts: [[a.x, sy], [xc, sy], [xc, ey], [b.x + b.w, ey]], endAngle: Math.PI };
     }
     const xc0 = corridorLeft(a, g);
     const xc1 = corridorRight(b, g);
-    const laneY = b.y >= a.y ? laneBelow(a.y, g).y : laneAbove(a.y, g);
+    const laneY = a.bandBottom ?? (b.y >= a.y ? laneBelow(a.y, g).y : laneAbove(a.y, g));
     return {
       pts: [
         [a.x, sy],
@@ -205,7 +248,10 @@ export function routeStream(
   }
 
   // ---- recycle: down a corridor, back along a lane below both ----
-  const xc0 = corridorRight(a, g);
+  // the corridor leaves on the side NEARER the target — a loop that ends
+  // left must not wander off to the far right first
+  const targetRight = b.x + b.w / 2 >= a.x + a.w / 2;
+  const xc0 = targetRight ? corridorRight(a, g) : corridorLeft(a, g);
   const lowerY = Math.max(a.y, b.y);
   const { y: baseLane, nextTop } = laneBelow(lowerY, g);
   let laneY = baseLane + laneIndex * 15;
@@ -217,7 +263,7 @@ export function routeStream(
   if (verticalClear(bcx, laneY, b.y + b.h, g, [b])) {
     return {
       pts: [
-        [a.x + a.w, sy],
+        [targetRight ? a.x + a.w : a.x, sy],
         [xc0, sy],
         [xc0, laneY],
         [bcx, laneY],
@@ -226,18 +272,18 @@ export function routeStream(
       endAngle: -Math.PI / 2,
     };
   }
-  // fallback: rise in the corridor beside the target, enter its right side
-  const xc1 = corridorRight(b, g);
+  // fallback: rise in the corridor beside the target, enter its near side
+  const xc1 = targetRight ? corridorLeft(b, g) : corridorRight(b, g);
   return {
     pts: [
-      [a.x + a.w, sy],
+      [targetRight ? a.x + a.w : a.x, sy],
       [xc0, sy],
       [xc0, laneY],
       [xc1, laneY],
       [xc1, ey],
-      [b.x + b.w, ey],
+      [targetRight ? b.x : b.x + b.w, ey],
     ],
-    endAngle: Math.PI,
+    endAngle: targetRight ? 0 : Math.PI,
   };
 }
 
