@@ -863,3 +863,46 @@ Work Log:
 
 Stage Summary:
 - App back on the shipped identity (charcoal-on-true-black, white/charcoal buttons, no inside/code section) and confirmed serving it live on :3000 through the :81 preview chain. Recovery = reset to origin/main + double-fork dev server relaunch. If a future rollback hits again: fetch, reset --hard origin/main, relaunch dev via the double-fork pattern above.
+
+---
+Task ID: 47 (PLAN OF RECORD — the "Alive" roadmap: narration-synced choreography, story-law docent, agent IQ)
+Agent: main (Super Z)
+Task: Owner direction: dig deep into the AI part — the build agent's intelligence, the narration/script craft (hooky, story-driven, teaching-game quality), and subtle narration-synced animation (explicitly NOT the current single-ball flow dots). Planning session only, zero code, per owner instruction.
+
+Work Log:
+- AUDIT READ (full): orchestrator.ts (6-stage pipeline: Router→Architect→Engineer→Solver→Critic→Docent), prompts.ts (all role prompts + ORION_VOICE), llm.ts (ZaiLlm / CachedLlm / TokenMeter / extractJson repair), projects/tour.ts (auto-tour, safeTour, roamStep), ui/tourDirector.ts (guided/roam paces, camera intent), ui/useSyncedCaption.ts (word reveal off the REAL audio clock), flowsheet/FlowLayer.tsx + flowAnim.ts (PathLUT dots), flowsheet/camera.ts, content/units.ts (Tour model + hand-authored ammonia tour), docent stage + solveFacts in orchestrator.
+- FINDINGS: (a) build AI is one-shot — critic verdict goes nowhere (no repair pass), architect plan unchecked before 20 turns of execution, zero cross-build memory; (b) docent writes EXPLANATIONS not STORIES — flat stop shape, no arc/stakes/hook/callback, while the hand-authored ammonia tour ("Splitting methane", "The loop's heart") is the real quality bar; (c) flow dots are physics-honest but theatrical wallpaper — everything moves, so nothing can be emphasized; (d) GOLD: useSyncedCaption already reveals words straight off the audio clock — a perfect director's clock with nothing choreographed to it. That clock is the foundation of the whole plan.
+- OWNER DECISIONS (recommended defaults, locked on "continue", veto-able any time): Wave 1 bundles choreography + docent rewrite · Orion stays the calm 30-year shift supervisor but SHARPER (war stories deferred to Wave 4) · flow dots DEMOTED during tours (~0.1 opacity ambient), untouched in Operate · repair loop = max 2 cycles × 8 turns with best-graph-wins.
+
+ROADMAP (task numbers 47-53):
+
+WAVE 1 "ALIVE" (47-48) — the tour transforms
+- 47 CHOREOGRAPHY INFRA:
+  * Beat markup — TourStep gains optional `beats?: Beat[]`; `text` stays canonical for old records. Beat = { text (6-20 words, one spoken sentence), target?: Ref (default step.ref), action?: 'spotlight'|'trace'|'countup'|'thermal'|'none', stream?, value?, unit?, label? }.
+  * Back-compat synthesis: no beats → synthesize one beat per sentence (target=step.ref, spotlight). Hand-authored + old AI tours get the spotlight treatment day one, zero rewrite.
+  * src/lib/ui/choreographer.ts — PURE: (beats, narrator progress, fired-ledger) → CueState { spotlight, fireTrace (one-shot), countup, thermal, beatIdx }. Beat windows = cumulative word-share of the spoken script (title takes the opening share, same law as useSyncedCaption — same approximation, ±0.3s tolerable for comets/countups).
+  * Surfaces: Diagram.tsx `spotlight` prop → non-target units/streams dim to ~0.3 (reuse existing dimming pattern; SHEET only — never chrome text) + target label lift; FlowLayer one-shot COMET (4-circle fading tail riding the existing PathLUT once, ~1.6s ease-in-out, eye-trace not conveyor) + `ambient` flag → dots 0.1 opacity while a tour plays; CountUp overlay (new tiny component, label-anchored, rAF 0→value ease-out ~1.2s, unit-formatted); caption bar current-word weight pulse (CSS only).
+  * Gates: tsc 0, eslint, cinema-polish/learn-merge/flow-anim suites updated where laws change, E2E dark+light shots of tours MID-BEAT (spotlight/comet/countup visible), contrast audit — captions stay ≥7:1 both themes, VLM review, fixed-window 414px law.
+- 48 DOCENT STORY-LAW v2:
+  * ORION_VOICE unchanged (calm supervisor, sharper tongue). New STORY LAW in docentSystem: stop 1 = COLD OPEN (stakes / a number / a question — "This is/Here is" FORBIDDEN as stop-1 opener) · every stop opens with a hook (tension word, number, question, sensory line) · walk follows the FEED MOLECULE — narrative turns ("but", "so", "meanwhile"), never unit descriptions · NAME THE ADVERSARY (equilibrium / inerts / heat loss — docent picks one from the primer) · ONE reveal stop (the counterintuitive fact) · close = callback to the opener + the numbers that matter + a tease of the next level.
+  * Reply schema becomes beats: steps=[{unit, title, beats:[{text, action, stream?, value?, unit?, label?}]}]; sanitizer joins beats → text (length laws unchanged), validates targets/streams exist, countup values sane; safeTour extended the same way (old records pass through synthesis).
+  * Ammonia hand-tour upgraded to authored beats (the owner's favorite content gets the full treatment first).
+  * Dots law: tour active → ambient 0.1 (task 47 infra).
+
+WAVE 2 "SMART" (49-50) — pass rate + script quality, machine-checked
+- 49 REPAIR LOOP + PLAN LINTER:
+  * Orchestrator: critic 'revise' (not 'fail') → phase 'repair': engineer gets REPAIR brief (critic issues + current graph digest), MAX 8 turns, must re-validate + re-solve; critic re-judges; max 2 cycles; BEST-GRAPH-WINS (snapshot before repair, restore if score drops); total-action budget unchanged (200).
+  * src/lib/agent/planLint.ts — PURE, zero tokens: catalog/port existence, stream endpoints reference placed units, product stream declared (general), family loop expectation, unit-count sanity, orphan sources. Issues appended to engineer turn 1; catastrophic → one architect repair call.
+- 50 TWO-PASS DOCENT + HOOK LINTER:
+  * Pass 1 writes the SPINE (acts, adversary, reveal, callback) as compact JSON; pass 2 writes beats against the spine. Cheap second call, big coherence gain.
+  * Deterministic hook linter (free): reject stop-1 "This is/Here is" openers, missing callback, zero question/tension markers, numbers in <3 stops. Fails → one rewrite with the failures quoted.
+
+WAVE 3 "MEMORY & LEVELS" (51-52) — compounding value, the teaching game
+- 51 BUILD MEMORY: cases.jsonl in .agent-cache/cases + a committed seed corpus (the reference plants as solved cases — survives sandbox rollbacks, ships with every clone). Case = {brief, family, planDigest, unitTypes, score, verdict, kpis, tourTitle}. Retrieval = lexical overlap + family + score (no new deps, no embeddings). Top-2 prior art into the ARCHITECT prompt only (~300 tokens). Written after every done build.
+- 52 TOUR LEVELS + PREDICTION CHALLENGE: three styles — STORY / NUMBERS / OPERATOR (chips on the tour index; on-demand docent call per style against the record's cached facts). End-of-tour challenge card: Orion poses a change ("halve the purge"), player PREDICTS the direction (up/down/same), the existing remix loop runs it, the delta is scored. Prediction → run → compare is the game loop; the simulator already makes it honest.
+
+WAVE 4 "DELIGHT" (53): cutaway insets during mechanism beats (the 3D GLB registry already exists), Orion war stories (one per family, vetted, still the supervisor), zone reveals.
+
+Stage Summary:
+- The plan in one line: the audio clock we already own becomes a director — beats give every spoken sentence a target and an action, the docent writes to a story law with a machine-checked spine, the build agent gains a repair shop and memory, and the dots step aside when Orion talks.
+- Zero code written this session, per owner instruction. Next session opens with task 47 (choreography infra).
