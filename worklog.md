@@ -906,3 +906,51 @@ WAVE 4 "DELIGHT" (53): cutaway insets during mechanism beats (the 3D GLB registr
 Stage Summary:
 - The plan in one line: the audio clock we already own becomes a director — beats give every spoken sentence a target and an action, the docent writes to a story law with a machine-checked spine, the build agent gains a repair shop and memory, and the dots step aside when Orion talks.
 - Zero code written this session, per owner instruction. Next session opens with task 47 (choreography infra).
+
+---
+Task ID: 47-PRE (PLAN — Fix Pack A: the four owner fixes + unit-study answer, BEFORE the Alive roadmap)
+Agent: main (Super Z)
+Task: Owner review pass on the tour/hero experience. Four fixes ("let's fix these first"), one open question. Planning only, zero code, per owner instruction.
+
+Owner's four (with references pasted as upload/pasted_image_1790007564027.png + 1790008373453.png):
+P1 "that bar is too long... should not be across the ends of the screen" — CinemaBar is inset-x-0 w-full edge-to-edge dock.
+P2 Tour camera must BREATHE: overview of whole plant first → zoom into unit → describe → zoom OUT to full sheet → zoom into next unit → repeat.
+P3 A way to REDUCE background music without turning it off — volume control, not just the on/off pill.
+P4 Hero voice card is "wrong, really wrong" — should be the reference player design; "we don't even need to stream any caption, it just has to be that good".
+Q  Open: can the system build "just a turbine" for a student?
+
+Work Log (investigation):
+- CinemaBar.tsx read: dock = absolute inset-x-0 bottom-0 + w-full border-t (THE DOCK LAW) — caption/dots/transport all present, structure already close to the reference; the flaw is full-bleed width.
+- tourDirector.ts read: start()/jump()/advance() fly DIRECTLY stop→stop; no fit between stops; intro stop refs firstUnit (camera dives immediately — no overview framing). CamIntent already supports {kind:'fit'}.
+- music.ts read: TourMusic has baseVolume=0.5 HARDCODED, duck GainNode 1↔0.3, no setLevel API. Prefs = {voice, music} booleans in localStorage (pfd.audio.prefs).
+- MeetOrion.tsx read: current voice card = paper card + streaming caption paragraph + one round button. Reference = dark player: title + one live line w/ cursor, thin waveform bar, avatar-circle + "AVION · YOUR GUIDE" + "1 / 7" + GUIDED pill, right: mono shortcut hint + icon row (prev/step/volume/effects/replay/close). Second image = glowing ribbon waveform aesthetic (white core + soft glow on black).
+- narration.ts read: one HTMLAudioElement + blob cache — a MediaElementSource + AnalyserNode can expose real amplitude for a LIVE waveform driven by Orion's actual voice.
+- Registry read: 33 unit types, ALL process equipment (sources, reformers, shift beds, compressor, columns, PSA, Claus train...). NO turbine/pump/valve — turbines exist only in prose. Validation demands connected flowsheet + feeds + products + solvable balance.
+
+THE PLAN:
+
+P1 — BOUNDED BAR (CinemaBar): dock → floating player card. inset-x-3/sm:inset-x-6 bottom-3, mx-auto max-w-[880px], rounded-xl border-all (not border-t), shadow-2xl, same caption/dots/transport inside. Update DOCK LAW comment + any cinema-polish test assertions on layout. Mobile 414px re-check, both themes.
+
+P2 — BREATHING CAMERA (tourDirector + camera):
+  * TourStep gains optional framing?: 'unit' | 'fit' (default 'unit'). Intro + outro steps of auto-tour, docent tours, and the hand-authored walkthrough → 'fit' (whole sheet while Orion gives the overview / lands the close).
+  * Director advance becomes a 3-phase state machine: speaking → PULL-BACK (fit, ~750ms flight + ~450ms dwell on the full sheet) → DIVE (fly to next unit). Last stop: pull back and stay (the outro over the whole plant). User jump/roam/pause cancels pending phases (existing camera cancel contract). Mobile: shorter flights (~500/300/500ms).
+  * This is the foundation task 47's beat choreographer layers onto (in-stop cues ride the same timing spine).
+
+P3 — MUSIC VOLUME: AudioPrefs gains musicLevel: 0..1 (default 0.5; old boolean prefs migrate). TourMusic.setLevel(v) ramps the master out gain (duck node sits after it, stays proportional). UI: ♪ button in CinemaBar opens a compact slider popover (drag = level, icon reflects low/high/mute, mute preserved as level 0 / X state). Persisted. Voice toggle untouched.
+
+P4 — HERO VOICE CARD v2 (MeetOrion): rebuild as a DARK PLAYER CARD (fixed dark tokens in both themes — a player object, like an embedded player on a light page; matches the charcoal identity):
+  * Row 1: the line's title (strong) + REAL VOICE mono tag.
+  * Row 2: ONE live line with block cursor while he speaks (not a caption paragraph — matches the reference's "Synthesis |" status line).
+  * Row 3: THE WAVEFORM — real analyser-driven bars (narrator gains amplitude(): MediaElementSource → AnalyserNode → RMS; rAF only while playing; graceful synthetic fallback). White/ink bars + soft glow on near-black — the reference's white-core aesthetic, no chromatic aberration (discipline).
+  * Row 4 transport: Orion avatar circle (Belt/O monogram on black) + ORION · YOUR GUIDE + NARRATED pill | right: play/pause (accent), replay, volume, mono hint "· space pause". No close X in the hero (nothing to end).
+  * Keeps: real TTS pipeline, blob cache, stop-on-unmount, reduced-motion (waveform static).
+
+Q — ANSWER (honest): NO, not today — three gaps: (1) no turbine in the catalog (33 process types; turbines only appear in prose), (2) the builder is plant-oriented (validation demands a connected flowsheet with feeds/products/solve; router routes to plant families or general-PLANT composition — "explore a turbine" would route general and the catalog would reject the turbine), (3) no unit-study surface. BUT single-unit teaching plants already exist (/plant/flash is one unit + feeds), and the pieces for proper unit study exist (free composition, 3D unit viewer, spec system, remix, Orion voice).
+  → NEW ROADMAP ITEM — Task 54 (Wave 3, fits "Levels"): UNIT STUDY MODE: (a) catalog + engine: gas turbine/expander (isentropic expansion mirroring the compressor's polytropic math), pump, control valve — small registry entries + models + standard P&ID glyphs; (b) single-equipment intent detection in the Router (study rig: unit + feed source + sink) + relaxed study validation; (c) Orion unit-study script (what it is, the one number that matters, what-if spec sandbox, 3D model); (d) unlocks "explore a pump/valve/exchanger/compressor" — a unit encyclopedia the AI builds on demand.
+
+SEQUENCING: P1 → P3 → P4 → P2 (P2 last, it's the deepest and feeds task 47). Then the Alive roadmap proceeds unchanged (47 choreography layers ON TOP of P2's camera spine; CinemaBar redesign in P1 is the shell task 47's count-up/cue surfaces mount into).
+
+Stage Summary:
+- Four owner fixes specced against the real code (dock law, hardcoded volume, direct-stop camera, paper voice card); the reference images decoded into a concrete dark player spec with a REAL voice-driven waveform (analyser on the narrator's own audio element).
+- Turbine question answered honestly: no today — task 54 (unit study mode) added to Wave 3 to make "explore a turbine" (and pump, valve, exchanger) buildable.
+- Zero code this session, per owner instruction. Next session: execute Fix Pack A (P1-P4), then task 47.
