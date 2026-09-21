@@ -26,12 +26,12 @@
 // ── the palettes (must match globals.css exactly) ───────────────────────────
 
 const LIGHT = {
-  canvas: '#EEF1F4', band: '#E5EAEE', bandLine: '#D2DAE1', sheet: '#E9EDF1',
-  paper: '#FAFBFC', halo: '#DCE4EA',
+  canvas: '#E6EAEE', band: '#F0F3F6', bandLine: '#D5DCE2', sheet: '#F6F8FA',
+  paper: '#FFFFFF', halo: '#E9EEF2',
   ink: '#1D242C', inkSoft: '#414D59', inkFaint: '#5C6873',
   accent: '#FFFFFF', onAccent: '#1D242C', accentLine: '#C6CDD4',
-  feed: '#82653A', gas: '#3D5A76', nh3: '#377454', sulfur: '#7E6326',
-  utility: '#5C6873', warn: '#8F5B2B', fail: '#B3452F',
+  feed: '#8F5A12', gas: '#33639C', nh3: '#1B7246', sulfur: '#82630D',
+  utility: '#56656F', warn: '#8F5410', fail: '#B03E20',
 } as const;
 
 const DARK = {

@@ -26,17 +26,18 @@ import { ShellAndTubeModel } from './models/ShellAndTube';
 function useStageTheme() {
   const read = () => {
     if (typeof window === 'undefined') {
-      // light "cool gray studio" fallbacks — the canvas itself is ssr:false,
+      // light "drawing office" fallbacks — the canvas itself is ssr:false,
       // so these only matter for type safety (dark is the default theme)
-      return { canvas: '#EEF1F4', inkSoft: '#414D59', bandLine: '#D2DAE1', ink: '#1D242C' };
+      return { canvas: '#E6EAEE', inkSoft: '#414D59', bandLine: '#D5DCE2', ink: '#1D242C', dark: false };
     }
     const cs = getComputedStyle(document.documentElement);
     const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
     return {
-      canvas: v('--fs-canvas', '#EEF1F4'),
+      canvas: v('--fs-canvas', '#E6EAEE'),
       ink: v('--fs-ink', '#1D242C'),
       inkSoft: v('--fs-ink-soft', '#414D59'),
-      bandLine: v('--fs-band-line', '#D2DAE1'),
+      bandLine: v('--fs-band-line', '#D5DCE2'),
+      dark: document.documentElement.classList.contains('dark'),
     };
   };
   const [theme, setTheme] = useState(read);
@@ -108,15 +109,26 @@ export default function ModelStage({
   const [spinning, setSpinning] = useState(spin);
 
   return (
-    <div className="h-full w-full" style={{ background: theme.canvas }}>
+    <div
+      className="h-full w-full"
+      style={
+        theme.dark
+          ? { background: '#000000' }
+          : {
+              // the drawing-office backdrop: a soft studio gradient behind a
+              // transparent canvas — gray metal gets something to sit IN,
+              // instead of drowning in a flat gray void
+              background: 'radial-gradient(120% 90% at 50% 30%, #F8FAFC 0%, #EDF1F5 55%, #E0E6EC 100%)',
+            }
+      }
+    >
       <Canvas
         dpr={[1, 2]}
         camera={{ fov: 38, position: [3.4, 2.1, 4.2], near: 0.05, far: 60 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: true, alpha: true }}
         onPointerDown={() => setSpinning(false)}
         onWheel={() => setSpinning(false)}
       >
-        <color attach="background" args={[theme.canvas]} />
 
         {/* base + key + fill */}
         <hemisphereLight args={[0xffffff, 0x8d8d8d, 0.85]} />
@@ -140,16 +152,24 @@ export default function ModelStage({
         </Bounds>
 
         {/* engineering ground: soft shadow + light grid */}
-        <ContactShadows position={[0, 0.001, 0]} opacity={0.42} scale={9} blur={2.6} far={3} resolution={512} color={theme.ink} />
+        <ContactShadows
+          position={[0, 0.001, 0]}
+          opacity={theme.dark ? 0.42 : 0.5}
+          scale={9}
+          blur={2.6}
+          far={3}
+          resolution={512}
+          color={theme.ink}
+        />
         <Grid
           position={[0, 0, 0]}
           args={[16, 16]}
           cellSize={0.25}
           cellThickness={0.6}
-          cellColor={theme.bandLine}
+          cellColor={theme.dark ? theme.bandLine : '#C4CED8'}
           sectionSize={1}
           sectionThickness={1.1}
-          sectionColor={theme.inkSoft}
+          sectionColor={theme.dark ? theme.inkSoft : '#8FA0AF'}
           fadeDistance={11}
           fadeStrength={1.4}
           infiniteGrid

@@ -163,15 +163,24 @@ export default function ProjectPage() {
 
   if (rec === 'missing') {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center" style={{ background: C.canvas }}>
-        <div className="text-[20px] font-extrabold" style={{ color: C.ink }}>Project not found</div>
-        <p className="max-w-[380px] text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
-          It may have been deleted in this browser, or the link belongs to another browser&apos;s
-          library. Exported plants travel as files — import one from the home page.
-        </p>
-        <Link href="/" className="mt-1 rounded-full border px-5 py-2.5 text-[13px] font-bold" style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}>
-          Back to Flowsheet
-        </Link>
+      <div className="flex min-h-dvh items-center justify-center px-6" style={{ background: C.canvas }}>
+        <div
+          className="flex max-w-[420px] flex-col items-center gap-4 rounded-2xl border p-8 text-center shadow-xl"
+          style={{ background: C.paper, borderColor: C.bandLine }}
+        >
+          <div className="text-[20px] font-extrabold" style={{ color: C.ink }}>Project not found</div>
+          <p className="text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
+            It may have been deleted in this browser, or the link belongs to another browser&apos;s
+            library. Exported plants travel as files — import one from the home page.
+          </p>
+          <Link
+            href="/"
+            className="mt-1 flex h-11 items-center rounded-full border px-6 text-[13.5px] font-bold"
+            style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
+          >
+            Back to Flowsheet
+          </Link>
+        </div>
       </div>
     );
   }

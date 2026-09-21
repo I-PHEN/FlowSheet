@@ -306,8 +306,10 @@ console.log('\nH. FIX PACK A (music level · breathing camera · the hero player
   check('amplitude only exists while the voice is speaking', /this\.state !== 'speaking' \|\| !this\.analyser/.test(narr));
   check('the analyser is wired only when the context can run (else native playback)', /ctx\.state !== 'running'/.test(narr) && /analyserDead/.test(narr));
 
-  // the hero voice card is a dark player object with the real ribbon
-  check('the hero card is a fixed-dark player object (both themes)', /const P = \{/.test(hero) && /#0B0B0D/.test(hero));
+  // the hero voice card is a FIXED-SKIN player object (dark skin on dark
+  // pages, bone skin on light pages) with the real ribbon
+  check('the hero card is a fixed-skin player object (P_DARK near-black + P_LIGHT bone)', /const P_DARK = \{/.test(hero) && /#0B0B0D/.test(hero) && /const P_LIGHT = \{/.test(hero) && /#FCFCFA/.test(hero));
+  check('the skin follows the page theme (dark class observer)', /usePlayerSkin/.test(hero) && /classList\.contains\('dark'\)/.test(hero));
   check('the hero waveform is driven by the REAL voice amplitude', /narrator\.amplitude\(\)/.test(hero));
   check('no caption streaming in the hero — the player is the demo', !/useSyncedCaption/.test(hero));
   check('the hero transport: nameplate + play/pause + replay + volume + space', /ORION · YOUR GUIDE/.test(hero) && /· space/.test(hero) && /vc-btn--primary/.test(hero));

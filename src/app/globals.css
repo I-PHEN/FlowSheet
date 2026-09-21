@@ -44,70 +44,73 @@
 }
 
 :root {
-  /* ── flowsheet tokens · light — "cool gray studio" ──────────────────────
-     Neutral professional light: cool-gray surfaces, WHITE action buttons
-     with dark text. NO green in the chrome — green lives only on the
-     flowsheet canvas as chemistry (streams, verdicts). Every pair below
-     is WCAG-proven by scripts/task43-contrast-audit.ts. */
-  --fs-canvas: #EEF1F4;
-  --fs-band: #E5EAEE;
-  --fs-band-line: #D2DAE1;
-  --fs-sheet: #E9EDF1;
-  --fs-paper: #FAFBFC;
-  --fs-paper-a95: rgba(250, 251, 252, 0.95);
+  /* ── flowsheet tokens · light — "the drawing office" ──────────────────────
+     Light gets its OWN contrast ladder, not dark-mode leftovers: a BRIGHT
+     SHEET floating on a gray desk (the mirror of dark's dark-sheet-on-
+     black), deep saturated stream hues that hold ≥3:1 as thin lines on the
+     bright sheet, white cards with ink text, WHITE action buttons with
+     dark text. NO green in the chrome — green lives only on the flowsheet
+     canvas as chemistry (streams, verdicts). Pairs are WCAG-proven by
+     scripts/task43-contrast-audit.ts. */
+  --fs-canvas: #E6EAEE;
+  --fs-band: #F0F3F6;
+  --fs-band-line: #D5DCE2;
+  --fs-sheet: #F6F8FA;
+  --fs-paper: #FFFFFF;
+  --fs-paper-a95: rgba(255, 255, 255, 0.95);
   --fs-ink: #1D242C;
   --fs-ink-soft: #414D59;
   --fs-ink-faint: #5C6873;
-  --fs-halo: #DCE4EA;
+  --fs-halo: #E9EEF2;
   --fs-tip-shadow: 0 2px 10px rgba(29, 36, 44, 0.10);
-  --fs-card-shadow: 0 6px 28px rgba(29, 36, 44, 0.12);
+  --fs-card-shadow: 0 6px 28px rgba(29, 36, 44, 0.14);
   /* action surface: white button, dark text, hairline border */
   --fs-accent: #FFFFFF;
   --fs-on-accent: #1D242C;
   --fs-accent-line: #C6CDD4;
-  --fs-feed: #82653A;
-  --fs-gas: #3D5A76;
-  --fs-nh3: #377454;
-  --fs-sulfur: #7E6326;
-  --fs-utility: #5C6873;
-  --fs-warn: #8F5B2B;
-  --fs-fail: #B3452F;
+  --fs-feed: #8F5A12;
+  --fs-gas: #33639C;
+  --fs-nh3: #1B7246;
+  --fs-sulfur: #82630D;
+  --fs-utility: #56656F;
+  --fs-warn: #8F5410;
+  --fs-fail: #B03E20;
 
   --radius: 0.625rem;
   /* shadcn surfaces live in the SAME family as the fs tokens — one
      temperature, so toasts/dialogs/charts never clash with the chrome.
      --primary is the action surface: white button + dark text in light. */
-  --background: #EEF1F4;
+  --background: #E6EAEE;
   --foreground: #1D242C;
-  --card: #FAFBFC;
+  --card: #FFFFFF;
   --card-foreground: #1D242C;
-  --popover: #FAFBFC;
+  --popover: #FFFFFF;
   --popover-foreground: #1D242C;
   --primary: #FFFFFF;
   --primary-foreground: #1D242C;
-  --secondary: #E5EAEE;
+  --secondary: #F0F3F6;
   --secondary-foreground: #1D242C;
-  --muted: #E5EAEE;
+  --muted: #F0F3F6;
   --muted-foreground: #414D59;
-  --accent: #E5EAEE;
+  --accent: #F0F3F6;
   --accent-foreground: #1D242C;
-  --destructive: #B3452F;
-  --border: #D2DAE1;
-  --input: #D2DAE1;
+  --destructive: #B03E20;
+  --border: #D5DCE2;
+  --input: #D5DCE2;
   --ring: #1D242C;
   /* charts speak the stream language: gas · feed · sulfur · utility · fail */
-  --chart-1: #3D5A76;
-  --chart-2: #82653A;
-  --chart-3: #7E6326;
-  --chart-4: #5C6873;
-  --chart-5: #B3452F;
-  --sidebar: #FAFBFC;
+  --chart-1: #33639C;
+  --chart-2: #8F5A12;
+  --chart-3: #82630D;
+  --chart-4: #56656F;
+  --chart-5: #B03E20;
+  --sidebar: #FFFFFF;
   --sidebar-foreground: #1D242C;
   --sidebar-primary: #FFFFFF;
   --sidebar-primary-foreground: #1D242C;
-  --sidebar-accent: #E5EAEE;
+  --sidebar-accent: #F0F3F6;
   --sidebar-accent-foreground: #1D242C;
-  --sidebar-border: #D2DAE1;
+  --sidebar-border: #D5DCE2;
   --sidebar-ring: #1D242C;
 }
 
@@ -469,8 +472,9 @@
   accent-color: #ececee;
 }
 
-/* the hero voice card's buttons — the card is a FIXED-dark player object
-   (same in both themes), so its hovers are fixed-dark too */
+/* the hero voice card's buttons — the card is a FIXED player object (its own
+   skin, never the page's palette): dark skin on dark pages, BONE skin on
+   light pages. Hovers follow the skin. */
 .vc-btn {
   transition:
     background-color 150ms ease,
@@ -490,6 +494,22 @@
 .vc-btn--primary:hover {
   background: #323236;
   border-color: #4a4a4f;
+}
+/* the bone skin (light pages): white action button + ink text, exactly the
+   light chrome's action law, just confined to the player object */
+.vc-skin--light .vc-btn:hover {
+  background: #f0f3f6;
+  border-color: #b9c2ca;
+  color: #1d242c;
+}
+.vc-skin--light .vc-btn--primary {
+  background: #ffffff;
+  border-color: #c6cdd4;
+  color: #1d242c;
+}
+.vc-skin--light .vc-btn--primary:hover {
+  background: #f0f3f6;
+  border-color: #b9c2ca;
 }
 
 /* ---- builder canvas: streams draw themselves in (Task 21) ---- */

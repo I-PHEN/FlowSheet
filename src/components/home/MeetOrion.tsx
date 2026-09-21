@@ -42,19 +42,52 @@ const INTRO = {
 };
 const SCRIPT = stepScript(INTRO);
 
-/** the player object is DARK in both themes — fixed tokens, never the
- *  page's palette. A player embedded on a light page stays a player. */
-const P = {
+/** the player object keeps its OWN fixed tokens per skin — never the
+ *  page's palette. Dark pages get the near-black player; light pages get
+ *  the BONE player (a white object on a light page, like paper on a desk).
+ *  A player embedded on a page stays a player — it just dresses for the
+ *  room. */
+const P_DARK = {
   bg: '#0B0B0D', // near-black card body
   line: '#2C2C2F', // hairline (the charcoal band line)
   ink: '#ECECEE', // primary text / the waveform's white core
   inkSoft: '#A7A8AC', // the status line
   inkFaint: '#818287', // tags, hints
-  action: '#28282C', // the action surface (charcoal identity)
-  onAction: '#F2F2F4',
-  actionLine: '#3E3E42',
+  inkRGB: '236,236,238', // the waveform's bar color, as r,g,b
+  glow: 9, // the waveform's soft glow (dark aesthetic)
+  avatarBg: '#141417',
+  popBg: '#141417', // the volume popover
   live: '#6FAE8C', // his speaking state — semantic green, the one allowed
 };
+const P_LIGHT = {
+  bg: '#FCFCFA', // bone card body — a paper-white object
+  line: '#D9DDD8', // warm hairline
+  ink: '#1D242C', // ink text / the waveform's ink core
+  inkSoft: '#414D59',
+  inkFaint: '#5C6873',
+  inkRGB: '29,36,44', // ink bars on bone
+  glow: 0, // no glow on paper — clean ink, not bloom
+  avatarBg: '#FFFFFF',
+  popBg: '#FFFFFF',
+  live: '#2A6347', // deep sage (the light theme's semantic green)
+};
+type PlayerSkin = typeof P_DARK;
+
+/** which room is the player in? (dark pages / light pages). The FIRST
+ *  render always says dark — the same value the server rendered — and an
+ *  effect corrects it after mount, so hydration can never mismatch. */
+function usePlayerSkin(): PlayerSkin {
+  const [skin, setSkin] = useState<PlayerSkin>(P_DARK);
+  useEffect(() => {
+    const read = () =>
+      document.documentElement.classList.contains('dark') ? P_DARK : P_LIGHT;
+    setSkin(read());
+    const obs = new MutationObserver(() => setSkin(read()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return skin;
+}
 
 // ---------------------------------------------------------------------------
 // the waveform — a live signal, not a blob
@@ -73,7 +106,7 @@ const P = {
  */
 const BARS = 44;
 
-function VoiceWave({ speaking }: { speaking: boolean }) {
+function VoiceWave({ speaking, skin }: { speaking: boolean; skin: PlayerSkin }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -152,13 +185,14 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
       for (let i = 0; i < BARS; i++) if (bars[i] > 0.015) { alive = true; break; }
       if (!alive) {
         // resting: a faint hairline — the player is on, nobody is talking
-        ctx.fillStyle = 'rgba(236,236,238,0.22)';
+        ctx.fillStyle = `rgba(${skin.inkRGB},0.22)`;
         ctx.fillRect(0, mid - 0.75, w, 1.5);
         return;
       }
 
       // 3 — the bars: ONE path, ONE glow fill; the linear gradient carries
-      //     the live-signal feel (soft past → bright now, newest at right)
+      //     the live-signal feel (soft past → bright now, newest at right).
+      //     Dark glows; bone is clean ink.
       const pad = 2;
       const step = (w - pad * 2) / BARS;
       const bw = Math.max(1.5, step * 0.52);
@@ -170,11 +204,13 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
         else path.rect(x, mid - bh, bw, bh * 2);
       }
       const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, 'rgba(236,236,238,0.38)');
-      grad.addColorStop(1, 'rgba(236,236,238,0.96)');
+      grad.addColorStop(0, `rgba(${skin.inkRGB},0.38)`);
+      grad.addColorStop(1, `rgba(${skin.inkRGB},0.96)`);
       ctx.save();
-      ctx.shadowColor = 'rgba(236,236,238,0.5)';
-      ctx.shadowBlur = 9;
+      if (skin.glow > 0) {
+        ctx.shadowColor = `rgba(${skin.inkRGB},0.5)`;
+        ctx.shadowBlur = skin.glow;
+      }
       ctx.fillStyle = grad;
       ctx.fill(path);
       ctx.restore();
@@ -194,7 +230,7 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [speaking]);
+  }, [speaking, skin]);
 
   return <canvas ref={ref} className="h-[72px] w-full" style={{ display: 'block' }} aria-hidden="true" />;
 }
@@ -203,7 +239,7 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
 // the voice's volume — the same popover pattern as the tour bar's music
 // ---------------------------------------------------------------------------
 
-function VoiceVolume() {
+function VoiceVolume({ skin }: { skin: PlayerSkin }) {
   const [open, setOpen] = useState(false);
   const [vol, setVol] = useState(0.95);
   const popRef = useRef<HTMLDivElement>(null);
@@ -240,7 +276,7 @@ function VoiceVolume() {
         title="Voice volume"
         onClick={() => setOpen((o) => !o)}
         className="vc-btn flex h-[30px] w-[30px] items-center justify-center rounded-lg border"
-        style={{ borderColor: P.line, color: vol > 0 ? P.inkSoft : P.inkFaint }}
+        style={{ borderColor: skin.line, color: vol > 0 ? skin.inkSoft : skin.inkFaint }}
       >
         {vol === 0 ? (
           <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />
@@ -253,7 +289,7 @@ function VoiceVolume() {
       {open && (
         <div
           className="absolute bottom-full right-0 z-40 mb-2 w-40 rounded-lg border p-2.5 shadow-xl"
-          style={{ background: '#141417', borderColor: P.line }}
+          style={{ background: skin.popBg, borderColor: skin.line }}
           role="group"
           aria-label="Voice volume"
         >
@@ -268,12 +304,13 @@ function VoiceVolume() {
               setVol(v);
               narrator.setVolume(v);
             }}
-            className="vc-range vc-range--dark w-full"
+            className="vc-range w-full"
+            style={{ accentColor: skin.ink }}
             aria-label="Voice volume"
           />
           <div
             className="mt-1 flex items-center justify-between font-mono text-[9px] font-bold tracking-[0.1em]"
-            style={{ color: P.inkFaint }}
+            style={{ color: skin.inkFaint }}
           >
             <span>VOICE</span>
             <span>{vol === 0 ? 'MUTED' : `${pct}%`}</span>
@@ -292,6 +329,7 @@ export function MeetOrion() {
   const [nstate, setNstate] = useState<NarrationState>('idle');
   const [started, setStarted] = useState(false);
   const hoverRef = useRef(false);
+  const skin = usePlayerSkin();
 
   useEffect(() => narrator.subscribe(setNstate), []);
 
@@ -377,10 +415,11 @@ export function MeetOrion() {
 
       {/* the two proofs — his voice, and the plant he walks you through */}
       <div className="mt-4 grid items-stretch gap-5 lg:grid-cols-2">
-        {/* the voice card — a player object, dark in both themes */}
+        {/* the voice card — a player object: near-black on dark pages,
+            bone on light pages (its own fixed skin either way) */}
         <div
-          className="flex flex-col rounded-2xl border p-5 shadow-2xl"
-          style={{ borderColor: P.line, background: P.bg }}
+          className={`vc-skin flex flex-col rounded-2xl border p-5 shadow-2xl ${skin === P_DARK ? 'vc-skin--dark' : 'vc-skin--light'}`}
+          style={{ borderColor: skin.line, background: skin.bg }}
           onPointerEnter={() => {
             hoverRef.current = true;
           }}
@@ -390,12 +429,12 @@ export function MeetOrion() {
         >
           {/* row 1 — the line's title + the real-voice tag */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[14px] font-bold leading-tight" style={{ color: P.ink }}>
+            <span className="text-[14px] font-bold leading-tight" style={{ color: skin.ink }}>
               {INTRO.title}
             </span>
             <span
               className="shrink-0 font-mono text-[9.5px] font-bold tracking-[0.14em]"
-              style={{ color: P.inkFaint }}
+              style={{ color: skin.inkFaint }}
             >
               REAL VOICE
             </span>
@@ -406,14 +445,14 @@ export function MeetOrion() {
           <div className="mt-2 flex min-h-[18px] items-center gap-1.5">
             <span
               className="font-mono text-[11px] font-semibold tracking-[0.04em]"
-              style={{ color: P.inkSoft }}
+              style={{ color: skin.inkSoft }}
             >
               {status}
             </span>
             {cursorOn && (
               <span
                 className="caret inline-block h-[12px] w-[6px]"
-                style={{ background: P.ink }}
+                style={{ background: skin.ink }}
                 aria-hidden="true"
               />
             )}
@@ -422,35 +461,35 @@ export function MeetOrion() {
           {/* row 3 — THE WAVEFORM: his actual voice, bar by bar, newest
               at the right — a live signal, not a looping animation */}
           <div className="mt-3 flex min-h-[96px] flex-1 items-center py-2">
-            <VoiceWave speaking={playing} />
+            <VoiceWave speaking={playing} skin={skin} />
           </div>
 
           {/* row 4 — the transport */}
           <div
             className="mt-auto flex items-center gap-2.5 border-t pt-3.5"
-            style={{ borderColor: P.line }}
+            style={{ borderColor: skin.line }}
           >
             {/* his nameplate: avatar + name + state */}
             <span
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
-              style={{ background: '#141417', borderColor: P.line }}
+              style={{ background: skin.avatarBg, borderColor: skin.line }}
               title="Orion — your guide"
             >
-              <Belt color={P.ink} size={14} />
+              <Belt color={skin.ink} size={14} />
             </span>
-            <span className="font-mono text-[10px] font-extrabold tracking-[0.16em]" style={{ color: P.ink }}>
+            <span className="font-mono text-[10px] font-extrabold tracking-[0.16em]" style={{ color: skin.ink }}>
               ORION · YOUR GUIDE
             </span>
             <span
               className="rounded-full border px-2 py-0.5 font-mono text-[8.5px] font-extrabold tracking-[0.12em]"
-              style={{ borderColor: P.line, color: P.inkSoft }}
+              style={{ borderColor: skin.line, color: skin.inkSoft }}
             >
               NARRATED
             </span>
             {nstate === 'speaking' && (
               <span
                 className="bd-pulse h-1.5 w-1.5 rounded-full"
-                style={{ background: P.live }}
+                style={{ background: skin.live }}
                 aria-hidden="true"
               />
             )}
@@ -478,14 +517,14 @@ export function MeetOrion() {
                   void narrator.replay(SCRIPT);
                 }}
                 className="vc-btn flex h-[30px] w-[30px] items-center justify-center rounded-lg border"
-                style={{ borderColor: P.line, color: P.inkSoft }}
+                style={{ borderColor: skin.line, color: skin.inkSoft }}
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-              <VoiceVolume />
+              <VoiceVolume skin={skin} />
               <span
                 className="ml-1 hidden select-none font-mono text-[9px] font-bold tracking-[0.1em] sm:inline"
-                style={{ color: P.inkFaint }}
+                style={{ color: skin.inkFaint }}
                 aria-hidden="true"
               >
                 · space

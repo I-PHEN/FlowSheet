@@ -22,17 +22,17 @@
  */
 
 export const C = {
-  /** canvas background — light: #EEF1F4 cool gray · dark: #000000 true black (the void) */
+  /** canvas background — light: #E6EAEE gray desk · dark: #000000 true black (the void) */
   canvas: 'var(--fs-canvas)',
-  /** the drawing sheet — the ONE box the whole flowsheet lies on — light: #E9EDF1 · dark: #141417 */
+  /** the drawing sheet — the ONE box the whole flowsheet lies on — light: #F6F8FA bright paper (lighter than the desk: the sheet POPS) · dark: #141417 */
   sheet: 'var(--fs-sheet)',
-  /** section band fill (one step off canvas) — light: #E5EAEE · dark: #131315 */
+  /** section band fill (one step off the sheet) — light: #F0F3F6 · dark: #131315 */
   band: 'var(--fs-band)',
-  /** section band hairline border — light: #D2DAE1 · dark: #2C2C2F (clear, neutral) */
+  /** section band hairline border — light: #D5DCE2 · dark: #2C2C2F (clear, neutral) */
   bandLine: 'var(--fs-band-line)',
-  /** equipment fill / panel surface — light: #FAFBFC · dark: #1A1A1D */
+  /** equipment fill / panel surface — light: #FFFFFF · dark: #1A1A1D */
   paper: 'var(--fs-paper)',
-  /** translucent paper (legend chip) — light: rgba(250,251,252,.95) · dark: rgba(26,26,29,.95) */
+  /** translucent paper (legend chip) — light: rgba(255,255,255,.95) · dark: rgba(26,26,29,.95) */
   paperA95: 'var(--fs-paper-a95)',
   /** primary linework, tags, labels — light: #1D242C · dark: #ECECEE */
   ink: 'var(--fs-ink)',
@@ -40,7 +40,7 @@ export const C = {
   inkSoft: 'var(--fs-ink-soft)',
   /** tertiary (dashed utilities, footnotes) — light: #5C6873 · dark: #818287 */
   inkFaint: 'var(--fs-ink-faint)',
-  /** emphasis halo behind a selected unit — light: #DCE4EA · dark: #232326 */
+  /** emphasis halo behind a selected unit — light: #E9EEF2 · dark: #232326 */
   halo: 'var(--fs-halo)',
   /** hover tooltip shadow (theme-tinted) */
   tipShadow: 'var(--fs-tip-shadow)',
@@ -56,20 +56,21 @@ export const C = {
   /** hairline border for the action surface — light: #C6CDD4 · dark: #3E3E42 */
   accentLine: 'var(--fs-accent-line)',
 
-  // ---- service hues (muted, textbook-ish; brightened for dark) ----
-  /** feeds: natural gas, steam, air — light: #82653A ochre · dark: #C9A05C amber */
+  // ---- service hues (muted, textbook-ish; DEEP for the bright light sheet,
+  //      brightened for dark — each theme owns its contrast ladder) ----
+  /** feeds: natural gas, steam, air — light: #6E4E1F deep ochre · dark: #C9A05C amber */
   feed: 'var(--fs-feed)',
-  /** process gas: syngas + loop gas — light: #3D5A76 steel · dark: #7FA3C2 steel-blue */
+  /** process gas: syngas + loop gas — light: #2E4864 deep steel · dark: #7FA3C2 steel-blue */
   gas: 'var(--fs-gas)',
-  /** liquid ammonia product (SEMANTIC, not brand — verdicts & product streams) — light: #377454 · dark: #6FAE8C sage */
+  /** liquid ammonia product (SEMANTIC, not brand — verdicts & product streams) — light: #2A6347 deep sage · dark: #6FAE8C sage */
   nh3: 'var(--fs-nh3)',
-  /** sulphur-bearing product streams (Claus family dot tint) — light: #7E6326 gold · dark: #D4B05A */
+  /** sulphur-bearing product streams (Claus family dot tint) — light: #6B5215 deep gold · dark: #D4B05A */
   sulfur: 'var(--fs-sulfur)',
-  /** utilities & offgas: water, CO2, purge (dashed) — light: #5C6873 · dark: #8A939C */
+  /** utilities & offgas: water, CO2, purge (dashed) — light: #3E4A54 slate · dark: #8A939C */
   utility: 'var(--fs-utility)',
-  /** advisory notes in panels — light: #8F5B2B · dark: #D89B5C */
+  /** advisory notes in panels — light: #7A4A1D · dark: #D89B5C */
   warn: 'var(--fs-warn)',
-  /** failed verdicts (critic FAIL) — light: #B3452F rust · dark: #E0785F coral */
+  /** failed verdicts (critic FAIL) — light: #A03A26 rust · dark: #E0785F coral */
   fail: 'var(--fs-fail)',
 } as const;
 
@@ -93,6 +94,6 @@ export const FONT = {
   pill: 11,
 } as const;
 
-export const DIAGRAM_STROKE = 2.4;
-export const STREAM_W = 2.6;
-export const STREAM_W_HI = 4.4;
+export const DIAGRAM_STROKE = 2.6;
+export const STREAM_W = 3.0;
+export const STREAM_W_HI = 4.8;
