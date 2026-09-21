@@ -1019,3 +1019,65 @@ VERIFICATION:
 
 Stage Summary:
 - The builder is now watchable and unbreakable: the run survives any connection cut (job store + resumable SSE), assembles one piece at a time (paced mutations, cache replays included), stays quiet while it thinks (collapsed card + the now-line), draws a real P&ID on a wide sheet (bare symbols, adaptive bands), the tour breathes visibly (1.5s full-sheet dwell), and the hero voice card is a live signal (amplitude-history bars).
+
+---
+Task ID: 55 (PLAN OF RECORD — Front Door: voice warmup, logo, landing v2 with glassy bar, user management/auth)
+Agent: main (Super Z)
+Task: Owner pass: "voice takes too long to warm up", "build a simple logo", "turn this into a professional hero section with a glassy top bar", "understand how we are going to manage users" (sign-in gate before prebuilt plants AND build-with-AI, profile display), "Orion should be a bit humorous introducing himself", reference = Google Flow's landing (4 screenshots pasted). PLANNING ONLY, zero code, per owner instruction.
+
+Work Log (audit, all confirmed in code):
+- VOICE WARMUP ROOT CAUSES: (1) narrator.prefetch() EXISTS in narration.ts but has ZERO callers — dead code; every first play pays the full price. (2) /api/tts is non-streaming (`stream: false`) — client waits for the complete WAV. (3) First-ever request also pays ZAI.create() init + render + 429 backoff (4s×attempt, 3 attempts max). (4) el.play() without a gesture rejects → 'blocked' → user must tap again (the "warming up" feel). (5) MeetOrion SCRIPT + tour stop-1 are static/known at mount — nothing fetches them early. Server memory+disk caches make REPEATS instant; it's the first play that's slow.
+- AUTH FACTS: next-auth@4.24.11 IS in package.json but has ZERO usage anywhere in src/ (dep only). No /api/auth route, no SessionProvider, no middleware. Prisma 6 + template-default schema.prisma (SQLite, empty User model) exist, unused. No DATABASE_URL wiring confirmed for auth.
+- DATA FACTS: projects live in IndexedDB (src/lib/projects/store.ts — "per-user, no accounts"), records carry a local ownerId (getOwnerId), legacy localStorage library folds in on first touch. A merge-to-account path is mechanical because records are already owner-tagged.
+- LANDING FACTS: src/app/page.tsx (261 lines) — flat paper header 58px (no glass, no logo — text wordmark), hero copy + HeroDemo side-by-side, MeetOrion dark player card v3, ProjectsGrid (local store), 3 PlantCards, footer, BuildFab. Fonts: Geist + Geist Mono. Identity law (task 45): no brand color in chrome, charcoal/white action surfaces, green only as chemistry on canvas — the glassy bar + logo must obey this law in BOTH themes.
+- REFERENCE DECODED (VLM on the 4 pasted screenshots): all four are Google Flow's landing — (1) dark minimal top nav, faded center links, floating pill CTA below the bar; (2) massive centered headline + product UI inside a rounded device frame with play overlay; (3) "Plan" feature section: giant background word, bordered translucent text card, stacked receding windows, sticky bottom pill nav; (4) "Create" section with segmented controls. Takeaways for Flowsheet: windowed product demo, huge type as graphic element, translucent bordered cards, minimal nav with faded states.
+
+THE PLAN (new tasks 56-60; existing roadmap 47-54 unchanged):
+
+TASK 56 — VOICE WARMUP (small, standalone, ship first):
+- W1 WARM ON LOAD: landing mounts → narrator.prefetch(SCRIPT) for the Orion hero line; app shell mounts → prefetch tour stop 1. The fetch runs while the user reads the headline; by click time the blob is cached → speak() starts in <100ms.
+- W2 PREFETCH THE NEXT STOP: tourAudio, once stop N starts speaking, prefetches N+1's script (one line). When a build finishes and its tour lands client-side, prefetch ALL stops (≤14, known then) — tours become gapless.
+- W3 WARM THE AUDIO GRAPH EARLY: one-time pointerdown listener anywhere creates/resumes the AudioContext so the first play doesn't pay context spin-up and the waveform is live from syllable one.
+- W4 BLOCKED-STATE POLISH: 'blocked' auto-retries once on the next gesture (instead of making the user find play again); hero card shows an honest "voice warming…" shimmer while state=loading.
+- W5 (B-side, only if needed): /api/tts streams (stream:true) so playback starts before the full file lands.
+- Measure: performance.mark voice:click→voice:firstSample; targets <300ms prefetched, <1.5s cold. Touches narration.ts, MeetOrion.tsx, tourAudio.ts (route only if W5).
+
+TASK 57 — LOGO + FAVICON + SPLASH:
+- Concept directions (owner picks/vetoes): (A) "PIPE-F" — P&ID monogram: 2-3 unit nodes joined by orthogonal pipe runs forming a subtle F — the flowsheet grammar as a letter; (B) "STREAM-FORK" — one line enters, forks into two (the flash drum: one stream in, two phases out — literally Level 1 of the app); (C) "BELT" — evolve the existing Orion three-dot belt mark into the product mark (risk: conflates guide with product). RECOMMEND A, with the mark = the simplest possible flowsheet (source → unit → product) readable at 24px.
+- Law: Geist wordmark, ink color, hairline aesthetic, NO gradients (task-45 identity); green stays chemistry-only.
+- Deliverables: SVG mark (24/32px-tuned) + lockup, favicon set + apple-touch-icon, OG image, boot splash (the mark assembling one piece at a time — rhymes with the paced builder).
+
+TASK 58 — LANDING v2 (professional hero + glassy top bar):
+- GLASSY TOP BAR (sticky): logo+wordmark left; center nav (How it works · Prebuilt plants · GitHub) with faded/active states; right: theme toggle, Sign in (ghost), Get started (primary pill). Glass = backdrop-blur + translucent paper + hairline border; light + dark variants per token law.
+- HERO: left = eyebrow badge, headline (keep "Describe any chemical plant. Watch AI engineer it — live."), sub, two CTAs; right = HeroDemo inside a proper DEVICE FRAME (rounded-2xl, border, shadow, dark glass — the Google Flow "product in a window" pattern) + the MeetOrion dark player card v3 directly beneath/beside it with the HUMOROUS intro (see below).
+- ORION HUMOR LAW (evolve the persona, don't replace it): 30-year shift supervisor, dry wit, one joke per intro, never mean, never slapstick, callback structure; rotating line (1 of ~5 per visit) so the landing repeats. Draft lines (owner edits welcome):
+  1. "Name's Orion. Thirty years on the catwalks, zero lost eyebrows — a record I'm quite proud of, actually. Stick with me and I'll show you what every unit does, and which ones hum in B-flat."
+  2. "I'm Orion. I've heard every pump about to give, smelled every leak that mattered, and paperwork-ed every incident that didn't. Building plants in a browser? Took the fun out of steel-toe boots, but I'll manage."
+  3. "Name's Orion. Thirty years in plants like this — yes, the smell clings to everything, no, it never washes out. Come on, before the night shift notices us."
+  4. "I'm Orion — retired from the catwalks, un-retired for you. Turns out thirty years of 'don't touch that valve' translates surprisingly well to teaching."
+  5. "Name's Orion. Two rules in thirty years: never trust a gauge that reads exactly what you expect, and introduce yourself before touching someone's plant. So — hello."
+- Below hero: 3-step "how it works" strip (Describe → Watch it get engineered → Walk it with Orion), prebuilt-plants gallery (auth-gated CTAs), standing invitation, footer. ProjectsGrid stays and becomes "Your plants" once signed in (59).
+- Answer to "do we need a different hero section?": NO new page — rebuild the existing `/` into the front door (right URL structure already; all content pieces exist, they get the Google-Flow treatment). App routes under /plant/** untouched.
+
+TASK 59 — AUTH / USER MANAGEMENT (the owner's core question):
+- Provider decision: PRIMARY = Auth.js v5 (next-auth@5) with GitHub + Google OAuth, JWT sessions — v4 is maintenance-mode and we have zero users (cheapest moment to pick the modern line; v4.24 is already installed as fallback if v5 beta fights Next 16). No passwords ever.
+- Route map: `/` public · `/signin` proper page (two big provider buttons + "why sign in" one-liner, branded, fast) · `/api/auth/[...nextauth]` · middleware.ts matcher /plant/:path* → redirect unauthenticated to /signin?next=<intent> · OAuth callback returns the user EXACTLY where they clicked (never lose intent) · sign-out → back to `/`.
+- Gating rules (per owner): prebuilt plants AND build-with-AI require sign-in; the landing + Orion voice demo stay public (the hook). /api/agent/build|remix check session server-side (token-cost control: ~100-170k tokens per build). /api/tts stays open for the hero.
+- Profile UI: avatar (OAuth picture) top-right in the glassy bar → dropdown: name/email, "My plants", theme, Sign out. One AppHeader component used by landing AND app pages (unify plant-page headers later — not blocking).
+- Guest→member: on first sign-in, "Bring your plants with you" — reads IndexedDB (records already owner-tagged) and imports to the account library (task 60 does the server side; until then local store keeps working as-is — auth adds nothing destructive).
+- WHY GATE (the rationale): token-cost control, per-user library + progress (the Wave-3 memory story), and a real usage funnel. NOT building yet: roles, teams, quotas, billing, email.
+
+TASK 60 — SERVER LIBRARY (later, after 59): Prisma+SQLite (template already present) or a file-store mirroring .agent-cache patterns — PlantRecord rows per user; My Plants page; merge-on-first-sign-in completes.
+
+SEQUENCING: 56 (quick win, same-day) → 57 → 58 → 59 → 60. Each independently shippable; the glassy bar designed in 58 reserves the avatar slot that 59 fills. Existing roadmap 47-54 unchanged; 47 (choreography) can interleave after 56 if the owner prefers the Alive wave first.
+
+OPEN QUESTIONS (veto-able defaults in brackets):
+1. Providers at launch: GitHub + Google both? [yes, both]
+2. Prebuilt plants fully gated as owner said, or public-view + gated-build? [gated, as instructed — noted friction tradeoff for students]
+3. Logo direction A/B/C? [A — PIPE-F monogram]
+4. v5 vs v4 next-auth? [try v5 first, v4.24 fallback]
+
+Stage Summary:
+- Root causes found in code, not guessed: prefetch() is dead code (zero callers), TTS is non-streaming, first request pays SDK init + 429 backoff, autoplay-block forces a second tap. Fix is mostly wiring what already exists.
+- Front-door plan locked: warm voice (56) → logo (57) → Google-Flow-grade landing with glassy bar + humorous Orion intro (58) → full auth with intent-preserving gating + avatar profile (59) → server library (60). Zero code written this session, per owner instruction.
+- Repository state note: 5 local commits still unpushed (PAT revoked — owner owes a new fine-grained PAT, repo I-PHEN/FlowSheet, Contents: read/write).
