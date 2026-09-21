@@ -1081,3 +1081,4 @@ Stage Summary:
 - Root causes found in code, not guessed: prefetch() is dead code (zero callers), TTS is non-streaming, first request pays SDK init + 429 backoff, autoplay-block forces a second tap. Fix is mostly wiring what already exists.
 - Front-door plan locked: warm voice (56) → logo (57) → Google-Flow-grade landing with glassy bar + humorous Orion intro (58) → full auth with intent-preserving gating + avatar profile (59) → server library (60). Zero code written this session, per owner instruction.
 - Repository state note: 5 local commits still unpushed (PAT revoked — owner owes a new fine-grained PAT, repo I-PHEN/FlowSheet, Contents: read/write).
+- LANGUAGE RULE (owner, explicit): the owner does NOT read Chinese — ALL user-facing communication in English from here on. (Owner pasted a screenshot of a Chinese reply to say "I don't understand chinese, please write english.")
