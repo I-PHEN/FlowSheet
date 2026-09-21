@@ -7,24 +7,28 @@
  * it assembles as the agents work and inspects like the reference plant
  * (pan, zoom, hover streams, click units); the session (right) is the chat —
  * the narrative spine of the build. The session shrinks to a rail so the
- * plant gets the attention, and the whole thing runs on the existing agent
- * stream (Router → Architect → Engineer → Solver → Critic → Docent over
- * SSE, or the remix variant on the same protocol). Engine and agent:
- * untouched.
+ * plant gets the attention, and the whole run lives in useAgentRun (job
+ * POST + resumable SSE over Router → Architect → Engineer → Solver → Critic
+ * → Docent). Engine and agent: untouched.
+ *
+ * The builder is the home of FRESH builds and reference remixes. A SAVED
+ * plant is edited in place on its own project page (Learn | Operate | Edit
+ * with AI) — ?remix=<savedId> links are redirected there, so no plant ever
+ * has two homes.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FlowGraph } from '@/lib/engine/graph';
-import type { BuildEvent, BuildPhase, CriticVerdict, SolveSummary } from '@/lib/agent/protocol';
-import type { Tour } from '@/lib/content/units';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
-import { SessionPanel, PHASE_COLOR, PHASE_LABEL, type LogEntry } from '@/components/builder/SessionPanel';
+import { SessionPanel, PHASE_COLOR, PHASE_LABEL } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { C } from '@/lib/design/tokens';
-import { getFamily, isFamilyId } from '@/lib/families';
+import { isFamilyId, getFamily } from '@/lib/families';
+// (isFamilyId kept for future family chips on general builds)
 import {
   getPlant,
   findLegacyBySlug,
@@ -36,41 +40,29 @@ import {
   PLANT_SCHEMA_VERSION,
   type PlantRecord,
 } from '@/lib/projects/record';
-
-type Status = 'idle' | 'running' | 'finished';
+import { useAgentRun } from '@/lib/agent/useAgentRun';
 
 export default function BuilderPage() {
+  const router = useRouter();
   const [brief, setBrief] = useState('');
-  const [status, setStatus] = useState<Status>('idle');
-  const [phase, setPhase] = useState<BuildPhase | null>(null);
-  const [graph, setGraph] = useState<FlowGraph | null>(null);
-  const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [solve, setSolve] = useState<SolveSummary | null>(null);
-  const [verdict, setVerdict] = useState<CriticVerdict | null>(null);
-  const [doneOk, setDoneOk] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
-  const [family, setFamily] = useState<{ id: string; label: string } | null>(null);
-  const [tour, setTour] = useState<Tour | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
-  // remix mode (?remix=<plantId|reference>): a working plant is loaded on the
-  // canvas and the composer sends CHANGE instructions, not build briefs. The
-  // source updates to the latest graph after each run, so changes chain.
+  const [familyChip, setFamilyChip] = useState<{ id: string; label: string } | null>(null);
+  // remix mode (?remix=reference): the family reference graph is loaded on
+  // the canvas and the composer sends CHANGE instructions, not build briefs.
+  // (saved plants redirect to their project page — they edit in place there)
   const [remixSource, setRemixSource] = useState<{ name: string; graph: FlowGraph } | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const jobIdRef = useRef<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-  const finishRef = useRef<(() => void) | null>(null);
-  const keyRef = useRef(0);
   const canvasRef = useRef<BuildCanvasHandle>(null);
 
-  const addEntry = useCallback((e: Omit<LogEntry, 'key'>) => {
-    setEntries((prev) => {
-      const next = [...prev, { ...e, key: ++keyRef.current }];
-      return next.length > 400 ? next.slice(-360) : next;
-    });
-  }, []);
+  const run = useAgentRun({
+    onDone: (_ev, finalGraph) => {
+      canvasRef.current?.fit();
+      // remix chains: the next instruction edits the LATEST graph
+      if (remixSource && finalGraph) setRemixSource({ name: remixSource.name, graph: finalGraph });
+    },
+  });
 
   // restore a project (?load=id reads the IndexedDB store, then falls back
   // to the legacy localStorage slug) — client-only
@@ -78,294 +70,87 @@ export default function BuilderPage() {
     const loadId = new URLSearchParams(window.location.search).get('load');
     if (!loadId) return;
     let alive = true;
-    const restore = (
-      src: Pick<PlantRecord, 'brief' | 'graph' | 'verdict' | 'kpis' | 'name'>,
-    ) => {
-      setBrief(src.brief);
-      setGraph(src.graph);
-      setVerdict(src.verdict);
-      if (src.kpis) {
-        const s: SolveSummary = {
-          kpis: src.kpis,
-          converged: true,
-          iterations: 0,
-          solveMs: 0,
-          balanceWorstRelErr: 0,
-          warnings: [],
-        };
-        setSolve(s);
-        addEntry({ kind: 'solve', solve: s });
-      }
-      if (src.verdict) addEntry({ kind: 'verdict', verdict: src.verdict });
-      if (src.brief) addEntry({ kind: 'user', text: src.brief });
-      addEntry({ kind: 'note', text: `Loaded “${src.name}” — inspect it below or start a new session.` });
-      setStatus('finished');
-      setDoneOk(src.verdict?.verdict !== 'fail');
-      setSaved(true);
-      setChatOpen(true);
-    };
     void (async () => {
       const rec = await getPlant(loadId);
       if (!alive) return;
       if (rec) {
-        restore(rec);
+        setBrief(rec.brief);
+        run.restore({
+          brief: rec.brief,
+          graph: rec.graph,
+          verdict: rec.verdict,
+          kpis: rec.kpis,
+          name: rec.name,
+        });
+        setSaved(true);
+        setChatOpen(true);
         return;
       }
       // pre-migration links still work
       const legacy = findLegacyBySlug(loadId);
       if (legacy) {
-        restore({
-          name: legacy.name,
+        setBrief(legacy.brief);
+        run.restore({
           brief: legacy.brief,
           graph: legacy.graph,
           verdict: legacy.verdict,
           kpis: legacy.kpis,
+          name: legacy.name,
         });
+        setSaved(true);
+        setChatOpen(true);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [addEntry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleEvent = (ev: BuildEvent) => {
-    switch (ev.type) {
-      case 'phase':
-        setPhase(ev.phase);
-        addEntry({ kind: 'phase', phase: ev.phase, label: ev.label });
-        break;
-      case 'message':
-        addEntry({ kind: 'message', role: ev.role, text: ev.text });
-        break;
-      case 'tool': {
-        // the target id (unit/stream/controller) powers the one-line
-        // "Placing R1 — primary reformer" status on the work card
-        const a = (ev.args ?? {}) as Record<string, unknown>;
-        const target =
-          typeof a.id === 'string'
-            ? a.id
-            : typeof a.unit === 'string'
-              ? a.unit
-              : typeof a.stream === 'string'
-                ? a.stream
-                : '';
-        const utype = typeof a.type === 'string' ? a.type : '';
-        addEntry({ kind: 'tool', tool: ev.name, ok: ev.ok, seq: ev.seq, text: ev.summary, target, utype });
-        break;
-      }
-      case 'graph':
-        setGraph(ev.graph);
-        break;
-      case 'solve':
-        setSolve(ev.solve);
-        addEntry({ kind: 'solve', solve: ev.solve });
-        break;
-      case 'verdict':
-        setVerdict(ev.verdict);
-        addEntry({ kind: 'verdict', verdict: ev.verdict });
-        break;
-      case 'family':
-        setFamily({ id: ev.family, label: ev.label });
-        addEntry({ kind: 'note', text: `Router → ${ev.label}${ev.reason ? ` (${ev.reason})` : ''}` });
-        break;
-      case 'tour':
-        setTour(ev.tour);
-        break;
-      case 'usage':
-        addEntry({ kind: 'usage', usage: ev.usage });
-        break;
-      case 'error':
-        addEntry({ kind: 'error', text: ev.message });
-        break;
-      case 'done':
-        setDoneOk(ev.success);
-        setStatus('finished');
-        // remix chains: the next instruction edits the LATEST graph
-        if (remixSource && ev.graph) setRemixSource({ name: remixSource.name, graph: ev.graph });
-        addEntry({
-          kind: 'note',
-          text: `${remixSource ? 'Remix' : 'Build'} finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the session)'}.`,
-        });
-        canvasRef.current?.fit();
-        break;
-    }
-  };
-
-  // load a plant for remixing (?remix=reference → the ammonia family's
-  // reference graph; ?remix=<id> → a saved project from the library)
+  // remix entry (?remix=reference → the ammonia family's reference graph;
+  // ?remix=<savedId> → that plant's project page, where editing lives now)
   useEffect(() => {
     const remixId = new URLSearchParams(window.location.search).get('remix');
     if (!remixId) return;
+    if (remixId === 'reference') {
+      const fam = getFamily('ammonia');
+      setRemixSource({ name: 'The reference plant', graph: fam.referenceGraph() });
+      setFamilyChip({ id: 'ammonia', label: `${fam.name} — ${fam.route}` });
+      setChatOpen(true);
+      return;
+    }
+    // a saved plant: its project page is the one home — edit mode lives there
     let alive = true;
     void (async () => {
-      let src: { name: string; graph: FlowGraph } | null = null;
-      if (remixId === 'reference') {
-        const fam = getFamily('ammonia');
-        src = { name: 'The reference plant', graph: fam.referenceGraph() };
-      } else {
-        const rec = await getPlant(remixId);
-        if (rec) src = { name: rec.name, graph: rec.graph };
+      const rec = await getPlant(remixId);
+      if (!alive) return;
+      if (rec) {
+        router.replace(`/plant/p/${rec.id}`);
+        return;
       }
-      if (!alive || !src) return;
-      const fid = src.graph.family && isFamilyId(src.graph.family) ? src.graph.family : 'ammonia';
-      const fam = getFamily(fid);
-      setRemixSource(src);
-      setGraph(src.graph);
-      setFamily({ id: fid, label: `${fam.name} — ${fam.route}` });
-      // no log entry on purpose: the empty state (with remix examples) is the
-      // greeting — adding a note would replace it with a bare transcript
-      setChatOpen(true);
+      // unknown id: fall through to a plain fresh-build session
     })();
     return () => {
       alive = false;
     };
-  }, [addEntry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function startBuild() {
-    if (!brief.trim() || status === 'running') return;
-    setStatus('running');
-    setPhase(null);
-    if (!remixSource) setGraph(null);
-    setEntries([{ key: ++keyRef.current, kind: 'user', text: brief.trim() }]);
-    setSolve(null);
-    setVerdict(null);
-    setDoneOk(null);
-    setSelected(null);
-    setSaved(false);
-    setSavedId(null);
-    if (!remixSource) setFamily(null);
-    setTour(null);
-    setChatOpen(true);
-    const ac = new AbortController();
-    abortRef.current = ac;
-    jobIdRef.current = null;
-    try {
-      // 1 — START the job: a quick POST that returns { jobId }; the run
-      //     lives on the server, decoupled from any single connection
-      const res = await fetch(remixSource ? '/api/agent/remix' : '/api/agent/build', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(remixSource ? { graph: remixSource.graph, instruction: brief } : { brief }),
-        signal: ac.signal,
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(err?.error ?? `server responded ${res.status}`);
-      }
-      const started = (await res.json()) as { jobId?: string };
-      if (!started.jobId) throw new Error('the server did not accept the build');
-      jobIdRef.current = started.jobId;
+  const startBuild = useCallback(() => {
+    void run.start(brief, remixSource?.graph ?? null);
+  }, [run, brief, remixSource]);
 
-      // 2 — CONSUME the run over resumable SSE: heartbeats keep the proxy
-      //     warm, and a dropped stream reconnects itself with Last-Event-ID
-      //     — zero lost events, no more “network error” mid-build
-      await new Promise<void>((resolve) => {
-        const es = new EventSource(`/api/agent/build/events?id=${encodeURIComponent(started.jobId!)}`);
-        esRef.current = es;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          es.close();
-          esRef.current = null;
-          finishRef.current = null;
-          resolve();
-        };
-        finishRef.current = finish;
-        es.onmessage = (m) => {
-          let ev: BuildEvent;
-          try {
-            ev = JSON.parse(m.data) as BuildEvent;
-          } catch {
-            return; // skip malformed frame
-          }
-          if (ev.type === 'done') {
-            handleEvent(ev);
-            finish(); // the stream is over — close before EventSource reconnects
-          } else {
-            handleEvent(ev);
-          }
-        };
-        es.addEventListener('gone', () => {
-          // the job is no longer live on the server (expired) — say it
-          // plainly instead of retrying forever
-          addEntry({
-            kind: 'error',
-            text: 'This build session is no longer live on the server — start it again.',
-          });
-          setStatus('finished');
-          setDoneOk((ok) => ok ?? false);
-          finish();
-        });
-        es.onerror = () => {
-          // EventSource retries automatically (same URL, Last-Event-ID
-          // header) — nothing to do here; 'gone' ends it if the job is gone
-        };
-      });
-    } catch (e) {
-      const err = e as Error;
-      if (err.name === 'AbortError') {
-        addEntry({ kind: 'note', text: 'Build stopped.' });
-      } else {
-        addEntry({ kind: 'error', text: err.message || 'connection lost' });
-      }
-      setStatus('finished');
-      setDoneOk((ok) => ok ?? false);
-    }
-  }
-
-  function stopBuild() {
-    // stop the START call if it is still in flight
-    abortRef.current?.abort();
-    // stop the SERVER-side run (honest partial done) and close the stream
-    const id = jobIdRef.current;
-    esRef.current?.close();
-    esRef.current = null;
-    jobIdRef.current = null;
-    finishRef.current?.(); // unblock the awaiting startBuild, if any
-    addEntry({ kind: 'note', text: 'Build stopped.' });
-    setStatus('finished');
-    setDoneOk((ok) => ok ?? false);
-    if (id) {
-      void fetch('/api/agent/build/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: id }),
-      }).catch(() => {
-        /* the sweeper catches an orphaned job anyway */
-      });
-    }
-  }
-
-  // leaving the page closes the stream (the server-side run finishes into
-  // the job buffer on its own — nothing dangles client-side)
-  useEffect(
-    () => () => {
-      esRef.current?.close();
-      esRef.current = null;
-    },
-    [],
-  );
+  const stopBuild = useCallback(() => run.stop(), [run]);
 
   function resetToIdle() {
-    setStatus('idle');
-    setPhase(null);
-    if (!remixSource) setGraph(null);
-    setEntries([]);
-    setSolve(null);
-    setVerdict(null);
-    setDoneOk(null);
-    setSelected(null);
-    setSaved(false);
-    setSavedId(null);
-    if (!remixSource) setFamily(null);
-    setTour(null);
+    run.reset(remixSource?.graph ?? null);
     setChatOpen(true);
   }
 
   // save as a first-class project (IndexedDB, this browser) — one click to
   // reopen it any time from the home grid
   async function saveProject(): Promise<PlantRecord | null> {
+    const graph = run.graph;
     if (!graph) return null;
     const now = new Date().toISOString();
     const rec: PlantRecord = {
@@ -379,12 +164,12 @@ export default function BuilderPage() {
       schemaVersion: PLANT_SCHEMA_VERSION,
       ownerId: getOwnerId(),
       graph,
-      kpis: solve?.kpis ?? null,
-      verdict,
-      productionTpd: solve?.kpis.productionTpd ?? null,
+      kpis: run.solve?.kpis ?? null,
+      verdict: run.verdict,
+      productionTpd: run.solve?.kpis.productionTpd ?? null,
       source: 'user',
-      family: family?.id ?? graph.family,
-      tour,
+      family: run.family?.id ?? graph.family,
+      tour: run.tour,
     };
     try {
       await putPlant(rec);
@@ -400,7 +185,7 @@ export default function BuilderPage() {
       });
       return rec;
     } catch {
-      addEntry({ kind: 'error', text: 'Could not save in this browser (storage unavailable).' });
+      run.note('Could not save in this browser (storage unavailable).');
       return null;
     }
   }
@@ -408,7 +193,7 @@ export default function BuilderPage() {
   // save (if needed) and jump to the project page where the tour player
   // lives — voice, music, spotlight, step controls
   async function takeTour() {
-    if (!graph) return;
+    if (!run.graph) return;
     let id = savedId;
     if (!id) {
       const rec = await saveProject();
@@ -417,9 +202,13 @@ export default function BuilderPage() {
     if (id) window.location.href = `/plant/p/${id}`;
   }
 
-  const running = status === 'running';
+  const running = run.running;
+  const graph = run.graph;
   const unitCount = graph?.units.length ?? 0;
   const streamCount = graph?.streams.length ?? 0;
+  const status = run.status;
+  const phase = run.phase;
+  const family = familyChip ?? run.family;
 
   return (
     <div className="flex h-dvh flex-col" style={{ background: C.canvas }}>
@@ -437,12 +226,12 @@ export default function BuilderPage() {
               <span
                 className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
                 style={{ borderColor: C.utility, color: C.utility }}
-                title={`Remixing ${remixSource.name}`}
+                title={`Editing ${remixSource.name}`}
               >
-                REMIX
+                EDITING · {remixSource.name.slice(0, 24).toUpperCase()}
               </span>
             )}
-            {family && (
+            {family && !remixSource && (
               <span
                 className="hidden shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline"
                 style={{ borderColor: C.nh3, color: C.nh3 }}
@@ -454,14 +243,14 @@ export default function BuilderPage() {
           </div>
           <div className="hidden truncate text-[11px] leading-tight sm:block" style={{ color: C.inkSoft }}>
             {remixSource
-              ? `remixing: ${remixSource.name} · ${unitCount} units`
+              ? `editing: ${remixSource.name} · ${unitCount} units`
               : unitCount > 0
                 ? `${unitCount} units · ${streamCount} streams`
                 : 'describe the plant — the agents build it'}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {status === 'finished' && tour && graph && (
+          {status === 'finished' && run.tour && graph && (
             <button
               onClick={() => void takeTour()}
               className="hidden items-center rounded-full border px-3.5 py-1.5 text-[11.5px] font-bold sm:flex"
@@ -480,12 +269,12 @@ export default function BuilderPage() {
               {PHASE_LABEL[phase]}
             </span>
           )}
-          {status === 'finished' && doneOk !== null && (
+          {status === 'finished' && run.doneOk !== null && (
             <span
               className="rounded-full border px-3 py-1 font-mono text-[11px] font-bold"
-              style={{ color: doneOk ? C.nh3 : C.warn, borderColor: doneOk ? C.nh3 : C.warn }}
+              style={{ color: run.doneOk ? C.nh3 : C.warn, borderColor: run.doneOk ? C.nh3 : C.warn }}
             >
-              {doneOk ? 'BUILD OK' : 'BUILD ISSUES'}
+              {run.doneOk ? 'BUILD OK' : 'BUILD ISSUES'}
             </span>
           )}
           {savedId && (
@@ -535,7 +324,7 @@ export default function BuilderPage() {
             aria-label="Build session"
           >
             <SessionPanel
-              entries={entries}
+              entries={run.entries}
               status={status}
               phase={phase}
               brief={brief}
@@ -553,8 +342,8 @@ export default function BuilderPage() {
               hasGraph={unitCount > 0}
               unitCount={unitCount}
               streamCount={streamCount}
-              doneOk={doneOk}
-              tourReady={tour !== null && status === 'finished'}
+              doneOk={run.doneOk}
+              tourReady={run.tour !== null && status === 'finished'}
               onTakeTour={() => void takeTour()}
               remixName={remixSource?.name ?? null}
             />

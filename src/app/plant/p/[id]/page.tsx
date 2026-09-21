@@ -1,46 +1,51 @@
 'use client';
 
 /**
- * /plant/p/[id] — a saved plant as a first-class citizen.
+ * /plant/p/[id] — a saved plant as a first-class citizen, and its ONE home.
  *
  * Same stage as the prebuilts: the live BuildCanvas renderer (pan, zoom,
- * hover streams, click units), an inspector, and — the point of the page —
- * a narrated guided tour generated from the build itself. The tour runs as
- * CINEMA: the director flies the camera stop-to-stop, captions stream in
- * the CinemaBar at the bottom of the stage, and clicking any unit mid-tour
- * drops into free roam (camera flies there, a caption card appears).
+ * hover streams, click units), an inspector, a narrated guided tour, and
+ * the Operate control room. And the third mode: EDIT WITH AI — the same
+ * agent session the builder runs (composer, quiet thinking, one-by-one
+ * assembly) mounted right here, editing THIS plant in place: the run is
+ * page-level so the canvas assembles in every mode, and when it finishes
+ * the record itself is updated (same id — graph, kpis, verdict, tour), so
+ * Learn and Operate immediately reflect the new plant. No second pane, no
+ * dead ends: the owner's law — the plant always has a way back to where
+ * the building happened, because the building happens HERE.
  *
- * Full parity with the prebuilt workspaces means OPERATE too: Learn | Operate
- * in the header, and a control room whose levers are derived from the graph
- * + registry (never per-plant code) — every lever re-solves the whole
- * flowsheet live, the answer stays pinned while the levers scroll, and the
- * stream dots ride the new flows. The record in the local project store is
- * the only input; nothing here knows or cares that the plant was drawn by
- * AI agents rather than shipped in code.
+ * The tour runs as CINEMA: the director flies the camera stop-to-stop,
+ * captions stream in the CinemaBar at the bottom of the stage, and
+ * clicking any unit mid-tour drops into free roam. The record in the
+ * local project store is the only input; nothing here knows or cares
+ * that the plant was drawn by AI agents rather than shipped in code.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Download, PanelRight, Wand2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { C } from '@/lib/design/tokens';
 import { executeGraph } from '@/lib/engine';
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { PlantResult } from '@/lib/engine/types';
 import { BuildCanvas, UnitInspector, type BuildCanvasHandle } from '@/components/builder/BuildCanvas';
 import { PlantOperate } from '@/components/builder/PlantOperate';
+import { SessionPanel } from '@/components/builder/SessionPanel';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CinemaBar } from '@/components/learn/CinemaBar';
 import { TourIndex } from '@/components/learn/TourIndex';
 import { useTourDirector } from '@/lib/ui/tourDirector';
 import { useCinemaPanel } from '@/lib/ui/useCinemaPanel';
-import { getPlant, ensureMigrated, exportRecord } from '@/lib/projects/store';
+import { getPlant, ensureMigrated, exportRecord, putPlant } from '@/lib/projects/store';
 import { effectiveFamily, type PlantRecord } from '@/lib/projects/record';
 import { patchSpec } from '@/lib/projects/operate';
 import { getFamily } from '@/lib/families';
 import { generateTour, roamStep } from '@/lib/projects/tour';
+import { useAgentRun } from '@/lib/agent/useAgentRun';
 
-type Mode = 'learn' | 'operate';
+type Mode = 'learn' | 'operate' | 'edit';
 
 /** solve, or null when this combination doesn't — honesty over fake numbers */
 function trySolve(g: FlowGraph): PlantResult | null {
@@ -58,6 +63,7 @@ export default function ProjectPage() {
   const [rec, setRec] = useState<PlantRecord | null | 'missing'>(null);
   const [userSelected, setUserSelected] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('learn');
+  const [editBrief, setEditBrief] = useState('');
   // null = the saved design point; a patched graph once a lever has moved
   const [liveGraph, setLiveGraph] = useState<FlowGraph | null>(null);
   const canvasRef = useRef<BuildCanvasHandle>(null);
@@ -72,6 +78,48 @@ export default function ProjectPage() {
       alive = false;
     };
   }, [id]);
+
+  // the record, kept fresh for the edit-run's save-back (a ref so the
+  // onDone callback always sees the latest without re-subscribing)
+  const recRef = useRef<PlantRecord | null | 'missing'>(null);
+  recRef.current = rec;
+
+  // EDIT WITH AI — the same agent session the builder runs, page-level so
+  // it keeps assembling in every mode. On done, the RECORD updates in
+  // place: same id, new graph/kpis/verdict/tour — Learn and Operate pick
+  // it up instantly, and nothing navigates anywhere.
+  const editRun = useAgentRun({
+    onDone: (_ev, finalGraph) => {
+      canvasRef.current?.fit();
+      const cur = recRef.current;
+      if (!cur || cur === 'missing' || !finalGraph) return;
+      const updated: PlantRecord = {
+        ...cur,
+        graph: finalGraph,
+        kpis: editRunRef.current?.solve?.kpis ?? cur.kpis,
+        verdict: editRunRef.current?.verdict ?? cur.verdict,
+        tour: editRunRef.current?.tour ?? cur.tour,
+        updatedAt: new Date().toISOString(),
+      };
+      void putPlant(updated)
+        .then(() => {
+          setRec(updated);
+          toast.success('Plant updated — the tour reflects it');
+        })
+        .catch(() => {
+          toast.error('Could not save the update in this browser');
+        });
+    },
+  });
+  // the run object for onDone (stable ref — same pattern as recRef)
+  const editRunRef = useRef<typeof editRun | null>(null);
+  editRunRef.current = editRun;
+
+  const startEdit = useCallback(() => {
+    const cur = recRef.current;
+    if (!cur || cur === 'missing') return;
+    void editRun.start(editBrief, cur.graph);
+  }, [editRun, editBrief]);
 
   // the docent's authored tour (saved with the record) beats the auto-tour
   const tour = useMemo(
@@ -140,6 +188,11 @@ export default function ProjectPage() {
     setMode('learn');
     setLiveGraph(null); // the book mode always shows the saved design point
   }, [director]);
+  const enterEdit = useCallback(() => {
+    director.end();
+    setUserSelected(null);
+    setMode('edit');
+  }, [director]);
   const onLever = useCallback(
     (unitId: string, specKey: string, value: number) => {
       setLiveGraph((cur) => {
@@ -189,6 +242,11 @@ export default function ProjectPage() {
   const streamCount = rec.graph.streams.filter((s) => !s.implicit).length;
   const k = rec.kpis;
 
+  // the stage: the edit run's LIVE graph while one exists (it assembles in
+  // every mode), the operate graph when levers have moved, else the record
+  const stageGraph = editRun.graph ?? opGraph ?? rec.graph;
+  const editingLive = editRun.status !== 'idle';
+
   return (
     <div className="flex h-dvh flex-col" style={{ background: C.canvas }}>
       {/* header */}
@@ -226,7 +284,9 @@ export default function ProjectPage() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {/* mode switch — the same Learn | Operate axis as the prebuilts */}
+        {/* mode switch — Learn | Operate | Edit with AI: the plant's whole
+            life on one stage, the owner's law: always a way back to the
+            building, because the building happens here */}
           <div
             className="flex items-center rounded-full border p-0.5"
             style={{ borderColor: C.bandLine, background: C.canvas }}
@@ -237,7 +297,7 @@ export default function ProjectPage() {
               role="tab"
               aria-selected={mode === 'learn'}
               onClick={enterLearn}
-              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              className="rounded-full px-3 py-1 text-[12px] font-bold"
               style={mode === 'learn' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Learn
@@ -246,10 +306,25 @@ export default function ProjectPage() {
               role="tab"
               aria-selected={mode === 'operate'}
               onClick={enterOperate}
-              className="rounded-full px-3.5 py-1 text-[12px] font-bold"
+              className="rounded-full px-3 py-1 text-[12px] font-bold"
               style={mode === 'operate' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
             >
               Operate
+            </button>
+            <button
+              role="tab"
+              aria-selected={mode === 'edit'}
+              onClick={enterEdit}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold"
+              style={mode === 'edit' ? { background: C.accent, color: C.onAccent, borderColor: C.accentLine } : { color: C.inkSoft }}
+              title="Edit this plant with AI — describe changes, the agents apply them here"
+            >
+              {(mode === 'edit' || editingLive) && editRun.running ? (
+                <span className="bd-pulse inline-block h-1.5 w-1.5 rounded-full" style={{ background: C.gas }} aria-hidden="true" />
+              ) : (
+                <Wand2 className="h-3 w-3" aria-hidden="true" />
+              )}
+              Edit <span className="hidden sm:inline">with AI</span>
             </button>
           </div>
           <button
@@ -275,16 +350,6 @@ export default function ProjectPage() {
             <Download className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="hidden sm:inline">Export</span>
           </button>
-          <Link
-            href={`/plant/builder?remix=${rec.id}`}
-            className="flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11.5px] font-bold"
-            style={{ borderColor: C.bandLine, color: C.ink, background: C.paper }}
-            title="Open this plant in the AI builder — describe changes and the agents will remix, re-solve and re-judge it"
-          >
-            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Remix with AI</span>
-            <span className="sm:hidden">Remix</span>
-          </Link>
           <ThemeToggle />
         </div>
       </header>
@@ -296,9 +361,9 @@ export default function ProjectPage() {
           <div className="relative min-h-0 flex-1">
             <BuildCanvas
               ref={canvasRef}
-              graph={opGraph ?? rec.graph}
+              graph={stageGraph}
               selected={spotlightUnit}
-              warm
+              warm={mode !== 'edit' || editRun.status === 'finished'}
               onUnitClick={(uid) => {
                 if (touring) {
                   // a click during a tour = free roam: fly there, caption, pause
@@ -320,21 +385,64 @@ export default function ProjectPage() {
             YOUR PLANT · {unitCount} UNITS · {streamCount} STREAMS
           </div>
           {rec.graph && userSelected && !touring && (
-            <UnitInspector graph={opGraph ?? rec.graph} unitId={userSelected} onClose={() => setUserSelected(null)} />
+            <UnitInspector graph={stageGraph} unitId={userSelected} onClose={() => setUserSelected(null)} />
           )}
         </section>
 
         {/* project panel — the mode axis owns it: the book in Learn, the
-            control room in Operate (the answer pinned, levers scroll under).
-            During a tour the cinema takes the width (useCinemaPanel); the
-            header toggle brings it back anytime. */}
+            control room in Operate, the agent session in Edit. During a tour
+            the cinema takes the width (useCinemaPanel); the header toggle
+            brings it back anytime. */}
         {showPanel && (
         <aside
-          className="flex h-[52dvh] w-full shrink-0 flex-col overflow-y-auto border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0"
-          style={{ borderColor: C.bandLine, background: C.paper }}
+          className={
+            mode === 'edit'
+              ? 'flex h-[52dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0'
+              : 'flex h-[52dvh] w-full shrink-0 flex-col overflow-y-auto border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0'
+          }
+          style={mode === 'edit' ? { borderColor: C.bandLine } : { borderColor: C.bandLine, background: C.paper }}
           aria-label="Project details"
         >
-          {mode === 'operate' ? (
+          {mode === 'edit' ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <SessionPanel
+                entries={editRun.entries}
+                status={editRun.status}
+                phase={editRun.phase}
+                brief={editBrief}
+                onBriefChange={setEditBrief}
+                onStart={startEdit}
+                onStop={editRun.stop}
+                onReset={() => {
+                  editRun.reset(rec.graph);
+                  setEditBrief('');
+                }}
+                resetLabel="Done editing"
+                onSave={() => {
+                  /* the record saves itself when a run finishes */
+                  toast.success('The plant saves itself when a run finishes');
+                }}
+                onZoomIn={() => {
+                  togglePanel();
+                  canvasRef.current?.fit();
+                }}
+                onCollapse={togglePanel}
+                saved={editRun.status === 'finished'}
+                hasGraph={(editRun.graph ?? rec.graph).units.length > 0}
+                unitCount={(editRun.graph ?? rec.graph).units.length}
+                streamCount={(editRun.graph ?? rec.graph).streams.length}
+                doneOk={editRun.doneOk}
+                tourReady={!!editRun.tour && editRun.status === 'finished'}
+                onTakeTour={() => {
+                  setEditBrief('');
+                  enterLearn();
+                  // the tour starts on the next tick — Learn's panel mounts it
+                  window.setTimeout(() => startTour(), 60);
+                }}
+                remixName={rec.name}
+              />
+            </div>
+          ) : mode === 'operate' ? (
             <div className="p-5">
               <PlantOperate
                 graph={opGraph ?? rec.graph}
@@ -356,6 +464,16 @@ export default function ProjectPage() {
             <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: C.ink }}>
               {rec.brief || 'No brief was recorded for this plant.'}
             </p>
+            {/* the invitation to keep going — the edit mode is one chip away */}
+            <button
+              type="button"
+              onClick={enterEdit}
+              className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full border text-[12.5px] font-bold"
+              style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
+            >
+              <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Edit this plant with AI
+            </button>
           </div>
 
           {/* the numbers */}

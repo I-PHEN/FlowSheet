@@ -766,6 +766,8 @@ export interface SessionPanelProps {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
+  /** label for the reset button — the edit panel says "Done editing" */
+  resetLabel?: string;
   onSave: () => void;
   onZoomIn: () => void;
   onCollapse: () => void;
@@ -795,6 +797,7 @@ export function SessionPanel({
   onStart,
   onStop,
   onReset,
+  resetLabel,
   onSave,
   onZoomIn,
   onCollapse,
@@ -871,7 +874,7 @@ export function SessionPanel({
       >
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-bold leading-tight" style={{ color: idle ? C.inkFaint : C.ink }}>
-            {remixing ? `${remixName} · remix` : sessionTitle}
+            {remixing ? `${remixName} · edit` : sessionTitle}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] leading-tight" style={{ color: C.inkSoft }}>
             {running && <span className="bd-pulse inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: phase ? PHASE_COLOR[phase] : C.gas }} />}
@@ -1049,12 +1052,12 @@ export function SessionPanel({
             />
             <div className="flex items-center gap-2 px-2.5 pb-2.5">
               <span className="hidden text-[10px] sm:block" style={{ color: C.inkFaint }}>
-                Enter to {remixing ? 'remix' : 'build'} · Shift+Enter for a new line
+                Enter to {remixing ? 'apply' : 'build'} · Shift+Enter for a new line
               </span>
               <button
                 onClick={onStart}
                 disabled={!brief.trim()}
-                aria-label={remixing ? 'Start the remix' : 'Start the build'}
+                aria-label={remixing ? 'Apply the change' : 'Start the build'}
                 className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border transition-opacity disabled:opacity-35"
                 style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
@@ -1114,7 +1117,7 @@ export function SessionPanel({
                 style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
               >
                 <RotateCcw size={12} />
-                New session
+                {resetLabel ?? 'New session'}
               </button>
             </div>
             {remixing && (
