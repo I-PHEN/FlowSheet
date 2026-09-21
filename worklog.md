@@ -1082,3 +1082,41 @@ Stage Summary:
 - Front-door plan locked: warm voice (56) → logo (57) → Google-Flow-grade landing with glassy bar + humorous Orion intro (58) → full auth with intent-preserving gating + avatar profile (59) → server library (60). Zero code written this session, per owner instruction.
 - Repository state note: 5 local commits still unpushed (PAT revoked — owner owes a new fine-grained PAT, repo I-PHEN/FlowSheet, Contents: read/write).
 - LANGUAGE RULE (owner, explicit): the owner does NOT read Chinese — ALL user-facing communication in English from here on. (Owner pasted a screenshot of a Chinese reply to say "I don't understand chinese, please write english.")
+
+---
+Task ID: 61 (PLAN OF RECORD — Fix Pack C: light mode identity, stream routing quality, ONE home for a plant)
+Agent: main (Super Z)
+Task: Owner: "the light mode version really sucks, plan and really fix it" (2 screenshots pasted), "when the AI builds it doesn't connect the streams well — fix right now", "when I click tour I see 'remix' — why remix, I just built it; from remix there's no way back to tour/learn/operate; there should always be a way to switch back to the initial AI phase where we did the building, not a separate remix pane". Plan + execute this session.
+
+DIAGNOSIS (all confirmed in code + VLM on owner shots + fresh light-mode shots in scripts/t61-shots/):
+- LIGHT MODE was designed DARK-FIRST — light is a token swap where every hue was picked to not-glow on black. Confirmed defects: (1) stream hues are muted mid-tones that die on the pale sheet (utility #5C6873 on #E9EDF1 ≈ 3:1, dashed+2.6px thin = smudges; gas #3D5A76 weak; the VLM literally read streams as "invisible/white"); (2) sheet vs canvas nearly identical (#E9EDF1 vs #EEF1F4 — the sheet boundary that reads beautifully in dark (#141417 on #000) vanishes in light); (3) glyph fills (paper on sheet, 1.05:1) vanish → wireframe sketches; (4) the 3D stage paints theme.canvas (#EEF1F4) as clear color = dead gray void, gray metal on pale gray, washed grid; (5) MeetOrion is a FIXED-DARK player card on light surroundings = "theme half-worked" read (owner screenshot 1); (6) hero demo panel reads as unloaded placeholder; (7) not-found empty state floats (no container, outline CTA).
+- STREAM ROUTING (route.ts + BuildCanvas glue): real defects on multi-band builds (VLM on the 15-unit methanol build + code read): (1) SINK streams never check obstacles — `ex = a.x+a.w+64` can arrow straight into a unit in the next column (purge/condensate from mid-plant units); (2) recycle returns ALWAYS use corridorRight(a) even when the target sits left → far-right wandering (S21); (3) band-flip (leftward forward) horizontal runs at the SOURCE's row lane → long messy treks across the band (S09, S11); (4) "skipping columns" hops overshoot past the neighbor before turning (S04); (5) terminals land on the INVISIBLE obstacle edge (116×64), 10px shy of the drawn glyph (96×52) — lines don't kiss the equipment; (6) pills at fixed 0.5 land on corners/other pills; (7) parallel-pair stagger only 14px.
+- NAVIGATION: /plant/p/[id] has Learn | Operate + a header "Remix with AI" LINK that navigates AWAY to /plant/builder?remix=id — a separate builder pane with NO way back to tour/learn/operate (only ← library). The owner wants: edit-with-AI as the SAME place where the building happened, always reachable, never a dead end. The builder's takeTour() also hard-navigates away after a fresh build.
+
+THE PLAN (Fix Pack C — execute in order):
+
+61-A LIGHT MODE IDENTITY ("the drawing office" — light gets its OWN contrast ladder, not dark leftovers):
+  * TOKEN RETUNE (globals.css :root): reverse the sheet law — light becomes a BRIGHT SHEET on a gray desk: canvas #E6EAEE (desk) · sheet #F6F8FA (paper, now LIGHTER than desk — the mirror of dark's dark-sheet-on-black) · band #F0F3F6 · paper #FFFFFF · paperA95 rgba(255,255,255,.95) · halo #E8EDF1. Ink ramp stays (#1D242C/#414D59/#5C6873 — now measured against a brighter sheet = more contrast). Stream hues go DEEP + saturated (graphical-object ≥3:1 on the new sheet): feed #6E4E1F · gas #2E4864 · nh3 #2A6347 · sulfur #6B5215 · utility #3E4A54 · warn #7A4A1D · fail #A03A26. accentLine #C6CDD4 stays.
+  * GLYPH LIFT (Diagram.tsx + BuildCanvas.tsx): light glyph fills become pure white on the bright sheet + stroke stays ink (the sheet change alone lifts them off the page); DIAGRAM_STROKE 2.4 stays, but light pills get ink text on white.
+  * 3D STAGE (ModelStage.tsx): alpha:true canvas + CSS backdrop — light: radial-gradient(#F8FAFC → #E2E8ED) studio; dark keeps the flat void. Grid colors retuned per theme (light cell #C9D2DA / section #96A4B0), ContactShadows opacity 0.42→0.55 in light.
+  * HERO PLAYER LIGHT SKIN (MeetOrion.tsx): second fixed skin — on light theme the player object is BONE (paper #FBFBF9 bg, ink text/bars, hairline #D8DCD8, NO glow, dark stays exactly as-is). The player-object law survives: still fixed tokens, never theme-mixing INSIDE the card.
+  * EMPTY/NOT-FOUND STATE: container card + solid accent CTA.
+  * GATES: task43-contrast-audit re-run + updated if it asserts old hexes; cinema-polish suite (hero-player laws may reference fixed-dark — update to two-skin law); tsc/eslint; E2E screenshots light+dark (landing, reference plant, 3D unit, builder, tour mid-beat) + VLM review; 414px.
+
+61-B STREAM ROUTING QUALITY (route.ts + BuildCanvas):
+  * SINK SAFETY: sink routes check the horizontal run for obstacles — blocked → drop to laneBelow first, then exit along the lane to the sheet margin.
+  * RECYCLE SIDE CHOICE: pick corridorRight/corridorLeft by target position relative to source (kills far-wander).
+  * BAND-BOTTOM WRAP: leftward-forward (band flip) runs its horizontal on the lane BELOW the source's BAND (pass band bounds into the grid via new optional fields on RRect) — one uniform serpentine convention: end of band → down → back along band bottom → up into next band.
+  * GLYPH-KISS TERMINALS: terminal points inset from the obstacle edge to the GLYPH edge (Δx 10, Δy 6) so lines and arrowheads touch the equipment, not the invisible pad.
+  * PILL PLACEMENT: pills move to the midpoint of the LONGEST segment (not 0.5); one collision pass nudges pills that sit within 26px of another on the same lane.
+  * PAIR STAGGER 14→20px.
+  * TESTS: scripts/route-tests.ts (bun) — pure-function laws: sink never crosses an obstacle, recycle picks the near side, band-flip uses the band-bottom lane, terminals kiss glyph edges, pills avoid collisions. Verify visually on the cached methanol replay + a fresh small build.
+
+61-C ONE HOME FOR A PLANT (the initial AI phase is a MODE, not another page):
+  * EXTRACT src/lib/agent/useAgentRun.ts — the job POST + resumable-SSE consumption lifted verbatim from the builder page (kind: 'build'|'remix'); builder page switches to it (single source of truth, zero behavior change).
+  * PROJECT PAGE (/plant/p/[id]) mode switch becomes Learn | Operate | EDIT WITH AI: edit mode embeds the SAME SessionPanel (composer, quiet thinking, now-line) wired to useAgentRun('remix', {graph: rec.graph}); the run is PAGE-LEVEL so the canvas assembles one-by-one in EVERY mode; on done → putPlant SAME id (graph/kpis/verdict/tour/updatedAt updated in place) + setRec + toast "Plant updated — the tour reflects it"; Learn/Operate instantly show the new plant. Header "Remix with AI" link DELETED (the mode chip replaces it).
+  * NO DEAD ENDS: /plant/builder?remix=<savedId> now REDIRECTS to /plant/p/<id> (router.replace) — old links land in edit mode; ?remix=reference (prebuilt family graph, no record) keeps working on the builder and saves as a NEW project as today; Workspace TutorHome link relabeled "Edit with AI".
+  * Builder fresh-build flow unchanged (build → Take the tour → project page, which now owns everything after).
+  * GATES: tsc/eslint; agent + learn-merge suites; E2E: project page → edit mode → run a remix on the cached plant → record updated in place → Learn shows new tour; redirect test; VLM both themes.
+
+SEQUENCING: 61-A (owner's loudest pain) → 61-B → 61-C. Each ships independently.
