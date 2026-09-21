@@ -26,17 +26,17 @@ import { ShellAndTubeModel } from './models/ShellAndTube';
 function useStageTheme() {
   const read = () => {
     if (typeof window === 'undefined') {
-      // light "drawing office" fallbacks — the canvas itself is ssr:false,
+      // light "white desk" fallbacks — the canvas itself is ssr:false,
       // so these only matter for type safety (dark is the default theme)
-      return { canvas: '#E6EAEE', inkSoft: '#414D59', bandLine: '#D5DCE2', ink: '#1D242C', dark: false };
+      return { canvas: '#FAFBFC', inkSoft: '#414D59', bandLine: '#E2E7EC', ink: '#1D242C', dark: false };
     }
     const cs = getComputedStyle(document.documentElement);
     const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
     return {
-      canvas: v('--fs-canvas', '#E6EAEE'),
+      canvas: v('--fs-canvas', '#FAFBFC'),
       ink: v('--fs-ink', '#1D242C'),
       inkSoft: v('--fs-ink-soft', '#414D59'),
-      bandLine: v('--fs-band-line', '#D5DCE2'),
+      bandLine: v('--fs-band-line', '#E2E7EC'),
       dark: document.documentElement.classList.contains('dark'),
     };
   };
@@ -115,10 +115,10 @@ export default function ModelStage({
         theme.dark
           ? { background: '#000000' }
           : {
-              // the drawing-office backdrop: a soft studio gradient behind a
-              // transparent canvas — gray metal gets something to sit IN,
-              // instead of drowning in a flat gray void
-              background: 'radial-gradient(120% 90% at 50% 30%, #F8FAFC 0%, #EDF1F5 55%, #E0E6EC 100%)',
+              // the white-desk backdrop: a soft studio gradient behind a
+              // transparent canvas — gray metal gets something bright to sit
+              // IN, matching the near-white app world
+              background: 'radial-gradient(120% 90% at 50% 30%, #FEFEFE 0%, #F3F6F8 55%, #E9EDF0 100%)',
             }
       }
     >
@@ -166,10 +166,10 @@ export default function ModelStage({
           args={[16, 16]}
           cellSize={0.25}
           cellThickness={0.6}
-          cellColor={theme.dark ? theme.bandLine : '#C4CED8'}
+          cellColor={theme.dark ? theme.bandLine : '#CBD4DC'}
           sectionSize={1}
           sectionThickness={1.1}
-          sectionColor={theme.dark ? theme.inkSoft : '#8FA0AF'}
+          sectionColor={theme.dark ? theme.inkSoft : '#9AA8B4'}
           fadeDistance={11}
           fadeStrength={1.4}
           infiniteGrid

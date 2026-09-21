@@ -26,8 +26,8 @@
 // ── the palettes (must match globals.css exactly) ───────────────────────────
 
 const LIGHT = {
-  canvas: '#E6EAEE', band: '#F0F3F6', bandLine: '#D5DCE2', sheet: '#F6F8FA',
-  paper: '#FFFFFF', halo: '#E9EEF2',
+  canvas: '#FAFBFC', band: '#F2F4F7', bandLine: '#E2E7EC', sheet: '#FFFFFF',
+  paper: '#FFFFFF', halo: '#F0F3F5',
   ink: '#1D242C', inkSoft: '#414D59', inkFaint: '#5C6873',
   accent: '#FFFFFF', onAccent: '#1D242C', accentLine: '#C6CDD4',
   feed: '#8F5A12', gas: '#33639C', nh3: '#1B7246', sulfur: '#82630D',

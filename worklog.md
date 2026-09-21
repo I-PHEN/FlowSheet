@@ -1139,3 +1139,51 @@ Work Log:
 Stage Summary:
 - Light mode is a designed identity now ("the drawing office": bright sheet on gray desk, saturated chemistry, studio-lit 3D, bone player card) instead of dark-mode leftovers; streams on AI builds connect like a drafted P&ID (ink-kissing terminals, safe sinks, near-side recycles, band-gap wraps — all law-tested); and a saved plant has ONE home — build → tour → edit → tour all happen on the project page's stage, with the builder reserved for fresh builds. No dead ends anywhere.
 - 3 commits this session (a5e8933 light, 67fa44f router, + this one). 10 unpushed total (PAT still revoked).
+
+---
+Task ID: 62 (PLAN OF RECORD — light-white desk, quiet chat, "Build with me" roadmap note)
+Agent: main (Super Z)
+Task: Owner round: "the light mode really sucks — background should be WHITE not grey, or the grey closer to white ('light white'), this has to be really professional"; "the chat bubbles are plenty too much, reduce it to a few ones"; NEW IDEA (explicitly NOT for now): two build-with-AI modes — "Watch me build" (current) + "Build with me" (voice agent co-builds step-at-a-time, asks the user questions, answers theirs — e.g. 'why are you putting this stream here?' — to understand the plant). Plan + execute the two fixes this session; record the idea only.
+
+DIAGNOSIS:
+- LIGHT MODE v2 ("drawing office", 61-A) used a GRAY DESK (#E6EAEE canvas) — the owner reads it as "grey background", the opposite of professional-white. The fix is NOT more contrast on gray: it's a WHITE desk world — near-white canvas, PURE-WHITE sheet (the brightest surface), hairline + soft shadow carrying every boundary (the Linear/Notion light law). Stream hues/ink ramp unchanged (they only gain contrast on the whiter ground).
+- CHAT STACK per run today = 7 blocks: YOU brief · Router note · AGENT WORK card · "Run finished — N units" note · PLANT ANSWER · CRITIC VERDICT · TOKEN LEDGER. Two chained edits = 14 blocks. The owner wants a conversation, not an audit trail.
+
+THE PLAN:
+- 62-A LIGHT-WHITE DESK: globals.css :root — canvas #E6EAEE→#FAFBFC, sheet #F6F8FA→#FFFFFF, band #F0F3F6→#F2F4F7, bandLine #D5DCE2→#E2E7EC, halo→#F0F3F5, card-shadow softened .14→.10; shadcn mirrors (--background/--secondary/--muted/--accent/--border/--input/--sidebar-*) follow. ModelStage: SSR/var fallbacks + light studio gradient whitened (#FEFEFE→#F3F6F8→#E9EDF0), light grid retuned. task43 audit palette updated + re-run. Ink ramp + service hues UNCHANGED (contrast only improves on whiter ground).
+- 62-B QUIET CHAT: per run exactly 3 bubbles — YOU → AGENT WORK → ANSWER. Kill the Router note + "Run finished" note at the source (useAgentRun); MERGE plant answer + critic verdict into ONE compact ANSWER card (verdict pill + score + converged meta, verdict summary, KPI grid, collapsible strengths/issues/suggestions details); TOKEN LEDGER folds into the work card's expanded detail; notes stay only for stops/errors/restore. Restore seed order fixed (user first, then answer, then note).
+- 62-C ROADMAP ONLY (task 63 slot): "Build with me" voice co-build mode — NOT built now, per owner instruction.
+
+---
+Task ID: 63 (ROADMAP — "Build with me" voice co-build mode · recorded, NOT built)
+Agent: main (Super Z)
+Task: Owner's idea, explicitly deferred ("we are not going to build it now though"): build-with-AI gets TWO modes.
+
+THE IDEA (owner's words, verbatim intent):
+- "Watch me build" — what exists today: the agent builds the whole plant while the student watches the canvas assemble.
+- "Build with me" (future): a CONVERSATIONAL VOICE co-build. The agent and the student build the plant ONE STEP AT A TIME, together. The agent asks the student questions ("what should we do about the recycle?"), the student asks questions back ("why are you putting this stream here?") — the point is UNDERSTANDING the plant, not just receiving it. Orion is the obvious voice for this.
+
+DESIGN SEEDS (for the future task, when the owner says go):
+- Sits on the SAME pipeline (orchestrator tool surface) but pauses between engineer steps instead of running them back-to-back; each pause is a voice turn (TTS + waveform card) with a typed fallback.
+- Reuses: useAgentRun job+SSE (already step-chunked), narration/tourAudio voice stack (task 56 warmup makes turns instant), Orion persona law (dry-wit shift supervisor).
+- New plumbing needed: a step-gate event in the orchestrator (pause/continue), a conversational loop mode in the prompts, and an ASR input path for spoken questions (ASR skill stack exists).
+- Sequencing thought: lands naturally AFTER 56 (voice warmup) and 59 (auth — voice co-build is the most token-hungry flow, worth gating).
+
+---
+Task ID: 62-EXECUTED (the white desk + the quiet chat)
+Agent: main (Super Z)
+Task: Execute task 62 per the owner's round: light mode goes WHITE ("light white", professional), chat bubbles reduced to a few; record "Build with me" as task 63 (done, above).
+
+Work Log:
+- 62-A THE WHITE DESK: globals.css :root retuned — canvas #E6EAEE→#FAFBFC (near-white desk), sheet #F6F8FA→#FFFFFF (pure-white paper, now the brightest surface; hairline #E2E7EC + the existing sheet drop-shadow carry the boundary — the Linear/Notion light law), band #F0F3F6→#F2F4F7, halo→#F0F3F5, tip/card shadows softened (.10/.08); shadcn mirrors follow (--background, --secondary/--muted/--accent, --border/--input, --sidebar-*). ModelStage: SSR/var fallbacks updated, light studio gradient whitened (#FEFEFE→#F3F6F8→#E9EDF0), light grid retuned (#CBD4DC / #9AA8B4). Ink ramp + stream/service hues UNTOUCHED (contrast only improves on the whiter ground). tokens.ts + audit palette doc comments updated.
+- 62-B THE QUIET CHAT (one run = THREE bubbles): useAgentRun — the Router note and the "Run finished — N units" note no longer emit (family stays state; the ANSWER card + panel sub-header carry the result); restore() seeds user-first (YOU → ANSWER → note, same shape a live run leaves). SessionPanel — deriveBlocks rewritten to the quiet-chat law: PLANT ANSWER + CRITIC VERDICT merge into ONE AnswerCard (verdict pill + score + converged/it/ms meta, verdict summary as the body, KPI grid inline, warnings direct, strengths/issues/suggestions behind a DETAILS toggle with counts); the TOKEN LEDGER is now a footnote line inside the work card's expanded detail (LedgerLine); SolveCard/VerdictCard/UsageLine deleted; Block type simplified (answer + workcard-with-usage).
+- LINT DEBT CLEARED (pre-existing, in blast radius): project page recRef/editRunRef ref-during-render → useEffect assignment; MeetOrion usePlayerSkin → useSyncExternalStore over the html class (hydration law preserved: server snapshot = dark); builder page ?remix effect restructured into the async IIFE; 2 stale eslint-disable directives removed. Lint now 0/0 across the repo.
+- CONTENT FIX: BuildCanvas legend "NH3" → "PRODUCT" (the semantic green is the product color for every family — the old label was wrong on methanol/sulphur plants; VLM caught it).
+- GATES: tsc 0 errors in src/; eslint 0/0; agent 63/0, learn-merge 43/0, cinema-polish 114/0, flow-anim 53/0, route 14/0; task43 contrast audit ALL PASS both themes on the new palette.
+- E2E (scripts/t62-shots/, real agent run): light landing VLM "A- production-ready — definitively WHITE, not gray" (Linear/Vercel comparison); light plant page — white sheet separates cleanly via hairline+shadow, streams clearly colored, glyphs solid; REAL edit run ("Halve the natural gas feed…") mid-run = user bubble + ONE AGENT WORK card + working line; done = + ONE merged ANSWER card (FAIL 20/100 pill + score + KPIs on a single card), NO ledger bubble, NO router/run-finished notes, toast "Plant updated — the tour reflects it", record updated in place; back to Learn intact (no dead end); dark theme VLM-verified unchanged and healthy (true black, no light bleed); 414px mobile light holds; 0 console errors across the pass.
+
+Stage Summary:
+- Light mode is now the WHITE desk the owner asked for — near-white ground, pure-white sheet, hairlines + soft shadows, everything else unchanged because the contrast ladder already worked.
+- The chat is now a conversation: a run costs exactly THREE bubbles (YOU → quiet work card → one ANSWER), verified live on a real edit run; the audit trail (phases, tools, ledger) is all still there, one click deep.
+- "Build with me" recorded as task 63 (design seeds in this log) — NOT built, per owner instruction.
+- Commit: 1 this session. 11 unpushed total (PAT still revoked — owner owes a new fine-grained PAT for I-PHEN/FlowSheet).

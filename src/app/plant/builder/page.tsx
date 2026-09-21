@@ -104,7 +104,6 @@ export default function BuilderPage() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // remix entry (?remix=reference → the ammonia family's reference graph;
@@ -112,28 +111,27 @@ export default function BuilderPage() {
   useEffect(() => {
     const remixId = new URLSearchParams(window.location.search).get('remix');
     if (!remixId) return;
-    if (remixId === 'reference') {
-      const fam = getFamily('ammonia');
-      setRemixSource({ name: 'The reference plant', graph: fam.referenceGraph() });
-      setFamilyChip({ id: 'ammonia', label: `${fam.name} — ${fam.route}` });
-      setChatOpen(true);
-      return;
-    }
-    // a saved plant: its project page is the one home — edit mode lives there
     let alive = true;
     void (async () => {
+      if (remixId === 'reference') {
+        const fam = getFamily('ammonia');
+        if (!alive) return;
+        setRemixSource({ name: 'The reference plant', graph: fam.referenceGraph() });
+        setFamilyChip({ id: 'ammonia', label: `${fam.name} — ${fam.route}` });
+        setChatOpen(true);
+        return;
+      }
+      // a saved plant: its project page is the one home — edit mode lives there
       const rec = await getPlant(remixId);
       if (!alive) return;
       if (rec) {
         router.replace(`/plant/p/${rec.id}`);
-        return;
       }
       // unknown id: fall through to a plain fresh-build session
     })();
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startBuild = useCallback(() => {

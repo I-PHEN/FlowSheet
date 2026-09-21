@@ -966,7 +966,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           <span className="h-[3px] w-5 rounded-full" style={{ background: C.gas }} /> PROCESS GAS
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-5 rounded-full" style={{ background: C.nh3 }} /> NH3
+          <span className="h-[3px] w-5 rounded-full" style={{ background: C.nh3 }} /> PRODUCT
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-5 border-t-2 border-dashed" style={{ borderColor: C.inkFaint }} />

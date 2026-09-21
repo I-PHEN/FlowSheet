@@ -82,7 +82,9 @@ export default function ProjectPage() {
   // the record, kept fresh for the edit-run's save-back (a ref so the
   // onDone callback always sees the latest without re-subscribing)
   const recRef = useRef<PlantRecord | null | 'missing'>(null);
-  recRef.current = rec;
+  useEffect(() => {
+    recRef.current = rec;
+  }, [rec]);
 
   // EDIT WITH AI — the same agent session the builder runs, page-level so
   // it keeps assembling in every mode. On done, the RECORD updates in
@@ -113,7 +115,9 @@ export default function ProjectPage() {
   });
   // the run object for onDone (stable ref — same pattern as recRef)
   const editRunRef = useRef<typeof editRun | null>(null);
-  editRunRef.current = editRun;
+  useEffect(() => {
+    editRunRef.current = editRun;
+  }, [editRun]);
 
   const startEdit = useCallback(() => {
     const cur = recRef.current;

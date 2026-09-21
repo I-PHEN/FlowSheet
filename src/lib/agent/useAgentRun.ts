@@ -154,8 +154,9 @@ export function useAgentRun(opts?: {
           addEntry({ kind: 'verdict', verdict: ev.verdict });
           break;
         case 'family':
+          // QUIET CHAT: the router's family pick is state, not a message —
+          // it reaches the UI through chips/labels, never a chat bubble
           setFamily({ id: ev.family, label: ev.label });
-          addEntry({ kind: 'note', text: `Router → ${ev.label}${ev.reason ? ` (${ev.reason})` : ''}` });
           break;
         case 'tour':
           setTour(ev.tour);
@@ -167,12 +168,10 @@ export function useAgentRun(opts?: {
           addEntry({ kind: 'error', text: ev.message });
           break;
         case 'done': {
+          // QUIET CHAT: no "run finished" bubble — the ANSWER card and the
+          // panel sub-header carry the result
           setDoneOk(ev.success);
           setStatus('finished');
-          addEntry({
-            kind: 'note',
-            text: `Run finished — ${ev.unitCount} units, ${ev.streamCount} streams${ev.success ? '' : ' (with problems — see the session)'}.`,
-          });
           onDoneRef.current?.(ev, graphRef.current);
           break;
         }
@@ -330,6 +329,9 @@ export function useAgentRun(opts?: {
       keyRef.current = 0;
       setGraph(src.graph);
       setVerdict(src.verdict ?? null);
+      // QUIET CHAT seed order: the brief leads, the answer follows — the
+      // same YOU → ANSWER shape a live run leaves behind
+      if (src.brief) addEntry({ kind: 'user', text: src.brief });
       if (src.kpis) {
         const s: SolveSummary = {
           kpis: src.kpis,
@@ -343,7 +345,6 @@ export function useAgentRun(opts?: {
         addEntry({ kind: 'solve', solve: s });
       }
       if (src.verdict) addEntry({ kind: 'verdict', verdict: src.verdict });
-      if (src.brief) addEntry({ kind: 'user', text: src.brief });
       addEntry({
         kind: 'note',
         text: `Loaded “${src.name ?? 'plant'}” — inspect it below or start a new session.`,

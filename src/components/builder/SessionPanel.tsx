@@ -3,14 +3,16 @@
 /**
  * SessionPanel — the chat half of the builder studio.
  *
- * The session is the narrative spine of a build: the student's brief is a
+ * THE QUIET CHAT LAW: one run = THREE bubbles. The student's brief is a
  * chat message; ONE "agent work" card per run carries all the thinking
  * (each phase a collapsible section inside, collapsing to a one-line
- * summary when the run's outputs land); the plant answer, critic verdict
- * and errors stay as their own cards; and when the curtain falls the
- * composer hands over to the next-move actions (tour, zoom, save, new
- * session). The empty state is the on-ramp: family presets, an
- * "I don't know what to build" region picker, and surprise briefs.
+ * summary when the run's outputs land, token ledger as a footnote in the
+ * detail); ONE answer card merges the critic's verdict with the solver's
+ * numbers; errors and true system notes stay as their own lines. When the
+ * curtain falls the composer hands over to the next-move actions (tour,
+ * zoom, save, new session). The empty state is the on-ramp: family
+ * presets, an "I don't know what to build" region picker, and surprise
+ * briefs.
  *
  * Pure presentation — every piece of state lives in the page.
  */
@@ -97,8 +99,9 @@ const ROLE_COLOR: Record<string, string> = {
   system: C.inkFaint,
 };
 
-// ── chat derivation: one "agent work" card per RUN; every phase is a
-// section inside it; the run's outputs render after the card ────────────────
+// ── chat derivation — THE QUIET CHAT LAW: a run is exactly THREE bubbles
+// (YOU → one quiet work card → one ANSWER card); everything else the
+// pipeline reports folds inside them ───────────────────────────────────
 
 type ToolLine = { key: number; tool: string; ok: boolean; seq: number; text: string; target: string; utype: string };
 type ThinkLine = { key: number; role: 'architect' | 'engineer' | 'critic' | 'docent' | 'system'; text: string };
@@ -109,11 +112,9 @@ type PhaseSection = { phase: BuildPhase; body: PhaseBody; summary: string };
 
 type Block =
   | { kind: 'user'; key: number; text: string }
-  | { kind: 'workcard'; key: number; phases: PhaseSection[] }
-  | { kind: 'solve'; key: number; solve: SolveSummary }
-  | { kind: 'verdict'; key: number; verdict: CriticVerdict }
+  | { kind: 'workcard'; key: number; phases: PhaseSection[]; usage?: RunUsage }
+  | { kind: 'answer'; key: number; solve?: SolveSummary; verdict?: CriticVerdict }
   | { kind: 'error'; key: number; text: string }
-  | { kind: 'usage'; key: number; usage: RunUsage }
   | { kind: 'note'; key: number; text: string };
 
 /** the one line that stands for a whole phase once it is over */
@@ -160,11 +161,13 @@ function phaseSummary(phase: BuildPhase, body: PhaseBody): string {
 
 function deriveBlocks(entries: LogEntry[]): Block[] {
   // Split into RUNS at user messages — each run is one agent session (a
-  // build or a remix change). ONE work card per run: every phase becomes a
-  // section inside it, in order, and the run's OUTPUTS (plant answer,
-  // verdict, notes, errors) render after the card. Mid-run solves stay
-  // inside their phase section as a quiet line — only the run's LAST solve
-  // becomes the plant-answer card.
+  // build or an edit change). THE QUIET CHAT LAW: a run renders as exactly
+  // THREE bubbles — the user's brief, ONE quiet work card (every phase,
+  // every thought, every tool call lives inside it), and ONE answer card
+  // (verdict + plant numbers merged). The token ledger is a footnote inside
+  // the work card's detail; only errors and true system notes stay as
+  // their own lines. Mid-run solves stay in their phase section as quiet
+  // lines — the run's LAST solve is the one the answer card shows.
   const runs: LogEntry[][] = [];
   let cur: LogEntry[] = [];
   for (const e of entries) {
@@ -179,12 +182,16 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
 
   const blocks: Block[] = [];
   for (const run of runs) {
-    const pre: Block[] = []; // before any phase: the router note etc.
-    const outputs: Block[] = []; // after the work: answers, verdicts, notes
+    const pre: Block[] = []; // before any phase: system notes etc.
+    const outputs: Block[] = []; // errors + notes after the work
     const phases: PhaseSection[] = [];
     let pending: { phase: BuildPhase; body: PhaseBody } | null = null;
     let sawPhase = false;
     const solveSections: Array<{ body: PhaseBody; entry: SolveLine }> = [];
+    let runSolve: SolveSummary | null = null;
+    let runVerdict: CriticVerdict | null = null;
+    let runUsage: RunUsage | null = null;
+    let answerKey = 0;
 
     const flushPhase = () => {
       if (!pending) return;
@@ -198,14 +205,8 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
       switch (e.kind) {
         case 'user':
           return { kind: 'user', key: e.key, text: e.text ?? '' };
-        case 'solve':
-          return e.solve ? { kind: 'solve', key: e.key, solve: e.solve } : null;
-        case 'verdict':
-          return e.verdict ? { kind: 'verdict', key: e.key, verdict: e.verdict } : null;
         case 'error':
           return { kind: 'error', key: e.key, text: e.text ?? '' };
-        case 'usage':
-          return e.usage ? { kind: 'usage', key: e.key, usage: e.usage } : null;
         default:
           return { kind: 'note', key: e.key, text: e.text ?? '' };
       }
@@ -226,10 +227,23 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
         pending.body.tools.push({ key: e.key, tool: e.tool ?? '?', ok: e.ok !== false, seq: e.seq ?? 0, text: e.text ?? '', target: e.target ?? '', utype: e.utype ?? '' });
         continue;
       }
-      if (pending && e.kind === 'solve' && e.solve) {
-        const line = { key: e.key, solve: e.solve };
-        pending.body.solves.push(line);
-        solveSections.push({ body: pending.body, entry: line });
+      if (e.kind === 'solve' && e.solve) {
+        if (pending) {
+          const line = { key: e.key, solve: e.solve };
+          pending.body.solves.push(line);
+          solveSections.push({ body: pending.body, entry: line });
+        }
+        runSolve = e.solve;
+        answerKey = e.key;
+        continue;
+      }
+      if (e.kind === 'verdict' && e.verdict) {
+        runVerdict = e.verdict;
+        answerKey = e.key;
+        continue;
+      }
+      if (e.kind === 'usage' && e.usage) {
+        runUsage = e.usage;
         continue;
       }
       // non-phase content: before the first phase it leads the run; after,
@@ -239,16 +253,24 @@ function deriveBlocks(entries: LogEntry[]): Block[] {
     }
     flushPhase();
 
-    // promote the run's LAST solve to the standalone plant-answer card
+    // the run's LAST solve moves OUT of its phase body — the answer card
+    // owns it (earlier mid-run solves stay as quiet phase lines)
     if (solveSections.length > 0) {
       const last = solveSections[solveSections.length - 1];
       last.body.solves = last.body.solves.filter((l) => l.key !== last.entry.key);
-      outputs.unshift({ kind: 'solve', key: last.entry.key, solve: last.entry.solve });
     }
 
     blocks.push(...pre);
     if (phases.length > 0) {
-      blocks.push({ kind: 'workcard', key: phases[0].body.think[0]?.key ?? phases[0].body.tools[0]?.key ?? phases[0].body.solves[0]?.key ?? 0, phases });
+      blocks.push({
+        kind: 'workcard',
+        key: phases[0].body.think[0]?.key ?? phases[0].body.tools[0]?.key ?? phases[0].body.solves[0]?.key ?? 0,
+        phases,
+        usage: runUsage ?? undefined,
+      });
+    }
+    if (runSolve || runVerdict) {
+      blocks.push({ kind: 'answer', key: answerKey, solve: runSolve ?? undefined, verdict: runVerdict ?? undefined });
     }
     blocks.push(...outputs);
   }
@@ -419,8 +441,9 @@ function PhaseSectionView({
 /** ONE card for a whole agent run — all phases live inside it. Collapsed
  * to a single line by default (the live NOW line while it runs, the summary
  * line after); expandable forever after. The build is watched on the CANVAS
- * — the session stays quiet, like every modern agent chat. */
-function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
+ * — the session stays quiet, like every modern agent chat. The run's token
+ * ledger lives here too, as a footnote inside the detail. */
+function WorkCard({ phases, usage, live }: { phases: PhaseSection[]; usage?: RunUsage; live: boolean }) {
   const [open, setOpen] = useState(false);
   const anyFlagged = phases.some((p) => p.body.tools.some((l) => !l.ok));
   const lastIdx = phases.length - 1;
@@ -471,6 +494,7 @@ function WorkCard({ phases, live }: { phases: PhaseSection[]; live: boolean }) {
               last={i === lastIdx}
             />
           ))}
+          {usage && <LedgerLine usage={usage} />}
         </div>
       )}
     </div>
@@ -501,10 +525,11 @@ function NoteLine({ text }: { text: string }) {
   );
 }
 
-/** the run's token ledger — what this build actually cost (and saved) */
+/** the run's token ledger — a quiet footnote INSIDE the work card's detail
+ * (what this build actually cost and saved; roles on hover) */
 const fmtTokens = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
-function UsageLine({ usage }: { usage: RunUsage }) {
+function LedgerLine({ usage }: { usage: RunUsage }) {
   const parts = [
     `${fmtTokens(usage.promptTokens + usage.completionTokens)} tokens`,
     `${fmtTokens(usage.promptTokens)} in + ${fmtTokens(usage.completionTokens)} out`,
@@ -518,7 +543,7 @@ function UsageLine({ usage }: { usage: RunUsage }) {
     .join(' · ');
   return (
     <div
-      className="bd-msg-in rounded-lg border px-2.5 py-1.5 font-mono text-[9.5px] leading-relaxed"
+      className="border-t pt-1.5 font-mono text-[9.5px] leading-relaxed"
       style={{ borderColor: 'var(--fs-band-line)', color: C.inkFaint }}
       title={roles}
     >
@@ -543,97 +568,145 @@ function ErrorCard({ text }: { text: string }) {
   );
 }
 
-/** the solver's answer, as a compact result card (family-aware rows) */
-function SolveCard({ solve }: { solve: SolveSummary }) {
-  const k = solve.kpis;
-  const rows =
-    k.familyKpis && k.familyKpis.length > 0
+/** THE run's answer — the critic's verdict and the solver's numbers on ONE
+ * card (the quiet chat law): verdict pill + score up top, the summary as
+ * the body, the plant's KPIs inline, warnings if any, and the full critique
+ * (strengths · issues · suggestions) one click away. */
+function AnswerCard({ solve, verdict }: { solve?: SolveSummary; verdict?: CriticVerdict }) {
+  const [open, setOpen] = useState(false);
+  const tone = !verdict
+    ? C.ink
+    : verdict.verdict === 'pass'
+      ? C.nh3
+      : verdict.verdict === 'revise'
+        ? C.feed
+        : C.warn;
+  const k = solve?.kpis;
+  const rows = !k
+    ? []
+    : k.familyKpis && k.familyKpis.length > 0
       ? k.familyKpis
       : [
-          { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d`, raw: k.productionTpd },
-          { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %`, raw: k.productPurityWt },
+          { label: 'Production', value: `${k.productionTpd.toFixed(1)} t/d` },
+          { label: 'Purity', value: `${(k.productPurityWt * 100).toFixed(2)} wt %` },
         ];
-  const bad = !solve.converged || solve.warnings.length > 0;
+  const bad = (!!solve && (!solve.converged || solve.warnings.length > 0)) || verdict?.verdict === 'fail';
+  const detailCount =
+    (verdict?.strengths.length ?? 0) + (verdict?.issues.length ?? 0) + (verdict?.suggestions.length ?? 0);
   return (
     <div
       className="bd-msg-in rounded-xl border px-3 py-2.5"
-      style={{ borderColor: bad ? C.warn : 'var(--fs-band-line)', background: C.paper }}
+      style={{ borderColor: bad ? C.warn : tone, background: C.paper }}
     >
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: bad ? C.warn : C.nh3 }}>
-          PLANT ANSWER
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.ink }}>
+          ANSWER
         </span>
-        <span className="font-mono text-[9.5px]" style={{ color: C.inkFaint }}>
-          {solve.converged ? 'converged' : 'did not converge'} · {solve.iterations} it · {solve.solveMs.toFixed(0)} ms
-        </span>
+        {verdict && (
+          <>
+            <span
+              className="rounded-full px-2 py-0.5 font-mono text-[10px] font-extrabold"
+              style={{ background: tone, color: C.paper }}
+            >
+              {verdict.verdict.toUpperCase()}
+            </span>
+            <span className="font-mono text-[12px] font-extrabold" style={{ color: tone }}>
+              {verdict.score}/100
+            </span>
+          </>
+        )}
+        {solve && (
+          <span className={`${verdict ? '' : 'ml-auto'} font-mono text-[9.5px]`} style={{ color: C.inkFaint }}>
+            {solve.converged ? 'converged' : 'did not converge'}
+            {solve.iterations > 0 ? ` · ${solve.iterations} it` : ''}
+            {solve.solveMs > 0 ? ` · ${solve.solveMs.toFixed(0)} ms` : ''}
+          </span>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-        {rows.map((r) => (
-          <div key={r.label} className="min-w-0">
-            <div className="truncate font-mono text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: C.inkFaint }}>
-              {r.label}
+      {verdict?.summary && (
+        <p className="text-[12px] leading-relaxed" style={{ color: C.ink }}>
+          {verdict.summary}
+        </p>
+      )}
+      {rows.length > 0 && (
+        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+          {rows.map((r) => (
+            <div key={r.label} className="min-w-0">
+              <div
+                className="truncate font-mono text-[9px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: C.inkFaint }}
+              >
+                {r.label}
+              </div>
+              <div className="truncate text-[12px] font-bold" style={{ color: C.ink }} title={r.value}>
+                {r.value}
+              </div>
             </div>
-            <div className="truncate text-[12px] font-bold" style={{ color: C.ink }} title={r.value}>
-              {r.value}
-            </div>
-          </div>
-        ))}
-      </div>
-      {solve.warnings.length > 0 && (
-        <div className="mt-2 border-t pt-1.5 text-[11px] leading-snug" style={{ borderColor: 'var(--fs-band-line)', color: C.warn }}>
+          ))}
+        </div>
+      )}
+      {solve && solve.warnings.length > 0 && (
+        <div
+          className="mt-2 border-t pt-1.5 text-[11px] leading-snug"
+          style={{ borderColor: 'var(--fs-band-line)', color: C.warn }}
+        >
           {solve.warnings.map((w) => (
             <div key={w}>⚠ {w}</div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function VerdictCard({ verdict }: { verdict: CriticVerdict }) {
-  const tone = verdict.verdict === 'pass' ? C.nh3 : verdict.verdict === 'revise' ? C.feed : C.warn;
-  return (
-    <div className="bd-msg-in rounded-xl border px-3 py-2.5" style={{ borderColor: tone, background: C.paper }}>
-      <div className="mb-1 flex items-center gap-2">
-        <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: tone }}>
-          CRITIC VERDICT
-        </span>
-        <span className="rounded-full px-2 py-0.5 font-mono text-[10px] font-extrabold" style={{ background: tone, color: C.paper }}>
-          {verdict.verdict.toUpperCase()}
-        </span>
-        <span className="ml-auto font-mono text-[12px] font-extrabold" style={{ color: tone }}>
-          {verdict.score}/100
-        </span>
-      </div>
-      <p className="text-[12px] leading-relaxed" style={{ color: C.ink }}>
-        {verdict.summary}
-      </p>
-      {verdict.strengths.length > 0 && (
-        <ul className="mt-1.5">
-          {verdict.strengths.slice(0, 4).map((s) => (
-            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-              + {s}
-            </li>
-          ))}
-        </ul>
-      )}
-      {verdict.issues.length > 0 && (
-        <ul className="mt-1">
-          {verdict.issues.slice(0, 4).map((s) => (
-            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.warn }}>
-              − {s}
-            </li>
-          ))}
-        </ul>
-      )}
-      {verdict.suggestions.length > 0 && (
-        <ul className="mt-1 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
-          {verdict.suggestions.slice(0, 3).map((s) => (
-            <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
-              → {s}
-            </li>
-          ))}
-        </ul>
+      {verdict && detailCount > 0 && (
+        <div className="mt-1.5">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex w-full items-center gap-1.5 text-left"
+          >
+            <span className="font-mono text-[9.5px] font-extrabold tracking-[0.14em]" style={{ color: C.inkFaint }}>
+              {open ? 'HIDE' : 'DETAILS'}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[10.5px]" style={{ color: C.inkFaint }}>
+              {verdict.strengths.length} strengths · {verdict.issues.length} issues · {verdict.suggestions.length}{' '}
+              suggestions
+            </span>
+            <ChevronDown
+              size={12}
+              className="shrink-0 transition-transform"
+              style={{ color: C.inkFaint, transform: open ? 'rotate(180deg)' : 'none' }}
+            />
+          </button>
+          {open && (
+            <div className="mt-1.5 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+              {verdict.strengths.length > 0 && (
+                <ul>
+                  {verdict.strengths.map((s) => (
+                    <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+                      + {s}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {verdict.issues.length > 0 && (
+                <ul className={verdict.strengths.length > 0 ? 'mt-1' : ''}>
+                  {verdict.issues.map((s) => (
+                    <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.warn }}>
+                      − {s}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {verdict.suggestions.length > 0 && (
+                <ul className="mt-1">
+                  {verdict.suggestions.map((s) => (
+                    <li key={s} className="text-[11.5px] leading-snug" style={{ color: C.inkSoft }}>
+                      → {s}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -989,15 +1062,11 @@ export function SessionPanel({
                   case 'user':
                     return <UserMessage key={b.key} text={b.text} />;
                   case 'workcard':
-                    return <WorkCard key={b.key} phases={b.phases} live={live} />;
-                  case 'solve':
-                    return <SolveCard key={b.key} solve={b.solve} />;
-                  case 'verdict':
-                    return <VerdictCard key={b.key} verdict={b.verdict} />;
+                    return <WorkCard key={b.key} phases={b.phases} usage={b.usage} live={live} />;
+                  case 'answer':
+                    return <AnswerCard key={b.key} solve={b.solve} verdict={b.verdict} />;
                   case 'error':
                     return <ErrorCard key={b.key} text={b.text} />;
-                  case 'usage':
-                    return <UsageLine key={b.key} usage={b.usage} />;
                   default:
                     return <NoteLine key={b.key} text={b.text} />;
                 }

@@ -26,7 +26,7 @@
  * voice cost is once.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Pause, Play, RotateCcw, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { C } from '@/lib/design/tokens';
 import { Belt } from '@/components/learn/OrionMark';
@@ -73,20 +73,22 @@ const P_LIGHT = {
 };
 type PlayerSkin = typeof P_DARK;
 
-/** which room is the player in? (dark pages / light pages). The FIRST
- *  render always says dark — the same value the server rendered — and an
- *  effect corrects it after mount, so hydration can never mismatch. */
+/** which room is the player in? (dark pages / light pages). Reads the
+ *  <html> class as an external store: the SERVER snapshot always says dark
+ *  — the same value the server rendered — and React corrects it after
+ *  mount, so hydration can never mismatch. */
 function usePlayerSkin(): PlayerSkin {
-  const [skin, setSkin] = useState<PlayerSkin>(P_DARK);
-  useEffect(() => {
-    const read = () =>
-      document.documentElement.classList.contains('dark') ? P_DARK : P_LIGHT;
-    setSkin(read());
-    const obs = new MutationObserver(() => setSkin(read()));
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    const obs = new MutationObserver(onStoreChange);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  return skin;
+  const getSnapshot = useCallback(
+    () => document.documentElement.classList.contains('dark'),
+    [],
+  );
+  const isDark = useSyncExternalStore(subscribe, getSnapshot, () => true);
+  return isDark ? P_DARK : P_LIGHT;
 }
 
 // ---------------------------------------------------------------------------

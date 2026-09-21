@@ -1,5 +1,5 @@
 /**
- * Flowsheet design tokens — light "cool gray studio", dark "charcoal".
+ * Flowsheet design tokens — light "the white desk", dark "charcoal".
  *
  * NO BRAND COLOR IN THE CHROME. Action buttons are a neutral surface:
  * WHITE with dark text in light, DARK CHARCOAL with light text in dark
@@ -22,13 +22,13 @@
  */
 
 export const C = {
-  /** canvas background — light: #E6EAEE gray desk · dark: #000000 true black (the void) */
+  /** canvas background — light: #FAFBFC near-white desk · dark: #000000 true black (the void) */
   canvas: 'var(--fs-canvas)',
-  /** the drawing sheet — the ONE box the whole flowsheet lies on — light: #F6F8FA bright paper (lighter than the desk: the sheet POPS) · dark: #141417 */
+  /** the drawing sheet — the ONE box the whole flowsheet lies on — light: #FFFFFF pure-white paper (the brightest surface; hairline + shadow carry the edge) · dark: #141417 */
   sheet: 'var(--fs-sheet)',
-  /** section band fill (one step off the sheet) — light: #F0F3F6 · dark: #131315 */
+  /** section band fill (one step off the sheet) — light: #F2F4F7 · dark: #131315 */
   band: 'var(--fs-band)',
-  /** section band hairline border — light: #D5DCE2 · dark: #2C2C2F (clear, neutral) */
+  /** section band hairline border — light: #E2E7EC · dark: #2C2C2F (clear, neutral) */
   bandLine: 'var(--fs-band-line)',
   /** equipment fill / panel surface — light: #FFFFFF · dark: #1A1A1D */
   paper: 'var(--fs-paper)',
@@ -40,7 +40,7 @@ export const C = {
   inkSoft: 'var(--fs-ink-soft)',
   /** tertiary (dashed utilities, footnotes) — light: #5C6873 · dark: #818287 */
   inkFaint: 'var(--fs-ink-faint)',
-  /** emphasis halo behind a selected unit — light: #E9EEF2 · dark: #232326 */
+  /** emphasis halo behind a selected unit — light: #F0F3F5 · dark: #232326 */
   halo: 'var(--fs-halo)',
   /** hover tooltip shadow (theme-tinted) */
   tipShadow: 'var(--fs-tip-shadow)',
