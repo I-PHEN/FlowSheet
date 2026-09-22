@@ -70,14 +70,22 @@ tool-results/
 download/Flowsheet_The_Builders_Room.html
 scripts/builders-room/
 
-# --- task 65: dev-loop review artifacts — the repo is PUBLIC, screenshots never get committed ---
+# --- task 65/67: dev-loop review artifacts — the repo is PUBLIC, screenshots never get committed ---
 upload/
 download/
 scripts/*-shots/
 scripts/*.png
+scripts/**/*.png
+scripts/*.jpg
+scripts/**/*.jpg
 scripts/*vlm*.json
+scripts/**/*vlm*.json
+scripts/*.wav
+scripts/**/*.wav
 scripts/tts-test/
 scripts/*-plant-id.txt
 scripts/strip-list.txt
 scripts/restore-list.txt
+scripts/scrub-list.txt
 scripts/strip-artifacts.sh
+scripts/scrub-history.sh
