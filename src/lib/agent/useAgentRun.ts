@@ -23,29 +23,15 @@ import type {
   BuildEvent,
   BuildPhase,
   CriticVerdict,
+  LogEntry,
   RunUsage,
   SolveSummary,
 } from '@/lib/agent/protocol';
 import type { Tour } from '@/lib/content/units';
 
-export interface LogEntry {
-  key: number;
-  kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note' | 'usage';
-  phase?: BuildPhase;
-  label?: string;
-  role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
-  text?: string;
-  tool?: string;
-  ok?: boolean;
-  seq?: number;
-  /** the id the action touched (unit / stream / controller) — powers the now-line */
-  target?: string;
-  /** for add_unit: the unit type ("primary-reformer") — powers the now-line */
-  utype?: string;
-  solve?: SolveSummary;
-  verdict?: CriticVerdict;
-  usage?: RunUsage;
-}
+// THE ONE CONVERSATION LAW: the transcript is shared vocabulary (record
+// persistence, the session panel) — one type, defined in the protocol
+export type { LogEntry };
 
 export type RunStatus = 'idle' | 'running' | 'finished';
 
@@ -74,6 +60,7 @@ export interface UseAgentRun {
     verdict?: CriticVerdict | null;
     kpis?: SolveSummary['kpis'] | null;
     name?: string;
+    tour?: Tour | null;
   }) => void;
   /** append a page-level note (guidance, errors, state changes) */
   note: (text: string) => void;
@@ -191,7 +178,9 @@ export function useAgentRun(opts?: {
       setStatus('running');
       setPhase(null);
       setGraph(sourceGraph ?? null);
-      setEntries([{ key: ++keyRef.current, kind: 'user', text: brief.trim() }]);
+      // THE ONE CONVERSATION LAW: a new run APPENDS to the transcript —
+      // build → tour → edit is one chat; only reset() starts a fresh one
+      setEntries((prev) => [...prev, { key: ++keyRef.current, kind: 'user', text: brief.trim() }]);
       setSolve(null);
       setVerdict(null);
       setDoneOk(null);
@@ -324,11 +313,13 @@ export function useAgentRun(opts?: {
       verdict?: CriticVerdict | null;
       kpis?: SolveSummary['kpis'] | null;
       name?: string;
+      tour?: Tour | null;
     }) => {
       setEntries([]);
       keyRef.current = 0;
       setGraph(src.graph);
       setVerdict(src.verdict ?? null);
+      setTour(src.tour ?? null);
       // QUIET CHAT seed order: the brief leads, the answer follows — the
       // same YOU → ANSWER shape a live run leaves behind
       if (src.brief) addEntry({ kind: 'user', text: src.brief });

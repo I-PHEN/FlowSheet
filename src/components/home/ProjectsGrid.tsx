@@ -246,7 +246,9 @@ export function ProjectsGrid() {
                 <IconBtn label="Rename" onClick={(e) => { e.preventDefault(); setRenaming(rec); setRenameText(rec.name); }}>
                   <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                 </IconBtn>
-                <IconBtn label="Edit in builder" onClick={(e) => { e.preventDefault(); window.location.href = `/plant/builder?load=${rec.id}`; }}>
+                {/* one home per plant: the project page is where editing
+                    lives — its Edit tab opens the saved conversation */}
+                <IconBtn label="Edit with AI" onClick={(e) => { e.preventDefault(); window.location.href = `/plant/p/${rec.id}`; }}>
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M12 20h9" />
                     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />

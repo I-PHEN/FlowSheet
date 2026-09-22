@@ -14,6 +14,12 @@
  * dead ends: the owner's law — the plant always has a way back to where
  * the building happened, because the building happens HERE.
  *
+ * THE ONE CONVERSATION LAW: the transcript travels with the record
+ * (session.entries, written by the builder's save and by every edit run's
+ * save-back), so the Edit tab opens on the very conversation that built
+ * the plant — not a cold chat box. A tour started from Edit plays on the
+ * stage and lands BACK in Edit when it ends.
+ *
  * The tour runs as CINEMA: the director flies the camera stop-to-stop,
  * captions stream in the CinemaBar at the bottom of the stage, and
  * clicking any unit mid-tour drops into free roam. The record in the
@@ -101,6 +107,9 @@ export default function ProjectPage() {
         kpis: editRunRef.current?.solve?.kpis ?? cur.kpis,
         verdict: editRunRef.current?.verdict ?? cur.verdict,
         tour: editRunRef.current?.tour ?? cur.tour,
+        // THE ONE CONVERSATION LAW: the transcript keeps traveling with the
+        // plant — the next visit opens the chat where this one left it
+        session: { entries: editRunRef.current?.entries ?? cur.session?.entries ?? [] },
         updatedAt: new Date().toISOString(),
       };
       void putPlant(updated)
@@ -119,10 +128,24 @@ export default function ProjectPage() {
     editRunRef.current = editRun;
   }, [editRun]);
 
+  // THE ONE CONVERSATION LAW: a record saved with a session opens its Edit
+  // tab on the very conversation the builder had — seeded once; "Done
+  // editing" starts a fresh one, and it never reseeds behind the user's back
+  const seedSession = editRun.seedEntries;
+  const sessionSeededRef = useRef(false);
+  useEffect(() => {
+    if (sessionSeededRef.current || !rec || rec === 'missing') return;
+    sessionSeededRef.current = true;
+    if (rec.session && rec.session.entries.length > 0 && editRun.entries.length === 0) {
+      seedSession(rec.session.entries);
+    }
+  }, [rec, seedSession, editRun.entries.length]);
+
   const startEdit = useCallback(() => {
     const cur = recRef.current;
     if (!cur || cur === 'missing') return;
     void editRun.start(editBrief, cur.graph);
+    setEditBrief('');
   }, [editRun, editBrief]);
 
   // the docent's authored tour (saved with the record) beats the auto-tour
@@ -409,6 +432,11 @@ export default function ProjectPage() {
         >
           {mode === 'edit' ? (
             <div className="flex h-full min-h-0 flex-col">
+              {touring && (
+                <div className="max-h-[38%] shrink-0 overflow-y-auto border-b p-3" style={{ borderColor: C.bandLine }}>
+                  <TourIndex director={director} />
+                </div>
+              )}
               <SessionPanel
                 entries={editRun.entries}
                 status={editRun.status}
@@ -439,9 +467,9 @@ export default function ProjectPage() {
                 tourReady={!!editRun.tour && editRun.status === 'finished'}
                 onTakeTour={() => {
                   setEditBrief('');
-                  enterLearn();
-                  // the tour starts on the next tick — Learn's panel mounts it
-                  window.setTimeout(() => startTour(), 60);
+                  // the tour plays on the stage and lands BACK in this chat —
+                  // the one conversation law: it never looked like you left
+                  startTour();
                 }}
                 remixName={rec.name}
               />

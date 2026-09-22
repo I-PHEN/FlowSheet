@@ -13,7 +13,7 @@
 
 import type { FlowGraph } from '@/lib/engine/graph';
 import type { Kpis } from '@/lib/engine/types';
-import type { CriticVerdict, SavedPlant } from '@/lib/agent/protocol';
+import type { CriticVerdict, LogEntry, SavedPlant } from '@/lib/agent/protocol';
 import type { Tour } from '@/lib/content/units';
 import { isFamilyId } from '@/lib/families';
 import { safeTour } from './tour';
@@ -40,6 +40,14 @@ export interface PlantRecord {
   family?: string;
   /** the docent's narrated tour (v2) — played by the viewer's tour runner */
   tour?: Tour | null;
+  /**
+   * THE ONE CONVERSATION LAW (v2, additive): the build/edit transcript,
+   * saved with the plant so its project page's Edit tab opens the SAME
+   * conversation the builder had — build → tour → edit never feels like
+   * leaving the chat. Absent on older records: the edit panel falls back
+   * to its cold start. Keys are re-assigned on seed; presence is enough.
+   */
+  session?: { entries: LogEntry[] } | null;
 }
 
 /** the family a record belongs to, with a v1 fallback to the graph stamp */

@@ -109,6 +109,33 @@ export interface ArchitectPlan {
   notes: string[];
 }
 
+/**
+ * One line of the session transcript — the client-side mirror of a run's
+ * BuildEvents, folded by the session panel into the quiet chat (one work
+ * card + one answer card per run). THE ONE CONVERSATION LAW: entries
+ * accumulate across runs; only an explicit reset starts a new transcript.
+ * Saved into the plant record (`session.entries`) so the conversation
+ * travels with the plant between the builder and its project page.
+ */
+export interface LogEntry {
+  key: number;
+  kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note' | 'usage';
+  phase?: BuildPhase;
+  label?: string;
+  role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
+  text?: string;
+  tool?: string;
+  ok?: boolean;
+  seq?: number;
+  /** the id the action touched (unit / stream / controller) — powers the now-line */
+  target?: string;
+  /** for add_unit: the unit type ("primary-reformer") — powers the now-line */
+  utype?: string;
+  solve?: SolveSummary;
+  verdict?: CriticVerdict;
+  usage?: RunUsage;
+}
+
 /** localStorage library record (client, legacy) */
 export interface SavedPlant {
   slug: string;

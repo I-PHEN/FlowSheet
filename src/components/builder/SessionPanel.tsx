@@ -8,11 +8,14 @@
  * (each phase a collapsible section inside, collapsing to a one-line
  * summary when the run's outputs land, token ledger as a footnote in the
  * detail); ONE answer card merges the critic's verdict with the solver's
- * numbers; errors and true system notes stay as their own lines. When the
- * curtain falls the composer hands over to the next-move actions (tour,
- * zoom, save, new session). The empty state is the on-ramp: family
- * presets, an "I don't know what to build" region picker, and surprise
- * briefs.
+ * numbers; errors and true system notes stay as their own lines. THE ONE
+ * CONVERSATION LAW: runs chain — build, tour, and edit share one transcript
+ * (a run = one YOU bubble + one work card + one answer card, repeating),
+ * and after a run the composer STAYS an input: the same box that built
+ * the plant takes the next change — edit-with-AI is not a different
+ * screen, it is this chat continuing. The empty state is the on-ramp:
+ * family presets, an "I don't know what to build" region picker, and
+ * surprise briefs.
  *
  * Pure presentation — every piece of state lives in the page.
  */
@@ -36,31 +39,14 @@ import {
   ZoomIn,
   Zap,
 } from 'lucide-react';
-import type { BuildPhase, CriticVerdict, RunUsage, SolveSummary } from '@/lib/agent/protocol';
+import type { BuildPhase, CriticVerdict, LogEntry, RunUsage, SolveSummary } from '@/lib/agent/protocol';
 import { FAMILIES } from '@/lib/families';
 import { REGIONS, SURPRISE_BRIEFS, type RegionEntry } from '@/lib/content/regions';
 import { C } from '@/lib/design/tokens';
 
 // ── the log model (page-owned, derived from BuildEvents) ─────────────────────
-
-export interface LogEntry {
-  key: number;
-  kind: 'user' | 'phase' | 'message' | 'tool' | 'solve' | 'verdict' | 'error' | 'note' | 'usage';
-  phase?: BuildPhase;
-  label?: string;
-  role?: 'architect' | 'engineer' | 'critic' | 'docent' | 'system';
-  text?: string;
-  tool?: string;
-  ok?: boolean;
-  seq?: number;
-  /** the id the action touched (unit / stream / controller) — powers the now-line */
-  target?: string;
-  /** for add_unit: the unit type ("primary-reformer") — powers the now-line */
-  utype?: string;
-  solve?: SolveSummary;
-  verdict?: CriticVerdict;
-  usage?: RunUsage;
-}
+// LogEntry lives in the agent protocol — one type shared by the run hook,
+// this panel, and the plant record's saved session.
 
 export const PHASE_LABEL: Record<BuildPhase, string> = {
   architect: 'Architect planning',
@@ -922,11 +908,14 @@ export function SessionPanel({
     taRef.current?.focus();
   };
 
-  const sessionTitle = idle
-    ? 'Untitled session'
-    : brief.trim().length > 0
-      ? `${brief.trim().slice(0, 44)}${brief.trim().length > 44 ? '…' : ''}`
-      : 'Agent-built plant';
+  const sessionTitle = (() => {
+    // THE ONE CONVERSATION LAW: the session is titled by the brief that
+    // started it (the first YOU bubble) — stable across every later change
+    const first = entries.find((e) => e.kind === 'user')?.text ?? '';
+    const t = first.trim() || brief.trim();
+    if (t.length === 0) return idle ? 'Untitled session' : 'Agent-built plant';
+    return `${t.slice(0, 44)}${t.length > 44 ? '…' : ''}`;
+  })();
 
   const sub = running
     ? `${PHASE_LABEL[phase ?? 'engineer']} · ${unitCount} unit${unitCount === 1 ? '' : 's'} · ${streamCount} stream${streamCount === 1 ? '' : 's'}`
@@ -936,7 +925,9 @@ export function SessionPanel({
         : doneOk === false
           ? 'build finished with issues'
           : 'session restored from the library'
-      : 'architect · engineer · solver · critic · docent';
+      : blocks.length > 0
+        ? 'the conversation continues — each change chains from the latest plant'
+        : 'architect · engineer · solver · critic · docent';
 
   return (
     <div className="flex h-full w-full flex-col" style={{ background: C.paper }}>
@@ -1151,13 +1142,56 @@ export function SessionPanel({
           </div>
         ) : (
           <div>
-            <div className="mb-2 flex flex-wrap items-center gap-2">
+            {/* THE ONE CONVERSATION LAW: the composer STAYS an input after a
+                run — the same box that built the plant takes the next change.
+                Edit-with-AI is not a different screen; it is this chat. */}
+            <div
+              className="rounded-2xl border transition-[box-shadow] focus-within:ring-2"
+              style={{ borderColor: 'var(--fs-band-line)', background: C.canvas }}
+            >
+              <textarea
+                ref={taRef}
+                value={brief}
+                onChange={(e) => onBriefChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (brief.trim()) onStart();
+                  }
+                }}
+                rows={2}
+                placeholder={
+                  hasGraph
+                    ? 'Change something — add, remove, retune… or ask why a unit is there'
+                    : 'Describe the plant to build — units, targets, constraints…'
+                }
+                aria-label={hasGraph ? 'Next change' : 'Design brief'}
+                className="w-full resize-none bg-transparent px-3.5 pt-3 text-[13px] leading-relaxed outline-none placeholder:opacity-70"
+                style={{ color: C.ink }}
+              />
+              <div className="flex items-center gap-2 px-2.5 pb-2.5">
+                <span className="hidden text-[10px] sm:block" style={{ color: C.inkFaint }}>
+                  Enter to {hasGraph ? 'apply' : 'build'} · Shift+Enter for a new line
+                </span>
+                <button
+                  onClick={onStart}
+                  disabled={!brief.trim()}
+                  aria-label={hasGraph ? 'Apply the change' : 'Start the build'}
+                  className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border transition-opacity disabled:opacity-35"
+                  style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
+                >
+                  <ArrowUp size={16} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+            {/* the next moves — quiet pills; the input is the hero */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 onClick={onTakeTour}
                 disabled={!tourReady}
-                className="hover-band flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[12px] font-bold disabled:opacity-40"
-                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
-                title="Save the plant and play the docent's guided tour — voice and music"
+                className="hover-band flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-40"
+                style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
+                title="Play the docent's guided tour — voice and music, right here"
               >
                 <Play size={12} strokeWidth={3} />
                 Take the tour
@@ -1182,15 +1216,16 @@ export function SessionPanel({
               </button>
               <button
                 onClick={onReset}
-                className="hover-band ml-auto flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[12px] font-bold"
-                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
+                className="hover-band ml-auto flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-bold"
+                style={{ color: C.inkSoft, borderColor: 'var(--fs-band-line)' }}
+                title="Close this conversation and start a fresh one"
               >
                 <RotateCcw size={12} />
                 {resetLabel ?? 'New session'}
               </button>
             </div>
-            {remixing && (
-              <div className="flex flex-wrap gap-1.5">
+            {hasGraph && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {REMIX_EXAMPLES.slice(0, 2).map((text) => (
                   <button
                     key={text}
