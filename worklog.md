@@ -1213,3 +1213,22 @@ Stage Summary:
 - Follow-ups logged: stream-label collision on dense small plants (61-B residual), unit-label truncation ("PURIFICATIO").
 - Environment notes: LLM API hit 429 rate-limits mid-E2E (test plant never solved — critic failed after 5 retries; UX paths all proven regardless); dev server OOMs on this 3.9GB box — use the standalone build for E2E.
 - Commit: 1 this session. 12 unpushed total (PAT still revoked — owner owes a new fine-grained PAT for I-PHEN/FlowSheet, Contents: read/write).
+
+---
+Task ID: 65 — CLEAN PUSH TO GITHUB (public repo, zero screenshots)
+Agent: main (Super Z)
+Task: Owner provided a new fine-grained PAT and directed: "here is the token push it to github make not to push the screenshot."
+
+Work Log:
+- PRE-FLIGHT: token validated against the GitHub API — I-PHEN/FlowSheet is a PUBLIC repo, default branch main, push permission confirmed; remote main == local origin/main (200aec1, task-45 identity rework), so the 16 unpushed local commits (tasks 47-64: Fix Packs A/B, 61-A/B/C, 62, 64 + plan/worklog commits) were a clean fast-forward. The divergent local history-backup branch was identified and deliberately NOT pushed (it contains shots).
+- AUDIT: the unpushed commits carried 156 local review artifacts — 132 PNGs (11 shot dirs + 27 loose hero-*/task42-* files), 23 VLM JSONs, 1 plant-id txt, incl. 5 in download/task64/; three junk UUID-named commits had each added one artifact. Strip list built from EVERY path touched by ANY commit in the range (scripts/strip-list.txt) — an endpoint-only diff would have missed files that only lived in intermediate commits.
+- HISTORY STRIP (scripts/strip-artifacts.sh): git filter-branch --index-filter --prune-empty over origin/main..main removed all 156 paths from every commit; the three junk commits became empty and pruned (16 -> 13 descriptive commits, all messages preserved). pre-push-backup branch + refs/original keep the full pre-rewrite history locally; all 156 files were restored to local disk afterwards (untracked).
+- THE 58 EDGE CASE: 58 of the stripped paths (task42-45 shots, hero-A/B/C shots) were ALREADY PUBLISHED at origin/main — the range had re-shot them with new binary content. Stripping alone would have made the push DELETE published files; keeping the re-shots would upload new screenshot bytes. Resolution: a dedicated restore commit put all 58 back at their LAST-PUBLISHED content; the re-shot copies are preserved in scripts/local-backup-shots/published58-reshot-content.tar (gitignored). Net screenshot bytes uploaded by this push: ZERO — verified: the endpoint diff carries no png/jpg/vlm-json/plant-id path, and no previously-published file changes content.
+- GUARD RAILS: .gitignore now ignores upload/, download/, scripts/*-shots/, scripts/*.png, scripts/*vlm*.json, scripts/tts-test/, scripts/*-plant-id.txt and the one-off strip tooling — future dev-loop shots cannot be committed accidentally. git status is fully clean with all artifacts still on disk.
+- PUSH: main -> github.com/I-PHEN/FlowSheet (16 commits: 13 rewritten + restore + guard-rails + this worklog). history-backup branch NOT pushed, no tags pushed, only main.
+- SECURITY NOTES: (1) the PAT exists only in this session's shell env — never written to any file or commit; the remote URL was restored to its token-less form after the push. (2) The repo ALREADY contains hundreds of screenshots from rounds published BEFORE this task (scripts/bd*, lab*, lm*, sheet*, r*, qa*, audio*, 3d-*, d3*, dst*, op*, flash*, learn*, shot* pngs, vlm-*.json, tts-test/*.wav, download/remix-*.png, upload/hx/* incl. the owner's own CAD screenshots) — deliberately NOT touched: scrubbing them means force-rewriting public history, an owner decision (one-word go needed). (3) The PAT transited chat — worth rotating when convenient.
+
+Stage Summary:
+- GitHub is current with everything through task 64 (SSE/job store, paced assembly, white-desk light mode, stream routing quality, one-home edit-with-AI, the-one-conversation build->tour->edit) — pushed with ZERO screenshots or VLM artifacts in any pushed commit and zero deletions of previously-published files.
+- Local safety net: pre-push-backup branch, refs/original/*, scripts/local-backup-shots/ tar, and the untracked on-disk copies preserve everything that was stripped.
+- Open for owner: (a) scrub the ~300 pre-existing screenshots from public history? (b) rotate the PAT eventually.
