@@ -16,7 +16,7 @@ import { Diagram } from '@/components/flowsheet/Diagram';
 import { FLASH_LAYOUT } from '@/lib/flowsheet/flashLayout';
 import { DISTILLATION_LAYOUT } from '@/lib/flowsheet/distillationLayout';
 import { REFERENCE_LAYOUT } from '@/lib/flowsheet/layout';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { TopBar } from '@/components/home/TopBar';
 import { HeroDemo } from '@/components/home/HeroDemo';
 import { ProjectsGrid } from '@/components/home/ProjectsGrid';
 import { BuildFab } from '@/components/home/BuildFab';
@@ -47,6 +47,7 @@ function PlantCard({
   children,
   action,
   layout,
+  tpd,
 }: {
   href: string;
   level: string;
@@ -54,13 +55,17 @@ function PlantCard({
   title: string;
   children: React.ReactNode;
   action: string;
-  layout: Parameters<typeof Diagram>[0]['layout'];
+  layout: NonNullable<Parameters<typeof Diagram>[0]['layout']>;
+  /** design production, tonnes per day — shown in the census when the plant has one */
+  tpd?: number;
 }) {
+  const nUnits = layout.units.length;
+  const nStreams = layout.streams.length;
   return (
     <Link
       href={href}
       className="card-lift group overflow-hidden rounded-2xl border"
-      style={{ borderColor: C.bandLine, background: C.paper }}
+      style={{ borderColor: C.bandLine, background: C.paper, boxShadow: 'var(--fs-card-shadow)' }}
     >
       <div className="relative aspect-[16/9] overflow-hidden" style={{ background: C.canvas }}>
         <div className="h-full w-full origin-top-left scale-[1.02] transition-transform duration-300 group-hover:scale-[1.05]">
@@ -86,6 +91,12 @@ function PlantCard({
             <span className="font-mono text-[8px] font-extrabold tracking-[0.12em]">ORION</span>
           </span>
         </div>
+        {/* the census — the SAME mono metadata line every project card
+            carries (user plants and prebuilts speak one grammar) */}
+        <div className="mt-1.5 font-mono text-[10px] tracking-wider" style={{ color: C.inkSoft }}>
+          {nUnits} {nUnits === 1 ? 'UNIT' : 'UNITS'} · {nStreams} {nStreams === 1 ? 'STREAM' : 'STREAMS'}
+          {tpd != null ? ` · ${tpd.toLocaleString()} T/D` : ''}
+        </div>
         <div className="mt-1 text-[12px] leading-relaxed" style={{ color: C.inkSoft }}>
           {children}
         </div>
@@ -103,23 +114,8 @@ function PlantCard({
 
 export default function Home() {
   return (
-    <div className="flex min-h-dvh flex-col" style={{ background: C.canvas }}>
-      <header
-        className="flex h-[58px] shrink-0 items-center justify-between border-b px-5"
-        style={{ borderColor: C.bandLine, background: C.paper }}
-      >
-        <div className="flex items-baseline gap-2.5">
-          <span className="text-[15px] font-extrabold tracking-tight" style={{ color: C.ink }}>
-            Flowsheet
-          </span>
-          <span className="hidden text-[11.5px] font-semibold tracking-wide sm:inline" style={{ color: C.inkFaint }}>
-            AI-NATIVE PROCESS SIMULATOR
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="fs-page flex min-h-dvh flex-col">
+      <TopBar />
 
       <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 pb-20 pt-12 sm:pt-16">
         {/* ---- the hero: the pitch and the proof, side by side — the demo
@@ -206,7 +202,8 @@ export default function Home() {
             action="Climb the tower"
             layout={DISTILLATION_LAYOUT}
           >
-            Benzene from toluene, tray by tray. Six units, nine streams, reflux and reboil.
+            Benzene from toluene, tray by tray — reflux and reboil, and the mass balances
+            solve live under your sliders.
           </PlantCard>
 
           <PlantCard
@@ -215,9 +212,9 @@ export default function Home() {
             title="Steam-Methane Reforming Plant"
             action="Explore plant"
             layout={REFERENCE_LAYOUT}
+            tpd={1000}
           >
-            Natural gas + steam to 1,000 t/d of ammonia. 19 units, 27 streams, a recycle loop —
-            and every unit opens in 3D.
+            Natural gas + steam to ammonia — a full recycle loop, and every unit opens in 3D.
           </PlantCard>
         </div>
 

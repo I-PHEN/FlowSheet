@@ -45,17 +45,48 @@ function fmtDate(iso: string): string {
   }
 }
 
+/** the critic's score as a tiny radial gauge. The number IS a score out
+ *  of 100 — never a revision count — so the card says exactly that:
+ *  ring + "CRITIC n/100". The ring's arc carries the verdict (sage pass ·
+ *  amber revise · rust fail) and the tooltip spells the word out. */
+function ScoreRing({ score, color }: { score: number; color: string }) {
+  const r = 7;
+  const circ = 2 * Math.PI * r;
+  const filled = (Math.max(0, Math.min(100, score)) / 100) * circ;
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0">
+      <circle cx="8" cy="8" r={r} fill="none" stroke={C.bandLine} strokeWidth="2.4" />
+      <circle
+        cx="8"
+        cy="8"
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeDasharray={`${filled} ${circ}`}
+        transform="rotate(-90 8 8)"
+      />
+    </svg>
+  );
+}
+
 function verdictChip(rec: PlantRecord) {
   if (!rec.verdict) return null;
   const v = rec.verdict.verdict;
-  const ok = v === 'pass';
-  const revise = v === 'revise';
+  const color = v === 'pass' ? C.nh3 : v === 'revise' ? C.warn : C.fail;
+  const word = v === 'pass' ? 'PASS' : v === 'revise' ? 'REVISE' : 'FAIL';
   return (
     <span
-      className="rounded-full border px-2 py-0.5 font-mono text-[9px] font-bold tracking-wider"
-      style={{ borderColor: ok ? C.nh3 : revise ? C.warn : C.utility, color: ok ? C.nh3 : revise ? C.warn : C.utility }}
+      className="flex items-center gap-1.5 rounded-full border px-2 py-0.5"
+      style={{ borderColor: C.bandLine, background: C.paperA95 }}
+      title={`Critic verdict: ${word} — ${rec.verdict.score}/100`}
+      aria-label={`Critic verdict ${word}, score ${rec.verdict.score} out of 100`}
     >
-      {ok ? `CRITIC ${rec.verdict.score}` : revise ? `REVISE ${rec.verdict.score}` : `FAIL ${rec.verdict.score}`}
+      <ScoreRing score={rec.verdict.score} color={color} />
+      <span className="font-mono text-[9px] font-bold tracking-wider" style={{ color: C.inkSoft }}>
+        CRITIC {rec.verdict.score}/100
+      </span>
     </span>
   );
 }
@@ -67,10 +98,63 @@ const Thumb = memo(function Thumb({ rec }: { rec: PlantRecord }) {
       canvas={canvas}
       units={units}
       streams={streams}
+      dots
       className="block h-full w-full"
     />
   );
 });
+
+/** the ghost flowsheet — a PFD outline that pencils itself in, holds, and
+ *  erases, forever (`.np-draw` in globals.css; the paths stagger via
+ *  animation-delay, so the sketch grows left to right like a drawing being
+ *  made). A first-time visitor sees what the box does before clicking it. */
+function GhostSketch() {
+  const parts: Array<{ d: string; delay: number }> = [
+    // feed line in
+    { d: 'M 6 42 H 38', delay: 0 },
+    // feed vessel (rounded body + boot)
+    { d: 'M 45 24 H 59 A 7 7 0 0 1 66 31 V 51 A 7 7 0 0 1 59 58 H 45 A 7 7 0 0 1 38 51 V 31 A 7 7 0 0 1 45 24 Z', delay: 0.55 },
+    { d: 'M 50 58 V 67', delay: 0.8 },
+    // pipe over to the column
+    { d: 'M 66 41 H 94', delay: 1.15 },
+    // distillation column (rounded, four trays)
+    { d: 'M 98 10 H 114 A 4 4 0 0 1 118 14 V 70 A 4 4 0 0 1 114 74 H 98 A 4 4 0 0 1 94 70 V 14 A 4 4 0 0 1 98 10 Z', delay: 1.6 },
+    { d: 'M 98 24 H 114', delay: 1.85 },
+    { d: 'M 98 36 H 114', delay: 1.95 },
+    { d: 'M 98 48 H 114', delay: 2.05 },
+    { d: 'M 98 60 H 114', delay: 2.15 },
+    // pipe over to the exchanger
+    { d: 'M 118 41 H 146', delay: 2.4 },
+    // shell-and-tube outline + internals
+    { d: 'M 150 30 H 170 A 4 4 0 0 1 174 34 V 48 A 4 4 0 0 1 170 52 H 150 A 4 4 0 0 1 146 48 V 34 A 4 4 0 0 1 150 30 Z', delay: 2.75 },
+    { d: 'M 150 47 L 170 35', delay: 3.0 },
+    // product out
+    { d: 'M 174 41 H 214', delay: 3.25 },
+  ];
+  return (
+    <svg
+      viewBox="0 0 220 84"
+      className="h-auto w-[220px] max-w-full opacity-70 transition-opacity duration-300 group-hover:opacity-95"
+      aria-hidden="true"
+    >
+      {parts.map((p, i) => (
+        <path
+          key={i}
+          d={p.d}
+          pathLength={1}
+          className="np-draw"
+          style={{
+            animationDelay: `${p.delay}s`,
+            fill: 'none',
+            stroke: C.inkFaint,
+            strokeWidth: 1.5,
+            strokeLinecap: 'round',
+          }}
+        />
+      ))}
+    </svg>
+  );
+}
 
 function IconBtn({
   label,
@@ -210,12 +294,15 @@ export function ProjectsGrid() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {/* + New project — always first, always one click */}
+        {/* + New project — always first, always one click. The ghost
+            flowsheet sketches itself on loop inside the dashed box: a
+            whisper of what a click starts */}
         <Link
           href="/plant/builder"
-          className="card-lift group flex min-h-[240px] flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed"
+          className="card-lift group flex min-h-[240px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-4"
           style={{ borderColor: C.inkFaint, background: 'transparent' }}
         >
+          <GhostSketch />
           <span
             className="flex h-11 w-11 items-center justify-center rounded-full border"
             style={{ borderColor: C.bandLine, color: C.ink }}
@@ -235,10 +322,17 @@ export function ProjectsGrid() {
             key={rec.id}
             href={`/plant/p/${rec.id}`}
             className="card-lift group relative overflow-hidden rounded-2xl border"
-            style={{ borderColor: C.bandLine, background: C.paper }}
+            style={{ borderColor: C.bandLine, background: C.paper, boxShadow: 'var(--fs-card-shadow)' }}
           >
-            <div className="relative aspect-[16/10] overflow-hidden" style={{ background: C.canvas }}>
-              <div className="h-full w-full origin-top-left scale-[1.01] transition-transform duration-300 group-hover:scale-[1.04]">
+            {/* the thumbnail sits the way every prebuilt card's does: a
+                canvas mat inside the card, the flowsheet on a WHITE sheet
+                with a hairline and a soft shadow — never raw on the page
+                gray (round 68: one card grammar for every plant) */}
+            <div className="relative aspect-[16/10] p-2.5" style={{ background: C.canvas }}>
+              <div
+                className="h-full w-full origin-center overflow-hidden rounded-lg border transition-transform duration-300 group-hover:scale-[1.02]"
+                style={{ borderColor: C.bandLine, background: C.sheet, boxShadow: 'var(--fs-tip-shadow)' }}
+              >
                 <Thumb rec={rec} />
               </div>
               {/* hover actions */}
@@ -276,7 +370,9 @@ export function ProjectsGrid() {
               </div>
               <div className="mt-1.5 flex items-center gap-2">
                 <span className="font-mono text-[10px] tracking-wider" style={{ color: C.inkSoft }}>
-                  {rec.graph.units.length} UNITS · {rec.graph.streams.filter((s) => !s.implicit).length} STREAMS
+                  {rec.graph.units.length} {rec.graph.units.length === 1 ? 'UNIT' : 'UNITS'} ·{' '}
+                  {rec.graph.streams.filter((s) => !s.implicit).length}{' '}
+                  {rec.graph.streams.filter((s) => !s.implicit).length === 1 ? 'STREAM' : 'STREAMS'}
                   {rec.productionTpd != null ? ` · ${Math.round(rec.productionTpd).toLocaleString()} T/D` : ''}
                 </span>
                 <span className="ml-auto">{verdictChip(rec)}</span>

@@ -108,6 +108,21 @@ function usePlayerSkin(): PlayerSkin {
  */
 const BARS = 44;
 
+/** the resting waveform — a deterministic ghost of a spoken phrase, drawn
+ *  at low opacity whenever nobody is talking (round 68): before the first
+ *  press of play the card reads as a LOADED player — a track waiting —
+ *  never an empty or broken one. Same mirrored-bar grammar as the live
+ *  signal; quiet at both ends like a real breath group. */
+const GHOST = (() => {
+  const g = new Float32Array(BARS);
+  for (let i = 0; i < BARS; i++) {
+    const env = Math.sin(((i + 0.5) / BARS) * Math.PI); // quiet at both ends
+    const syll = 0.3 + 0.34 * Math.abs(Math.sin(i * 1.35)) + 0.22 * Math.abs(Math.sin(i * 0.47 + 1.3));
+    g[i] = Math.max(0.05, Math.min(1, env * syll * 0.9));
+  }
+  return g;
+})();
+
 function VoiceWave({ speaking, skin }: { speaking: boolean; skin: PlayerSkin }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -186,9 +201,26 @@ function VoiceWave({ speaking, skin }: { speaking: boolean; skin: PlayerSkin }) 
       let alive = false;
       for (let i = 0; i < BARS; i++) if (bars[i] > 0.015) { alive = true; break; }
       if (!alive) {
-        // resting: a faint hairline — the player is on, nobody is talking
-        ctx.fillStyle = `rgba(${skin.inkRGB},0.22)`;
-        ctx.fillRect(0, mid - 0.75, w, 1.5);
+        const pad = 2;
+        const step = (w - pad * 2) / BARS;
+        const bw = Math.max(1.5, step * 0.52);
+        const path = new Path2D();
+        for (let i = 0; i < BARS; i++) {
+          const bh = Math.max(1.4, GHOST[i] * maxHalf);
+          const x = pad + i * step + (step - bw) / 2;
+          if (typeof path.roundRect === 'function') path.roundRect(x, mid - bh, bw, bh * 2, bw / 2);
+          else path.rect(x, mid - bh, bw, bh * 2);
+        }
+        if (speaking) {
+          // a pause mid-line: the player is on, nobody is talking — the
+          // ghost fades down to a hairline so the breath reads as his
+          ctx.fillStyle = `rgba(${skin.inkRGB},0.22)`;
+          ctx.fillRect(0, mid - 0.75, w, 1.5);
+          return;
+        }
+        // at rest: the ghost waveform — his line, loaded and waiting
+        ctx.fillStyle = `rgba(${skin.inkRGB},0.26)`;
+        ctx.fill(path);
         return;
       }
 
