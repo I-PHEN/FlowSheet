@@ -69,8 +69,12 @@
   --fs-card-shadow: 0 6px 28px rgba(29, 36, 44, 0.10);
   /* the blueprint desk (round 68): the builder canvas's faint dot grid
      extended across the whole page at barely-there opacity, a soft lift
-     behind the hero, and the frosted top bar floating over both */
-  --fs-grid-dot: rgba(29, 36, 44, 0.055);
+     behind the hero, and the frosted top bar floating over both.
+     Round 70: the lift became a FULL-PAGE radial — the center of the desk
+     sits 2-4% lighter and falls off toward the edges/bottom, so the page
+     reads as a lit surface, not one flat hex value. */
+  --fs-grid-dot: rgba(29, 36, 44, 0.05);
+  --fs-page-lift: rgba(255, 255, 255, 0.5);
   --fs-page-glow: rgba(255, 255, 255, 0.5);
   --fs-glass: rgba(255, 255, 255, 0.62);
   --fs-glass-line: rgba(29, 36, 44, 0.08);
@@ -146,8 +150,11 @@
   --fs-tip-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
   --fs-card-shadow: 0 6px 28px rgba(0, 0, 0, 0.60);
   /* the blueprint desk, dark: whisper-quiet dots on the void, a breath of
-     lift behind the hero; the bar frosts to near-black glass */
+     lift behind the hero; the bar frosts to near-black glass. The full-page
+     radial lift rides at a dark-adjusted whisper (a light-page 50% white
+     would be a searchlight here) */
   --fs-grid-dot: rgba(236, 236, 238, 0.05);
+  --fs-page-lift: rgba(236, 236, 238, 0.045);
   --fs-page-glow: rgba(236, 236, 238, 0.04);
   --fs-glass: rgba(13, 13, 15, 0.62);
   --fs-glass-line: rgba(236, 236, 238, 0.09);
@@ -342,29 +349,40 @@
   animation: bd-pulse-kf 1.1s ease-in-out infinite;
 }
 
-/* the hero's "thinking" shimmer — a quiet gradient sweep across the live
-   status line while the agents work (skeleton-loader feel, Linear-style) */
-@keyframes hd-shimmer-kf {
-  from {
-    background-position: 100% 0;
+/* the hero's "thinking" loader — a clean three-dot pulse: fixed size,
+   fixed spacing, staggered phase. It replaces the old shimmer-on-text
+   (which faded whole words toward invisible and read as a broken
+   skeleton, not as busy). */
+@keyframes hd-dot-kf {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
   }
-  to {
-    background-position: -100% 0;
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
   }
 }
-.hd-shimmer {
-  background-image: linear-gradient(
-    100deg,
-    var(--fs-ink-faint) 35%,
-    var(--fs-ink) 50%,
-    var(--fs-ink-faint) 65%
-  );
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: hd-shimmer-kf 2.4s linear infinite;
+.hd-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 5px;
+  vertical-align: baseline;
+}
+.hd-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--fs-ink-soft);
+  animation: hd-dot-kf 1.15s ease-in-out infinite;
+}
+.hd-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.hd-dots span:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -374,10 +392,9 @@
   .caret {
     animation: none;
   }
-  .hd-shimmer {
+  .hd-dots span {
     animation: none;
-    background-image: none;
-    color: var(--fs-ink-soft);
+    opacity: 0.6;
   }
 }
 
@@ -646,22 +663,31 @@
    THE BLUEPRINT DESK + THE GLASS BAR + THE GHOST SKETCH (round 68)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* the landing page IS the drafting table: the same faint dot grid the
-   builder canvas uses (26px pitch), extended across the whole page at
-   barely-there opacity, with a soft radial lift behind the hero so the
-   white cards float. Two layers, one background — subtle by design. */
+/* the landing page IS the drafting table — three layers, one background:
+   1. the same faint dot grid the builder canvas uses (26px pitch) across
+      the ENTIRE page at texture-level opacity (it rides ON TOP, the way
+      grid paper is printed over the paper's tone);
+   2. a full-page radial lift — the desk's center is slightly lighter and
+      falls off toward the edges and bottom, a soft sense of depth instead
+      of one uniform hex value;
+   3. the local glow behind the hero, where the white cards float.
+   All three paint on the page wrapper itself, beneath every card, the
+   nav, and the text — no z-index games, no contrast cost. */
 .fs-page {
   background-color: var(--fs-canvas);
   background-image:
-    radial-gradient(1200px 560px at 50% 200px, var(--fs-page-glow), transparent 72%),
-    radial-gradient(var(--fs-grid-dot) 1.1px, transparent 1.7px);
+    radial-gradient(var(--fs-grid-dot) 1.1px, transparent 1.7px),
+    radial-gradient(120% 85% at 50% 14%, var(--fs-page-lift), transparent 70%),
+    radial-gradient(1200px 560px at 50% 200px, var(--fs-page-glow), transparent 72%);
   background-size:
+    26px 26px,
     100% 100%,
-    26px 26px;
-  background-repeat: no-repeat, repeat;
+    100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat;
   background-position:
+    13px 13px,
     0 0,
-    13px 13px;
+    0 0;
 }
 
 /* the top bar — glass, not paper: sticky, frosted over the blueprint desk

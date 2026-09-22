@@ -52,20 +52,27 @@ const COL_W = 200; // obstacle + routing corridor
 const ROW_H = 132; // obstacle + the label below + breathing room
 const PAD = 48;
 const BAND_GAP = 56;
+/** the sheet's aspect is allowed to meet the pane it hangs in — clamped so
+ *  a phone pane never demands a skyscraper and an ultrawide never demands
+ *  a ribbon (the stretch pass below closes on the true pane aspect). */
+const ASPECT_MIN = 0.9;
+const ASPECT_MAX = 2.8;
+const ASPECT_DEFAULT = 1.9; // pre-measurement (SSR/first frame) — the old wide frame
 
-/** choose the band count whose sheet aspect sits closest to a wide reading
- *  frame (~1.9:1). The stage is a wide pane — a near-square wrapped layout
- *  letterboxes into a small central block, which reads as “narrow canvas”.
+/** choose the band count whose sheet aspect sits closest to the STAGE's
+ *  aspect — the sheet is drafted for the pane it will hang in. The stage
+ *  changes shape when the chat panel opens, shrinks, or goes mobile, and
+ *  the sheet should FILL it every time (the law: the sheet's height when
+ *  the chat is open equals its height when the chat is shrunk).
  *  One band = a single left-to-right train (small plants stay one wide
  *  line); longer chains wrap into stacked bands that still fill the pane. */
-function pickBands(cols: number, maxColLen: number): number {
-  const TARGET = 1.9;
+function pickBands(cols: number, maxColLen: number, target: number): number {
   let best = 1;
   let bestScore = Infinity;
   for (let b = 1; b <= cols; b++) {
     const w = PAD * 2 + Math.ceil(cols / b) * COL_W;
     const h = PAD * 2 + b * (maxColLen * ROW_H) + (b - 1) * BAND_GAP + 48;
-    const score = Math.abs(Math.log(w / h / TARGET));
+    const score = Math.abs(Math.log(w / h / target));
     if (score < bestScore) {
       bestScore = score;
       best = b;
@@ -93,9 +100,14 @@ interface Layout {
   /** top y of each band's content (index = band) */
   bandTops: number[];
   maxColLen: number;
+  /** the stretched column pitch (obstacle + corridor) for THIS sheet */
+  colW: number;
+  /** the band gap for THIS sheet (grows when the sheet deepens) */
+  bandGap: number;
 }
 
-function computeLayout(graph: FlowGraph): Layout {
+function computeLayout(graph: FlowGraph, stageAspect: number): Layout {
+  const target = Math.min(ASPECT_MAX, Math.max(ASPECT_MIN, stageAspect));
   const units = graph.units;
   if (units.length === 0)
     return {
@@ -106,6 +118,8 @@ function computeLayout(graph: FlowGraph): Layout {
       bandRows: [1],
       bandTops: [PAD],
       maxColLen: 1,
+      colW: COL_W,
+      bandGap: BAND_GAP,
     };
 
   // adjacency (unit digraph, self-loops ignored)
@@ -155,9 +169,9 @@ function computeLayout(graph: FlowGraph): Layout {
   const maxDepth = Math.max(...byDepth.keys());
   const maxColLen = Math.max(...[...byDepth.values()].map((v) => v.length), 1);
 
-  // adaptive banding — the sheet aims for a wide frame (see pickBands)
+  // adaptive banding — the sheet aims for the STAGE's frame (see pickBands)
   const cols = maxDepth + 1;
-  const bandCount = pickBands(cols, maxColLen);
+  const bandCount = pickBands(cols, maxColLen, target);
   const bandCols = Math.ceil(cols / bandCount);
 
   // PER-BAND ROW HEIGHTS: a band reserves only the rows its own columns
@@ -168,13 +182,49 @@ function computeLayout(graph: FlowGraph): Layout {
     const b = Math.floor(d / bandCols);
     if (b >= 0 && b < bandCount) bandRows[b] = Math.max(bandRows[b], ids.length);
   }
+
+  // ── THE SHEET FILLS ITS PANE ──────────────────────────────────────────
+  // Draft the natural size at the standard grid pitch, then stretch the
+  // SPACING (never the glyphs) so the sheet's aspect meets the stage's:
+  // too tall → widen the column pitch (longer horizontal runs read like a
+  // wide-format PFD); too wide → grow the margins and band gaps (a
+  // draftsman centers his content block, he never blows air into the
+  // rows). Either way the sheet fills the pane — the chat-open state gets
+  // the SAME sheet height the shrunk-chat state always had.
+  // right slack only when the plant actually has sink streams — margin
+  // labels ("NH3 PRODUCT", "PURGE TO FUEL") need room to breathe
+  const hasSinks = graph.streams.some((s) => !s.to && !s.implicit);
+  const rowsTotal = bandRows.reduce((a, b) => a + b, 0);
+  const natW = PAD * 2 + bandCols * COL_W + (hasSinks ? 104 : 0);
+  const natH = PAD * 2 + rowsTotal * ROW_H + (bandCount - 1) * BAND_GAP + 48;
+  let W = natW;
+  let H = natH;
+  if (natW / natH < target) {
+    W = Math.min(target * natH, natW * 1.9); // widen, capped
+  } else if (natW / natH > target) {
+    H = Math.min(natW / target, natH * 1.8); // deepen, capped
+    // the cap bound (a long serpentine plant is naturally VERY wide) —
+    // compress the column pitch so the sheet still takes the pane's shape:
+    // full height, slightly narrower. The pitch floor keeps a routing
+    // corridor beside every obstacle, so the wiring stays CAD-crisp.
+    const floorW = PAD * 2 + bandCols * 156 + (hasSinks ? 104 : 0);
+    if (W / H > target) W = Math.max(H * target, floorW);
+  }
+  const colW = COL_W + (W - natW) / Math.max(1, bandCols);
+  const extraH = H - natH;
+  const gapExtra = bandCount > 1 ? (extraH * 0.5) / (bandCount - 1) : 0;
+  const bandGap = BAND_GAP + gapExtra;
+  // single stack: split the slack into top/bottom margins (content stays
+  // centered on the sheet); multi-band: a quarter up top, half into the
+  // gaps, the rest rides as the stamp zone at the bottom
+  const mgTop = PAD + extraH * (bandCount > 1 ? 0.25 : 0.5);
+
   const bandTops: number[] = [];
-  let bandAcc = PAD;
+  let bandAcc = mgTop;
   for (let b = 0; b < bandCount; b++) {
     bandTops.push(bandAcc);
-    bandAcc += bandRows[b] * ROW_H + BAND_GAP;
+    bandAcc += bandRows[b] * ROW_H + bandGap;
   }
-
   const placed = new Map<string, Placed>();
   for (const u of units) {
     const d = depth.get(u.id) ?? 0;
@@ -182,31 +232,30 @@ function computeLayout(graph: FlowGraph): Layout {
     const band = Math.floor(d / bandCols);
     // wrap the chain into bands: column position within the band, band rows
     // stacked vertically — a long train stays readable and WIDE
-    const x = PAD + (d % bandCols) * COL_W;
+    const x = PAD + (d % bandCols) * colW;
     const y = bandTops[band] + col * ROW_H + (band % 2 === 1 ? 24 : 0);
     placed.set(u.id, { id: u.id, x, y, depth: d, col, band });
   }
 
-  // right slack only when the plant actually has sink streams — margin
-  // labels ("NH3 PRODUCT", "PURGE TO FUEL") need room to breathe
-  const hasSinks = graph.streams.some((s) => !s.to && !s.implicit);
-  const width = PAD * 2 + bandCols * COL_W + (hasSinks ? 104 : 0);
-  const height = bandAcc - BAND_GAP + PAD + 48;
+  const width = W;
+  const height = H;
   return {
-    width: Math.max(width, 900),
-    height: Math.max(height, 360),
+    width: Math.max(width, 420),
+    height: Math.max(height, 260),
     units: placed,
     bandCount,
     bandRows,
     bandTops,
     maxColLen,
+    colW,
+    bandGap,
   };
 }
 
 /** the free lane below a band's content — band flips and blocked sinks run
  *  their horizontals here (one uniform serpentine convention) */
 function bandBottomLane(band: number, layout: Layout): number {
-  return layout.bandTops[band] + layout.bandRows[band] * ROW_H + BAND_GAP / 2;
+  return layout.bandTops[band] + layout.bandRows[band] * ROW_H + layout.bandGap / 2;
 }
 
 /** pull a route's terminal points from the OBSTACLE edge in to the symbol
@@ -345,7 +394,34 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
   ref,
 ) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const layout = useMemo(() => (graph ? computeLayout(graph) : null), [graph]);
+  // ── THE STAGE'S MEASURED ASPECT ──────────────────────────────────────
+  // The sheet is drafted FOR the pane it hangs in, so the pane is measured
+  // (ResizeObserver, quantized to 0.05 steps so a chat-panel drag only
+  // recomputes a handful of times, never per frame). Before the first
+  // measurement the old wide-frame default applies — one frame at most.
+  const [stageAspect, setStageAspect] = useState(ASPECT_DEFAULT);
+  const hasContent = !!graph && graph.units.length > 0;
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const apply = (w: number, h: number) => {
+      if (w < 40 || h < 40) return;
+      const q = Math.round(w / h / 0.05) * 0.05;
+      setStageAspect((prev) => (Math.abs(prev - q) < 0.01 ? prev : q));
+    };
+    const r0 = el.getBoundingClientRect(); // measure immediately — no first-frame letterbox
+    apply(r0.width, r0.height);
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1].contentRect;
+      apply(r.width, r.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasContent]);
+  const layout = useMemo(
+    () => (graph ? computeLayout(graph, stageAspect) : null),
+    [graph, stageAspect],
+  );
   // flow dots: material movement on the streams, speed from the SOLVER's
   // real molar flows (fast streams animate fast). Off by default when the
   // user prefers reduced motion.

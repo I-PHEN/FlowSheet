@@ -173,29 +173,28 @@ function targetView(tt: number, unitsShown: MiniUnit[]): typeof FULL {
 const easeOut = (k: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
 
 /** the ONE live status line — what the crew is doing right now, in plain
- *  words. This replaced the scrolling agent-log feed (reviewer round 66:
- *  "a subtle thinking shimmer, or just the diagram building itself" — the
- *  diagram builds itself above; this line whispers the current step, and
- *  the verbose log lives behind “See how it works”). */
+ *  words. The text itself stays SOLID and readable (the pulse dot + the
+ *  3-dot loader carry the "working" motion — a fading skeleton text reads
+ *  broken, not busy); the verbose log lives behind “See how it works”. */
 function statusAt(tt: number, reducedMotion: boolean): { text: string; done: boolean } {
   if (reducedMotion || tt >= ROLES[3].t1)
     return { text: 'Converged in 0.38 s · critic 92/100 · Orion’s tour ready', done: true };
-  if (tt < 4000) return { text: 'Reading the brief…', done: false };
-  if (tt < 5300) return { text: 'Architect — drafting the flowsheet…', done: false };
+  if (tt < 4000) return { text: 'Reading the brief', done: false };
+  if (tt < 5300) return { text: 'Architect — drafting the flowsheet', done: false };
   if (tt < T.streamStart) {
     const i = UNITS.filter((_, k) => tt >= T.unitStart + k * T.unitStep).length - 1;
-    return { text: i >= 0 ? `Engineer — placing ${UNIT_TAGS[i]}…` : 'Engineer — placing equipment…', done: false };
+    return { text: i >= 0 ? `Engineer — placing ${UNIT_TAGS[i]}` : 'Engineer — placing equipment', done: false };
   }
   if (tt < T.solving) {
     const j = STREAMS.filter((_, k) => tt >= T.streamStart + k * T.streamStep).length - 1;
     return {
-      text: j >= 0 ? `Engineer — wiring ${STREAM_NAMES[STREAMS[j].id]}…` : 'Engineer — wiring streams…',
+      text: j >= 0 ? `Engineer — wiring ${STREAM_NAMES[STREAMS[j].id]}` : 'Engineer — wiring streams',
       done: false,
     };
   }
-  if (tt < T.converged) return { text: 'Solver — converging mass + energy…', done: false };
-  if (tt < ROLES[2].t1) return { text: 'Critic — scoring the design…', done: false };
-  return { text: 'Docent — writing the tour…', done: false };
+  if (tt < T.converged) return { text: 'Solver — converging mass + energy', done: false };
+  if (tt < ROLES[2].t1) return { text: 'Critic — scoring the design', done: false };
+  return { text: 'Docent — writing the tour', done: false };
 }
 
 export function HeroDemo() {
@@ -331,8 +330,10 @@ export function HeroDemo() {
               >
                 <span className="bd-pulse h-1.5 w-1.5 rounded-full" style={{ background: C.warn }} />
                 SOLVING MASS + ENERGY
+                {/* a real fixed-width progress bar, filling left to right
+                    with the solve — never a dot trail into nothing */}
                 <span
-                  className="ml-0.5 inline-block h-[3px] w-9 overflow-hidden rounded-full"
+                  className="ml-0.5 inline-block h-1 w-12 shrink-0 overflow-hidden rounded-full"
                   style={{ background: C.bandLine }}
                 >
                   <span
@@ -406,9 +407,12 @@ export function HeroDemo() {
           </span>
         </div>
 
-        {/* THE STATUS LINE — one quiet line of what's happening now, with a
-            thinking shimmer while the crew works. The verbose agent log
-            lives behind the toggle. */}
+        {/* THE STATUS LINE — one quiet line of what's happening now: solid,
+            always-readable text + a clean 3-dot loader while the crew works
+            (consistent size and spacing — nothing trails off into nothing).
+            The verbose agent log lives behind the toggle; the toggle
+            shortens its label on phones so the status never truncates
+            mid-word. */}
         <div className="flex h-9 items-center gap-2 border-t px-3.5" style={{ borderColor: C.bandLine }}>
           {status.done ? (
             <span className="shrink-0 font-mono text-[11px] font-bold" style={{ color: C.nh3 }}>
@@ -418,10 +422,17 @@ export function HeroDemo() {
             <span className="bd-pulse h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: C.warn }} />
           )}
           <span
-            className={`min-w-0 flex-1 truncate font-mono text-[10.5px] font-semibold tracking-wide ${status.done ? '' : 'hd-shimmer'}`}
-            style={status.done ? { color: C.inkSoft } : undefined}
+            className="min-w-0 flex-1 truncate font-mono text-[10.5px] font-semibold tracking-wide"
+            style={{ color: C.inkSoft }}
           >
             {status.text}
+            {!status.done && (
+              <span className="hd-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -430,7 +441,8 @@ export function HeroDemo() {
             style={{ color: C.inkSoft }}
             aria-expanded={open}
           >
-            See how it works {open ? '▴' : '▾'}
+            <span className="hidden sm:inline">See how it works</span>
+            <span className="sm:hidden">How</span> {open ? '▴' : '▾'}
           </button>
         </div>
 

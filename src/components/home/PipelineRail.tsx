@@ -41,15 +41,30 @@ function CubeIcon() {
   );
 }
 
+/** the connector — a REAL arrow, not stray punctuation: a fixed 16px chevron
+ *  in its own circled node, riding the hairline, vertically centered between
+ *  the two stations it joins (its own flex row, generous min-width, so it
+ *  reads "step → step → step" at every viewport) */
 function Connector() {
   return (
-    <span className="relative hidden h-px min-w-7 flex-1 items-center sm:flex" aria-hidden="true">
+    <span
+      className="relative hidden h-10 min-w-16 flex-1 items-center sm:flex"
+      aria-hidden="true"
+    >
       <span className="h-px w-full" style={{ background: C.bandLine }} />
       <span
-        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] leading-none"
-        style={{ color: C.inkFaint, background: C.canvas, padding: '0 4px' }}
+        className="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border"
+        style={{ borderColor: C.bandLine, background: C.paper, color: C.inkFaint }}
       >
-        ›
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M9 5l7 7-7 7"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </span>
     </span>
   );

@@ -132,7 +132,11 @@ export default function BuilderPage() {
     },
   });
 
-  const graph = run.graph;
+  // THE SHEET SHOWS WHAT'S ON THE TABLE: the run's graph once the agents
+  // have built anything, otherwise the remix source (?remix=reference loads
+  // the family reference plant so you edit a DRAWN sheet, not a blank one —
+  // the documented remix behavior, restored)
+  const graph = run.graph ?? remixSource?.graph ?? null;
 
   // the relayout tool re-emits the sheet — meet it with a fresh camera fit,
   // so "straighten the lines" visibly redraws the whole drawing

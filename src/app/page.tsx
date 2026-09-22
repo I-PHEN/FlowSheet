@@ -122,7 +122,10 @@ export default function Home() {
              column is the wider one: the diagram is the product (reviewer
              round 66: “let it be the dominant visual”) ---- */}
         <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div>
+          {/* the text block centers against the DIAGRAM's midpoint, not
+              the demo card's outer box (the card's prompt/status bars
+              sit below the drawing and drag the optical center down) */}
+          <div className="lg:pb-12">
             {/* ONE weight on the setup line — the payoff line below is the
                 loud one (bigger, bolder, the one accent) */}
             <h1 className="tracking-tight">
@@ -143,10 +146,17 @@ export default function Home() {
               runs in your browser.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
+              {/* THE primary action is the only FILLED button on the page —
+                  eyes land here first; the secondary stays a quiet outline */}
               <Link
                 href="/plant/builder"
-                className="flex h-11 items-center gap-2 rounded-full border px-5 text-[13.5px] font-bold"
-                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
+                className="flex h-11 items-center gap-2 rounded-full border px-5 text-[13.5px] font-bold transition-transform duration-150 hover:-translate-y-px"
+                style={{
+                  background: C.ink,
+                  color: C.paper,
+                  borderColor: C.ink,
+                  boxShadow: '0 5px 16px rgba(29, 36, 44, 0.28)',
+                }}
               >
                 <span aria-hidden="true">✦</span>
                 Build a plant with AI
