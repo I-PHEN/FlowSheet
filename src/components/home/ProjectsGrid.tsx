@@ -177,7 +177,7 @@ export function ProjectsGrid() {
   };
 
   return (
-    <section className="mt-12" aria-label="Your projects">
+    <section className="mt-16 sm:mt-20" aria-label="Your projects">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2
           className="text-[11px] font-bold uppercase tracking-[0.16em]"

@@ -21,6 +21,7 @@ import { HeroDemo } from '@/components/home/HeroDemo';
 import { ProjectsGrid } from '@/components/home/ProjectsGrid';
 import { BuildFab } from '@/components/home/BuildFab';
 import { MeetOrion } from '@/components/home/MeetOrion';
+import { PipelineRail } from '@/components/home/PipelineRail';
 import { Belt } from '@/components/learn/OrionMark';
 
 function LevelBadge({ text, solid }: { text: string; solid?: boolean }) {
@@ -120,57 +121,32 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 pb-16 pt-10 sm:pt-14">
-        {/* ---- the hero: the pitch and the proof, side by side ---- */}
-        <section className="grid items-center gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <main className="mx-auto w-full max-w-[1180px] flex-1 px-5 pb-20 pt-12 sm:pt-16">
+        {/* ---- the hero: the pitch and the proof, side by side — the demo
+             column is the wider one: the diagram is the product (reviewer
+             round 66: “let it be the dominant visual”) ---- */}
+        <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <div>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.14em]"
-              style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paper }}
-            >
-              <span style={{ color: C.ink }} aria-hidden="true">✦</span>
-              AI-NATIVE PROCESS SIMULATOR
-            </span>
-            <h1
-              className="mt-4 text-[30px] font-extrabold leading-[1.12] tracking-tight sm:text-[38px]"
-              style={{ color: C.ink }}
-            >
-              Describe any chemical plant.
-              <br />
-              <span style={{ color: C.inkSoft }}>Watch AI engineer it</span> — live.
+            {/* ONE weight on the setup line — the payoff line below is the
+                loud one (bigger, bolder, the one accent) */}
+            <h1 className="tracking-tight">
+              <span className="block text-[20px] font-semibold leading-[1.2] sm:text-[24px]" style={{ color: C.ink }}>
+                Describe any chemical plant.
+              </span>
+              <span
+                className="mt-1.5 block text-[31px] font-extrabold leading-[1.07] [text-wrap:balance] sm:mt-2 sm:text-[44px]"
+                style={{ color: C.nh3 }}
+              >
+                Watch AI engineer it — live.
+              </span>
             </h1>
 
-            {/* the three beats — the whole product in one scan */}
-            <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono text-[9.5px] font-bold tracking-[0.12em]">
-              <span
-                className="rounded-full border px-2.5 py-1"
-                style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paper }}
-              >
-                BUILT BY AI
-              </span>
-              <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
-              <span
-                className="flex items-center gap-1.5 rounded-md border px-2.5 py-1"
-                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
-              >
-                <Belt color={C.onAccent} size={12} />
-                TAUGHT BY ORION
-              </span>
-              <span aria-hidden="true" style={{ color: C.inkFaint }}>→</span>
-              <span
-                className="rounded-full border px-2.5 py-1"
-                style={{ borderColor: C.bandLine, color: C.inkSoft, background: C.paper }}
-              >
-                EXPLORED IN 3D
-              </span>
-            </div>
-
-            <p className="mt-4 max-w-[520px] text-[13.5px] leading-relaxed" style={{ color: C.inkSoft }}>
+            <p className="mt-5 max-w-[520px] text-[13.5px] leading-relaxed" style={{ color: C.inkSoft }}>
               Type a sentence — any route, any capacity. The agents plan it, build it, solve it —
               then Orion walks you through it, and every unit opens in 3D. No installs: it all
               runs in your browser.
             </p>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href="/plant/builder"
                 className="flex h-11 items-center gap-2 rounded-full border px-5 text-[13.5px] font-bold"
@@ -191,6 +167,10 @@ export default function Home() {
           <HeroDemo />
         </section>
 
+        {/* ---- the three beats — ONE visual sentence below the fold (the
+             old text pills are gone from the hero: it sells, this explains) ---- */}
+        <PipelineRail />
+
         {/* ---- the guide gets a face: his nameplate and his real voice ---- */}
         <MeetOrion />
 
@@ -200,7 +180,7 @@ export default function Home() {
         {/* ---- the learning path ---- */}
         <h2
           id="learning-path"
-          className="mb-3 mt-12 scroll-mt-6 text-[11px] font-bold uppercase tracking-[0.16em]"
+          className="mb-3 mt-20 scroll-mt-6 text-[11px] font-bold uppercase tracking-[0.16em] sm:mt-24"
           style={{ color: C.inkSoft }}
         >
           The learning path
@@ -242,7 +222,7 @@ export default function Home() {
         </div>
 
         {/* ---- the standing invitation ---- */}
-        <p className="mx-auto mt-12 max-w-[560px] text-center text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
+        <p className="mx-auto mt-16 max-w-[560px] text-center text-[13px] leading-relaxed" style={{ color: C.inkSoft }}>
           Or skip the curriculum — describe the plant in your head and watch the agents build it.
         </p>
       </main>

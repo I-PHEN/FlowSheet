@@ -388,7 +388,7 @@ export function MeetOrion() {
   const cursorOn = nstate === 'loading' || nstate === 'speaking';
 
   return (
-    <section className="mt-10">
+    <section className="mt-16 sm:mt-20">
       {/* the identity — one line: kicker, the nameplate, the bio, the walk */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span

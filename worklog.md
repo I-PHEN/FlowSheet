@@ -1232,3 +1232,41 @@ Stage Summary:
 - GitHub is current with everything through task 64 (SSE/job store, paced assembly, white-desk light mode, stream routing quality, one-home edit-with-AI, the-one-conversation build->tour->edit) — pushed with ZERO screenshots or VLM artifacts in any pushed commit and zero deletions of previously-published files.
 - Local safety net: pre-push-backup branch, refs/original/*, scripts/local-backup-shots/ tar, and the untracked on-disk copies preserve everything that was stripped.
 - Open for owner: (a) scrub the ~300 pre-existing screenshots from public history? (b) rotate the PAT eventually.
+
+---
+Task ID: 66 — THE HERO SELLS, THE RAIL EXPLAINS (landing round per owner's reviewer)
+Agent: main (Super Z)
+Task: Owner: "do this — Concrete fixes" (six items) + scrub screenshots + push everything. The six: headline hierarchy, 3-badge pills out of the hero, demo panel de-logged, diagram dominant, light-mode card/page separation, section breathing room.
+
+Work Log:
+- FIX 1 HEADLINE: one weight on the setup ("Describe any chemical plant." 20/24px semibold ink); the payoff "Watch AI engineer it — live." is now the loud line — 31/44px extrabold, [text-wrap:balance], in C.nh3 (the app's one accent — chemistry green; first sanctioned chrome use, per the owner's "maybe the accent color"). Eyebrow chip deleted (the header already carries the identity).
+- FIX 2 THE RAIL: the three text pills (BUILT BY AI → TAUGHT BY ORION → EXPLORED IN 3D) deleted from the hero; new PipelineRail component below the fold — three glyph stations (spark / Belt / isometric cube) on a hairline with › chevrons, plain-language notes under each, vertical stack on mobile. One visual sentence, zero pill chrome.
+- FIX 3 QUIET CONSOLE: the role-chip grid + scrolling 3-line agent-log feed are GONE from the default view. Under the stage now: a slim prompt bar (✦ + the typed sentence + caret + send chip, fixed 2-line height — fixed-window law intact) and ONE status line — pulsing dot + shimmer text while the crew works (statusAt(): "Engineer — placing R-102…", "Solver — converging mass + energy…"), ✓ green "Converged in 0.38 s · critic 92/100 · Orion's tour ready" when done. The verbose log + role checklist live behind a "See how it works ▾" toggle (user-opened only, so the loop can never stretch the page). New .hd-shimmer keyframe in globals.css (gradient text sweep, disabled under prefers-reduced-motion). ORION TOUR READY overlay chip dropped (status line carries it).
+- FIX 4 DIAGRAM DOMINANT: hero grid rebalanced 5fr/6fr → 5fr/7fr (demo column ~665px), canvas 960×380 → 960×400, window bar slimmed, console strip ~150px → prompt bar + status line ~90px. The card IS the diagram now; it also gained the card shadow (--fs-card-shadow).
+- FIX 5 LIGHT SEPARATION + 2-ACCENT LAW: light --fs-canvas #FAFBFC → #E9EEF4 (soft gray-blue page; --background mirrors) — white cards/sheets now float on a distinct cool ground (dark theme untouched). Demo stage background C.canvas → C.sheet (white sheet inside the white card). Hero diagram muted to TWO chromatic accents: feed streams S1/S2 recolored to slate via a new per-stream `color` override on MiniStream (MiniFlow reads it, keeps the cls dash; app-wide P&ID grammar untouched — thumbnails unaffected).
+- FIX 6 BREATHING ROOM: hero→rail mt-14/20, rail→MeetOrion mt-16/20, ProjectsGrid mt-12 → mt-16/20, learning path mt-12 → mt-20/24, standing invitation mt-16, main pt-12/16 pb-20, hero grid gap-8 → gap-10.
+- GATES: tsc 0 in src/ (scripts/ dev-probe errors pre-existed); eslint 0/0; production build clean; task43 contrast audit ALL PASS both themes (worst pair unchanged); E2E 10 shots (light idle/midbuild/how-it-works-expanded/converged/rail+guide, dark midbuild, mobile hero+rail 414px, reference + builder light) — 0 console errors (only pre-existing THREE.Clock deprecation warnings).
+- VLM (10 shots, glm-4.6v): SHIP — headline hierarchy clear on every hero shot, demo "diagram dominant and clean", "distinct gray-blue page and white card" incl. reference ("white sheet on gray-blue background is perfect"), dark healthy, mobile solid, no overlap/clipping/cramping anywhere.
+
+Stage Summary:
+- The hero sells the feeling (one loud green payoff line over a big white diagram that builds itself, whispered to by one shimmer status line); the rail explains the product below the fold; the page breathes.
+- Light mode now has real depth: gray-blue studio floor, white paper everywhere else, two chromatic accents in the hero diagram.
+- Files: globals.css, page.tsx, HeroDemo.tsx, MiniFlow.tsx (+color override), MeetOrion.tsx, ProjectsGrid.tsx, new PipelineRail.tsx.
+
+---
+Task ID: 67 — SCRUB THE SCREENSHOTS (full public-history rewrite)
+Agent: main (Super Z)
+Task: Owner: "yh scrub the screenshots." — every image/VLM artifact ever committed to the PUBLIC repo I-PHEN/FlowSheet, all 39 commits of main, then force-push. ("and push everything")
+
+Work Log:
+- AUDIT: 39 commits in main history; 281 media files ever existed (scripts/ shots + charts + previews, upload/hx CAD material incl. SLDASM + zip, download/ remix pngs, tts-test wavs) + ~30 vlm-*.json API dumps. Only app image asset: public/logo.svg (kept). README references no scrubbed path; nothing in src/ imports scripts/assets.
+- STRIP LIST built from `git log main --name-only` (every path that EVER existed in main, not just the tip) filtered to images/media under scripts|download|upload + *vlm*.json + tts-test + upload/hx/ + upload zips. Verified: no public/, no src/, no PDFs, no code.
+- BACKUP: branch pre-scrub-backup at the pre-rewrite tip; media tar exported to scripts/local-backup-shots/full-history-media-backup.tar (gitignored); refs/original kept.
+- REWRITE: git filter-branch --index-filter (git rm -r --cached --ignore-unmatch <list>) --prune-empty over ALL of main. Empty commits pruned. Commit messages preserved.
+- VERIFY: tip tree diff vs pre-scrub tip shows ONLY artifact deletions; ls-tree grep for media/vlm under scripts|download|upload → zero; app + README intact.
+- PUSH: force-push main (non-fast-forward by design). Post-push remote tree verified screenshot-free via the GitHub API.
+- SECURITY NOTES: (1) GitHub retains unreachable objects for a while — old commits stay accessible by SHA until GC; a support request purges them immediately if needed. (2) The PAT exists only in this session's shell env — never committed. Worth rotating when convenient.
+
+Stage Summary:
+- The public repo now contains ZERO screenshots / VLM dumps / private CAD material in any commit, reachable or not (modulo GitHub's unreachable-object cache).
+- Local safety net: pre-scrub-backup branch + full media tar + on-disk untracked copies.

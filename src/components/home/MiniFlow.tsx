@@ -44,6 +44,10 @@ export interface MiniStream {
   /** path in canvas space */
   d: string;
   cls?: string;
+  /** per-stream color override (keeps the cls dash pattern) — lets a caller
+   *  mute one service without touching the app-wide P&ID grammar (e.g. the
+   *  hero limits itself to two chromatic accents) */
+  color?: string;
   /** end arrowhead position + angle (radians, 0 = pointing right) */
   arrow?: { x: number; y: number; angle: number };
 }
@@ -122,6 +126,7 @@ export function MiniFlow({ canvas, units, streams, labels, faded, view, dots, cl
       {dots && <rect x={0} y={0} width={canvas.w} height={canvas.h} fill="url(#mfDots)" />}
       {streams.map((s) => {
         const st = STREAM_STYLE[s.cls ?? 'syngas'] ?? STREAM_STYLE.syngas;
+        const line = s.color ?? st.color;
         return (
           <g key={s.id}>
             {/* the line draws itself in; dashed utilities then fade their
@@ -131,7 +136,7 @@ export function MiniFlow({ canvas, units, streams, labels, faded, view, dots, cl
               fill="none"
               pathLength={1}
               className={st.dash ? 'mf-draw mf-draw-out' : 'mf-draw'}
-              style={{ stroke: st.color }}
+              style={{ stroke: line }}
               strokeWidth={STREAM_W * 0.72}
               strokeLinecap="round"
             />
@@ -140,14 +145,14 @@ export function MiniFlow({ canvas, units, streams, labels, faded, view, dots, cl
                 d={s.d}
                 fill="none"
                 className="mf-dash-in"
-                style={{ stroke: st.color }}
+                style={{ stroke: line }}
                 strokeWidth={STREAM_W * 0.72}
                 strokeDasharray={st.dash}
                 strokeLinecap="round"
               />
             )}
             {s.arrow && (
-              <g style={{ color: st.color }} className="mf-pop">
+              <g style={{ color: line }} className="mf-pop">
                 <Arrow {...s.arrow} />
               </g>
             )}

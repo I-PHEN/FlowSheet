@@ -38,7 +38,7 @@ import { boxToAspect } from '@/lib/flowsheet/geom';
 const PROMPT =
   'Build a 500 t/day methanol plant — natural gas feed, steam reforming, synthesis loop with recycle.';
 
-const CANVAS = { w: 960, h: 380 };
+const CANVAS = { w: 960, h: 400 };
 const FULL = { x: 0, y: 0, w: CANVAS.w, h: CANVAS.h };
 
 const T = {
@@ -89,10 +89,11 @@ const UNITS: MiniUnit[] = [
 ];
 
 const STREAMS: MiniStream[] = [
-  // natural gas in → desulfurizer body's left face
-  { id: 'S1', d: 'M 8 189 L 42 189', cls: 'feed', arrow: { x: 49, y: 189, angle: 0 } },
+  // natural gas in → desulfurizer body's left face (feed muted to slate —
+  // the hero holds TWO chromatic accents only: steel-blue gas, sage product)
+  { id: 'S1', d: 'M 8 189 L 42 189', cls: 'feed', color: C.utility, arrow: { x: 49, y: 189, angle: 0 } },
   // desulfurizer → reformer firebox
-  { id: 'S2', d: 'M 99 189 C 124 189, 148 186, 170 186', cls: 'feed', arrow: { x: 173, y: 186, angle: 0 } },
+  { id: 'S2', d: 'M 99 189 C 124 189, 148 186, 170 186', cls: 'feed', color: C.utility, arrow: { x: 173, y: 186, angle: 0 } },
   // steam in (dashed utility) — down onto the reformer roof
   { id: 'S8', d: 'M 300 78 C 300 90, 300 100, 300 110', cls: 'water', arrow: { x: 300, y: 116, angle: Math.PI / 2 } },
   // reformer → converter (into the left face, clear of the quench stubs)
@@ -171,10 +172,37 @@ function targetView(tt: number, unitsShown: MiniUnit[]): typeof FULL {
 
 const easeOut = (k: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
 
+/** the ONE live status line — what the crew is doing right now, in plain
+ *  words. This replaced the scrolling agent-log feed (reviewer round 66:
+ *  "a subtle thinking shimmer, or just the diagram building itself" — the
+ *  diagram builds itself above; this line whispers the current step, and
+ *  the verbose log lives behind “See how it works”). */
+function statusAt(tt: number, reducedMotion: boolean): { text: string; done: boolean } {
+  if (reducedMotion || tt >= ROLES[3].t1)
+    return { text: 'Converged in 0.38 s · critic 92/100 · Orion’s tour ready', done: true };
+  if (tt < 4000) return { text: 'Reading the brief…', done: false };
+  if (tt < 5300) return { text: 'Architect — drafting the flowsheet…', done: false };
+  if (tt < T.streamStart) {
+    const i = UNITS.filter((_, k) => tt >= T.unitStart + k * T.unitStep).length - 1;
+    return { text: i >= 0 ? `Engineer — placing ${UNIT_TAGS[i]}…` : 'Engineer — placing equipment…', done: false };
+  }
+  if (tt < T.solving) {
+    const j = STREAMS.filter((_, k) => tt >= T.streamStart + k * T.streamStep).length - 1;
+    return {
+      text: j >= 0 ? `Engineer — wiring ${STREAM_NAMES[STREAMS[j].id]}…` : 'Engineer — wiring streams…',
+      done: false,
+    };
+  }
+  if (tt < T.converged) return { text: 'Solver — converging mass + energy…', done: false };
+  if (tt < ROLES[2].t1) return { text: 'Critic — scoring the design…', done: false };
+  return { text: 'Docent — writing the tour…', done: false };
+}
+
 export function HeroDemo() {
   const [t, setT] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [open, setOpen] = useState(false);
   const startRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const pausedRef = useRef(false);
@@ -245,22 +273,22 @@ export function HeroDemo() {
   const faded = !reduced && tt >= T.fade;
 
   const production = Math.round(512 * easeOut((tt - T.converged) / 700));
-  const orionReady = tt >= ROLES[3].t1;
 
-  // the session feed — last three events (newest at the bottom)
-  const feed = FEED.filter((e) => tt >= e.t).slice(-3);
+  // the one status line + the full log (behind the toggle)
+  const status = statusAt(tt, reduced);
+  const feed = FEED.filter((e) => tt >= e.t);
 
   return (
     <div
       className="overflow-hidden rounded-2xl border"
-      style={{ borderColor: C.bandLine, background: C.paper }}
+      style={{ borderColor: C.bandLine, background: C.paper, boxShadow: 'var(--fs-card-shadow)' }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-label="Looping demo: the AI builder assembling a methanol plant"
     >
-      {/* window bar */}
+      {/* window bar — slim: it frames the stage, it isn't the show */}
       <div
-        className="flex items-center gap-2 border-b px-3.5 py-2"
+        className="flex items-center gap-2 border-b px-3.5 py-1.5"
         style={{ borderColor: C.bandLine }}
       >
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: C.bandLine }} />
@@ -279,12 +307,11 @@ export function HeroDemo() {
         </span>
       </div>
 
-      <div
-        style={{ opacity: faded ? 0 : 1, transition: 'opacity 480ms ease' }}
-      >
-        {/* THE STAGE — full width, the plant big; the KPI chips live at its
-            top-right like the real workspace's KPI bar */}
-        <div className="relative" style={{ background: C.canvas }}>
+      <div style={{ opacity: faded ? 0 : 1, transition: 'opacity 480ms ease' }}>
+        {/* THE STAGE — the whole card IS the diagram. White sheet, dot grid,
+            the plant building itself unit by unit; the only overlays are the
+            two result chips, because the diagram is the show. */}
+        <div className="relative" style={{ background: C.sheet }}>
           <MiniFlow
             canvas={CANVAS}
             view={reduced ? FULL : cam}
@@ -295,7 +322,7 @@ export function HeroDemo() {
             className="block h-auto w-full"
           />
 
-          {/* the verdict chips — overlaid top-right, the workspace's KPI bar */}
+          {/* the result chips — overlaid top-right, quiet */}
           <div className="pointer-events-none absolute right-3 top-2.5 flex flex-col items-end gap-1.5">
             {solving && (
               <span
@@ -335,14 +362,6 @@ export function HeroDemo() {
                 </span>
               </>
             )}
-            {orionReady && (
-              <span
-                className="mf-in rounded-md border px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-wider"
-                style={{ background: C.accent, color: C.onAccent, borderColor: C.accentLine }}
-              >
-                ORION · TOUR READY
-              </span>
-            )}
           </div>
 
           {/* sheet corner stamp */}
@@ -356,82 +375,108 @@ export function HeroDemo() {
           )}
         </div>
 
-        {/* THE CONSOLE STRIP — the session rail under the stage. FIXED
-            WINDOW: every zone carries its full height from the first
-            frame, so the loop can never stretch the page. */}
-        <div className="flex flex-col border-t sm:flex-row" style={{ borderColor: C.bandLine }}>
-          {/* the brief */}
-          <div className="shrink-0 px-3.5 py-3 sm:w-[224px]">
-            <div
-              className="font-mono text-[9.5px] font-bold tracking-[0.14em]"
-              style={{ color: C.inkFaint }}
-            >
-              DESCRIBE YOUR PLANT
-            </div>
-            <div
-              className="mt-1.5 h-[96px] overflow-hidden rounded-lg border px-2.5 py-2 text-[12px] leading-relaxed"
-              style={{ borderColor: C.bandLine, background: C.canvas, color: C.ink }}
-            >
-              {typed}
-              {typing && (
-                <span className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]" style={{ background: C.ink }} />
-              )}
-            </div>
-          </div>
-
-          {/* the crew — role chips and the session feed */}
-          <div
-            className="min-w-0 flex-1 border-t px-3.5 py-3 sm:border-l sm:border-t-0"
-            style={{ borderColor: C.bandLine }}
+        {/* THE PROMPT BAR — the input that drives it all, minimized to one
+            slim composer under the stage (reviewer: “text/input controls
+            minimized underneath”). Fixed two-line height from frame one —
+            the fixed-window law. */}
+        <div className="flex items-start gap-2.5 border-t px-3.5 py-2.5" style={{ borderColor: C.bandLine }}>
+          <span
+            className="mt-[1px] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg border text-[11px]"
+            style={{ borderColor: C.bandLine, background: C.canvas, color: C.ink }}
+            aria-hidden="true"
           >
-            <div className="grid grid-cols-2 gap-1.5">
+            ✦
+          </span>
+          <div className="min-h-[30px] min-w-0 flex-1 pt-[5px] text-[12px] font-medium leading-[1.25]" style={{ color: C.ink }}>
+            {tt < T.typeStart && !reduced ? (
+              <span style={{ color: C.inkFaint }}>describe a plant — any route, any capacity…</span>
+            ) : (
+              typed
+            )}
+            {typing && (
+              <span className="caret ml-0.5 inline-block h-[13px] w-[6px] align-[-2px]" style={{ background: C.ink }} />
+            )}
+          </div>
+          <span
+            className="mt-[2px] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg text-[13px] font-bold"
+            style={{ background: C.ink, color: C.paper }}
+            aria-hidden="true"
+          >
+            →
+          </span>
+        </div>
+
+        {/* THE STATUS LINE — one quiet line of what's happening now, with a
+            thinking shimmer while the crew works. The verbose agent log
+            lives behind the toggle. */}
+        <div className="flex h-9 items-center gap-2 border-t px-3.5" style={{ borderColor: C.bandLine }}>
+          {status.done ? (
+            <span className="shrink-0 font-mono text-[11px] font-bold" style={{ color: C.nh3 }}>
+              ✓
+            </span>
+          ) : (
+            <span className="bd-pulse h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: C.warn }} />
+          )}
+          <span
+            className={`min-w-0 flex-1 truncate font-mono text-[10.5px] font-semibold tracking-wide ${status.done ? '' : 'hd-shimmer'}`}
+            style={status.done ? { color: C.inkSoft } : undefined}
+          >
+            {status.text}
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wide transition-colors"
+            style={{ color: C.inkSoft }}
+            aria-expanded={open}
+          >
+            See how it works {open ? '▴' : '▾'}
+          </button>
+        </div>
+
+        {/* THE HOW-IT-WORKS PANEL — the crew and their full event log, the
+            old default view. Opens only on the user's click, so the loop
+            can never stretch the page on its own. */}
+        {open && (
+          <div className="border-t px-3.5 py-3" style={{ borderColor: C.bandLine, background: C.canvas }}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
               {ROLES.map((a) => {
                 const done = tt >= a.t1;
                 const active = !done && tt >= a.t0;
                 return (
                   <div
                     key={a.label}
-                    className="flex h-6 items-center gap-2 rounded-lg border px-2.5 transition-opacity duration-300"
-                    style={{
-                      borderColor: done || active ? C.bandLine : 'transparent',
-                      background: done || active ? C.paper : 'transparent',
-                      opacity: tt >= a.t0 ? 1 : 0.28,
-                    }}
+                    className="flex items-center gap-1.5 font-mono text-[9.5px] font-bold tracking-[0.1em]"
+                    style={{ color: done ? C.ink : active ? C.inkSoft : C.inkFaint, opacity: tt >= a.t0 ? 1 : 0.55 }}
                   >
                     <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bd-pulse' : ''}`}
-                      style={{ background: done ? C.ink : active ? C.warn : C.inkFaint }}
+                      className={`h-1 w-1 shrink-0 rounded-full ${active ? 'bd-pulse' : ''}`}
+                      style={{ background: done ? C.nh3 : active ? C.warn : C.bandLine }}
                     />
-                    <span
-                      className="font-mono text-[10px] font-bold tracking-[0.12em]"
-                      style={{ color: C.ink }}
-                    >
-                      {a.label}
-                    </span>
-                    {done && (
-                      <span className="ml-auto font-mono text-[10px] font-bold" style={{ color: C.ink }}>
-                        ✓
-                      </span>
-                    )}
+                    {a.label}
+                    {done && ' ✓'}
                   </div>
                 );
               })}
             </div>
-
-            {/* the session feed — the crew's event log, newest at the bottom */}
-            <div className="mt-3 h-[47px] overflow-hidden">
-              {feed.map((e, i) => (
+            <div className="mt-2.5 max-h-[168px] overflow-y-auto pr-1">
+              {feed.map((e) => (
                 <div
                   key={`${e.t}-${e.text}`}
-                  className={`h-[15px] truncate font-mono text-[9.5px] tracking-wide ${i === feed.length - 1 ? 'bd-msg-in' : ''}`}
-                  style={{ color: i === feed.length - 1 ? C.inkSoft : C.inkFaint }}
+                  className="py-[2px] font-mono text-[9.5px] tracking-wide"
+                  style={{ color: C.inkFaint }}
                 >
                   {e.text}
                 </div>
               ))}
+              {feed.length === 0 && (
+                <div className="py-[2px] font-mono text-[9.5px] tracking-wide" style={{ color: C.inkFaint }}>
+                  waiting for the first event…
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
