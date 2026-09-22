@@ -53,6 +53,12 @@ import { useAgentRun } from '@/lib/agent/useAgentRun';
 
 type Mode = 'learn' | 'operate' | 'edit';
 
+/** the edit chat's size law — same as the builder: readable minimum,
+ *  never more than 40% of the screen */
+const PANEL_MIN = 360;
+const PANEL_DEFAULT = 400;
+const panelMax = (): number => Math.min(window.innerWidth * 0.4, 760);
+
 /** solve, or null when this combination doesn't — honesty over fake numbers */
 function trySolve(g: FlowGraph): PlantResult | null {
   try {
@@ -73,6 +79,65 @@ export default function ProjectPage() {
   // null = the saved design point; a patched graph once a lever has moved
   const [liveGraph, setLiveGraph] = useState<FlowGraph | null>(null);
   const canvasRef = useRef<BuildCanvasHandle>(null);
+
+  // deep links: /plant/p/<id>?mode=operate (or learn|edit) — the builder's
+  // Learn / Operate handoff buttons land here (deferred one frame so the
+  // record's own mode renders first, then the link refines it)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const m = new URLSearchParams(window.location.search).get('mode');
+      if (m === 'operate' || m === 'edit' || m === 'learn') setMode(m);
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // ── the resizable edit chat (desktop widths only; mobile is a sheet) ──
+  const [lg, setLg] = useState(false);
+  const [panelW, setPanelW] = useState(PANEL_DEFAULT);
+  const panelWRef = useRef(panelW);
+  useEffect(() => {
+    panelWRef.current = panelW;
+  }, [panelW]);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const on = () => setLg(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  useEffect(() => {
+    // deferred so the stored width lands after hydration
+    const id = requestAnimationFrame(() => {
+      try {
+        const w = Number(window.localStorage.getItem('fs-chat-w'));
+        if (Number.isFinite(w) && w >= PANEL_MIN && w <= panelMax()) setPanelW(w);
+      } catch {
+        /* private mode — the default width is fine */
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const startPanelResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWRef.current;
+    let w = startW; // tracked locally — the state ref lags a frame behind the drag
+    const move = (ev: PointerEvent) => {
+      w = Math.max(PANEL_MIN, Math.min(panelMax(), startW + (startX - ev.clientX)));
+      setPanelW(w);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try {
+        window.localStorage.setItem('fs-chat-w', String(Math.round(w)));
+      } catch {
+        /* keep the width in memory only */
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -127,6 +192,15 @@ export default function ProjectPage() {
   useEffect(() => {
     editRunRef.current = editRun;
   }, [editRun]);
+
+  // the relayout tool re-emits the sheet — meet it with a fresh camera fit
+  // so "straighten the lines" visibly redraws the drawing
+  const editEntriesLen = editRun.entries.length;
+  useEffect(() => {
+    const last = editRun.entries[editRun.entries.length - 1];
+    if (last && last.kind === 'tool' && last.tool === 'relayout') canvasRef.current?.fit();
+     
+  }, [editEntriesLen]);
 
   // THE ONE CONVERSATION LAW: a record saved with a session opens its Edit
   // tab on the very conversation the builder had — seeded once; "Done
@@ -424,14 +498,34 @@ export default function ProjectPage() {
         <aside
           className={
             mode === 'edit'
-              ? 'flex h-[52dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0'
+              ? 'relative flex h-[40dvh] w-full shrink-0 flex-col border-t lg:h-auto lg:border-l lg:border-t-0'
               : 'flex h-[52dvh] w-full shrink-0 flex-col overflow-y-auto border-t lg:h-auto lg:w-[380px] lg:border-l lg:border-t-0'
           }
-          style={mode === 'edit' ? { borderColor: C.bandLine } : { borderColor: C.bandLine, background: C.paper }}
+          style={
+            mode === 'edit'
+              ? { borderColor: C.bandLine, ...(lg ? { width: panelW, maxWidth: '40vw' } : {}) }
+              : { borderColor: C.bandLine, background: C.paper }
+          }
           aria-label="Project details"
         >
           {mode === 'edit' ? (
-            <div className="flex h-full min-h-0 flex-col">
+            <>
+              {/* the same resize handle the builder chat wears */}
+              <div
+                onPointerDown={startPanelResize}
+                onDoubleClick={() => setPanelW(PANEL_DEFAULT)}
+                className="absolute left-0 top-0 z-20 hidden h-full w-[9px] cursor-col-resize lg:block"
+                title="Drag to resize the chat · double-click to reset"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize the edit panel"
+              >
+                <span
+                  className="absolute left-1/2 top-1/2 h-14 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{ background: 'var(--fs-band-line)' }}
+                />
+              </div>
+              <div className="flex h-full min-h-0 flex-col">
               {touring && (
                 <div className="max-h-[38%] shrink-0 overflow-y-auto border-b p-3" style={{ borderColor: C.bandLine }}>
                   <TourIndex director={director} />
@@ -454,26 +548,16 @@ export default function ProjectPage() {
                   /* the record saves itself when a run finishes */
                   toast.success('The plant saves itself when a run finishes');
                 }}
-                onZoomIn={() => {
-                  togglePanel();
-                  canvasRef.current?.fit();
-                }}
                 onCollapse={togglePanel}
                 saved={editRun.status === 'finished'}
                 hasGraph={(editRun.graph ?? rec.graph).units.length > 0}
                 unitCount={(editRun.graph ?? rec.graph).units.length}
                 streamCount={(editRun.graph ?? rec.graph).streams.length}
                 doneOk={editRun.doneOk}
-                tourReady={!!editRun.tour && editRun.status === 'finished'}
-                onTakeTour={() => {
-                  setEditBrief('');
-                  // the tour plays on the stage and lands BACK in this chat —
-                  // the one conversation law: it never looked like you left
-                  startTour();
-                }}
                 remixName={rec.name}
               />
-            </div>
+              </div>
+            </>
           ) : mode === 'operate' ? (
             <div className="p-5">
               <PlantOperate

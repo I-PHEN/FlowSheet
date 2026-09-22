@@ -288,10 +288,11 @@ export function routeStream(
 }
 
 /**
- * Polyline → SVG path with softly rounded corners (radius clamped to
- * half the shorter adjoining segment, so tight routes stay tidy).
+ * Polyline → SVG path. Corners are ENGINEERING-crisp: a 3px bevel just
+ * enough to keep junctions clean at any zoom — the drawing-office default
+ * (strict 90° elbows, never a curve).
  */
-export function roundedPath(pts: Array<[number, number]>, r = 10): string {
+export function roundedPath(pts: Array<[number, number]>, r = 3): string {
   if (pts.length < 2) return '';
   let d = `M ${pts[0][0]} ${pts[0][1]}`;
   for (let i = 1; i < pts.length - 1; i++) {

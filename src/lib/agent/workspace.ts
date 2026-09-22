@@ -115,8 +115,17 @@ export class AgentWorkspace {
         return ok(`current graph: ${this.graph.units.length} units, ${this.graph.streams.length} streams`, {
           digest: graphDigest(this.graph),
         });
+      case 'relayout':
+        // a DRAWING action, not a physics action: flag mutated so the
+        // orchestrator re-emits the snapshot — the client re-packs its
+        // columns, re-routes every stream orthogonally and re-fits the
+        // camera. Answers "straighten the lines / tidy the sheet" honestly.
+        this._mutated = true;
+        return ok(
+          `flowsheet redrawn — orthogonal streams, aligned columns, camera re-fit (${this.graph.units.length} units, ${this.graph.streams.length} streams)`,
+        );
       default:
-        return fail(`unknown tool "${call.tool}" — available: add_unit, remove_unit, connect, disconnect, set_spec, add_controller, remove_controller, declare_product, validate, solve, read_stream, get_graph`);
+        return fail(`unknown tool "${call.tool}" — available: add_unit, remove_unit, connect, disconnect, set_spec, add_controller, remove_controller, declare_product, relayout, validate, solve, read_stream, get_graph`);
     }
   }
 

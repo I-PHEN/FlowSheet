@@ -106,22 +106,25 @@ TOOLS (all args are JSON):
 - add_controller {id, manipulate, measure, num, den, set, auto}
 - remove_controller {id}
 - declare_product {stream, species} — ${general ? 'REQUIRED: declare the product stream (carrying the brief\u2019s product out of the plant) and the product species name' : 'optional: declare the product stream + species so the plant answer card reports it'}
+- relayout {} — redraw the flowsheet cleanly on the canvas (orthogonal streams, aligned columns, camera re-fit). No args, no physics: call it after heavy edits if the sheet looks ragged, or when wiring a section left lines crossing awkwardly
 - validate {} — check the structure; returns precise plain-English issues
 - solve {} — runs the full plant simulation (refuses while validation issues remain)
 - read_stream {id} — T, P, flow, composition of a solved stream
 - get_graph {} — current build state as text
 
-WORK STRATEGY (efficient agents finish in 8-12 turns):
-1. Place all units first (batch 6-12 add_unit actions per turn).
-2. Connect all streams in process order (batch them too). Follow the plan's stream list${general ? '' : '; keep the KPI-convention ids'}.
-3. Specs: the catalog defaults ARE the reference operating points — set ONLY the specs the brief explicitly requires. Do NOT re-set defaults.
-4. add_controller if the plan calls for it${general ? '. declare_product once the product stream exists.' : '.'}
-5. validate {} — if issues, fix exactly what each message says, then validate again.
-6. solve {} — if it refuses or errors, read the message and fix. If it converges, read_stream on the product${general ? ' and confirm it carries the declared species at a meaningful rate' : ' and the converter feed'} to check against the brief.
-7. "done": true is ONLY valid after a SUCCESSFUL solve that satisfies the brief — the runtime rejects done otherwise and tells you to fix and solve.
+WORK STRATEGY — BUILD LIKE A DRAFTSMAN, SECTION BY SECTION (efficient agents finish in 8-12 turns):
+The canvas is watched live: each unit fades in the moment you place it and each stream draws itself the moment you wire it. A plant that assembles one section at a time reads as a professional drawing; a dump of naked boxes followed by a wiring scramble does not. But a turn is EXPENSIVE — one turn must carry a WHOLE section.
+1. Work in PROCESS ORDER, one section per turn: feed preparation → conversion/reaction → cooling/separation → polishing → recycle/purge as the plan has them.
+2. ONE TURN = ONE COMPLETE SECTION: 3-6 add_unit AND their 3-8 connect actions batched TOGETHER (8-12 actions in the turn). The section's units and its streams land in the same turn — place-and-wire, never place-then-wire-later. A turn that places or wires a single item is a WASTED turn; the turn budget is small and the runtime stops you mid-plant if you spend it one item at a time.
+3. Streams in process order, following the plan's stream list${general ? '' : '; keep the KPI-convention ids'}.
+4. Specs: the catalog defaults ARE the reference operating points — set ONLY the specs the brief explicitly requires. Do NOT re-set defaults.
+5. add_controller if the plan calls for it${general ? '. declare_product once the product stream exists.' : '.'}
+6. validate {} — if issues, fix exactly what each message says (batch the fixes), then validate again.
+7. solve {} — if it refuses or errors, read the message and fix. If it converges, read_stream on the product${general ? ' and confirm it carries the declared species at a meaningful rate' : ' and the converter feed'} to check against the brief.
+8. "done": true is ONLY valid after a SUCCESSFUL solve that satisfies the brief — the runtime rejects done otherwise and tells you to fix and solve.
 
 RULES:
-- Batch up to 12 actions per turn; waiting for results each turn wastes turns.
+- Batch HARD: one turn = one whole section (its units + its streams). Never a single-item turn.
 - A failed action is not fatal: its message tells you exactly what to fix. Do not repeat a failed action unchanged.
 - Never invent unit types, ports, spec keys, or stream ids that are not in the catalog/plan; the tools reject them.
 - The plant must be a single connected flowsheet with feeds, products, and one recycle loop max.
@@ -131,13 +134,14 @@ ${family.conventions(speciesDigest(), catalog)}
 ${family.primer}${general ? `
 
 WORK DISCIPLINE (you have 24 turns TOTAL — the runtime will stop you):
-- Batches of 8-12 actions, EVERY turn. One action per turn is a failed build.
-- Turn 1-2: ALL units. Turn 3-4: ALL streams, in process order, exactly as the plan lists them. Turn 5: controller and product declaration if the plan calls for them. Turn 6: validate. Turn 7: fix every issue, then solve, then read_stream the product. Only after a SUCCESSFUL solve may you set done to true.
+- ONE SECTION PER TURN, every turn: that section's units AND its streams in the same batch (8-12 actions). A single-item turn is a wasted turn — place-then-wire-later runs out of budget and reads terribly on the live canvas.
+- Sections in process order: feed/cleanup → conversion → separation → product/polish → recycle/purge if the plan has one. Turn 1: the whole first section (its units placed AND its streams wired). Continue section by section until the plan is fully built.
+- Late turns: controller and product declaration if the plan calls for them, then validate. Fix every issue, then solve, then read_stream the product. Only after a SUCCESSFUL solve may you set done to true.
 - set_spec ONLY for specs the brief names or the plan's specs list carries — the catalog defaults are already sensible operating points. NEVER re-state a default.` : ''}`;
 }
 
 export function engineerUser(brief: string, planJson: string): string {
-  return `DESIGN BRIEF:\n${brief}\n\nARCHITECT'S PLAN (guidance — you execute it with tools):\n${planJson}\n\nBegin building. First turn: place the units.`;
+  return `DESIGN BRIEF:\n${brief}\n\nARCHITECT'S PLAN (guidance — you execute it with tools):\n${planJson}\n\nBegin building. First turn: the first section of the plant — its units placed AND its streams wired.`;
 }
 
 export function engineerResults(results: { tool: string; ok: boolean; summary: string }[], state: { units: number; streams: number; controllers: number; solved: boolean }): string {
@@ -237,8 +241,8 @@ export function remixSystem(family: PlantFamily): string {
 Each turn, reply ONLY a JSON object (no prose outside it):
 {"thinking": "one or two short sentences", "actions": [{"tool": "...", "args": {...}}], "done": false, "doneReason": ""}
 
-TOOLS: add_unit {id, type} · remove_unit {id} · connect {id, name, cls, from, to, implicit?} · disconnect {id} · set_spec {unit, key, value} · add_controller {…} · remove_controller {id} · declare_product {stream, species} · validate {} · solve {} · read_stream {id} · get_graph {}.
-Arg shapes: "from"/"to" are "UNIT.port" strings; "to": null means the stream leaves the plant. set_spec args are flat: {"unit": "E3", "key": "outletT", "value": 210}.
+TOOLS: add_unit {id, type} · remove_unit {id} · connect {id, name, cls, from, to, implicit?} · disconnect {id} · set_spec {unit, key, value} · add_controller {…} · remove_controller {id} · declare_product {stream, species} · relayout {} · validate {} · solve {} · read_stream {id} · get_graph {}.
+Arg shapes: "from"/"to" are "UNIT.port" strings; "to": null means the stream leaves the plant. set_spec args are flat: {"unit": "E3", "key": "outletT", "value": 210}. relayout {} takes no args: it redraws the flowsheet cleanly on the canvas — orthogonal streams, aligned columns, camera re-fit. Call it whenever the student asks about the DRAWING (tidy it up, straighten the lines, re-align, make it look like the textbook sheet) or after edits that left the sheet looking ragged. It changes no physics — only how the plant is drawn.
 
 RULES:
 - Smallest edit that honors the request. The plant already solves — protect that.

@@ -9,13 +9,23 @@
  * summary when the run's outputs land, token ledger as a footnote in the
  * detail); ONE answer card merges the critic's verdict with the solver's
  * numbers; errors and true system notes stay as their own lines. THE ONE
- * CONVERSATION LAW: runs chain — build, tour, and edit share one transcript
+ * CONVERSATION LAW: runs chain — build and edit share one transcript
  * (a run = one YOU bubble + one work card + one answer card, repeating),
  * and after a run the composer STAYS an input: the same box that built
  * the plant takes the next change — edit-with-AI is not a different
  * screen, it is this chat continuing. The empty state is the on-ramp:
  * family presets, an "I don't know what to build" region picker, and
  * surprise briefs.
+ *
+ * THE HANDOFF LAW (task 69): once a plant is on the table the panel IS
+ * EDIT WITH AI — the header says so, the composer takes changes, and the
+ * only action under the input is SAVE TO LIBRARY (Learn and Operate live
+ * in the builder's header, handing off to the project page). No tour
+ * affordances here, no suggestion bubbles after a build — the flowsheet
+ * is the product.
+ *
+ * Visually: one continuous paper surface — soft tinted cards instead of
+ * boxed-in boxes, hairlines only where a boundary earns its keep.
  *
  * Pure presentation — every piece of state lives in the page.
  */
@@ -29,14 +39,12 @@ import {
   Compass,
   Factory,
   FlaskConical,
-  HelpCircle,
   MapPin,
-  Play,
   RotateCcw,
   Save,
   Sparkles,
   Square,
-  ZoomIn,
+  Wand2,
   Zap,
 } from 'lucide-react';
 import type { BuildPhase, CriticVerdict, LogEntry, RunUsage, SolveSummary } from '@/lib/agent/protocol';
@@ -314,7 +322,9 @@ function nowLine(phase: BuildPhase, body: PhaseBody): string {
   }
 }
 
-/** one phase inside the work card — a mini collapsible section */
+/** one phase inside the work card — a flat, quiet section (no boxed-in
+ * boxes: the card is the surface, the section is just a labeled row that
+ * opens into its detail) */
 function PhaseSectionView({
   phase,
   body,
@@ -333,21 +343,11 @@ function PhaseSectionView({
   const [open, setOpen] = useState(false);
   const flagged = body.tools.filter((l) => !l.ok).length;
   return (
-    <div
-      className="rounded-lg border"
-      style={{
-        borderColor: live
-          ? PHASE_COLOR[phase]
-          : flagged > 0
-            ? C.warn
-            : 'var(--fs-band-line)',
-        background: 'var(--fs-paper-60, transparent)',
-      }}
-    >
+    <div className={live ? 'rounded-lg' : undefined}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex w-full items-center gap-2 px-1 py-1.5 text-left"
       >
         <span
           className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
@@ -374,7 +374,7 @@ function PhaseSectionView({
         />
       </button>
       {open && (
-        <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+        <div className="mt-0.5 border-t px-1 pb-1 pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
           <div className="max-h-60 overflow-y-auto pr-1">
             {body.think.map((t) => (
               <div key={t.key} className="mb-2 last:mb-0">
@@ -399,7 +399,7 @@ function PhaseSectionView({
               </div>
             )}
             {body.tools.length > 0 && (
-              <div className="mt-1 flex flex-col gap-0.5 border-t pt-1.5" style={{ borderColor: 'var(--fs-band-line)' }}>
+              <div className="mt-1 flex flex-col gap-0.5 pt-1.5">
                 {(live ? body.tools.slice(-3) : body.tools).map((l) => (
                   <div key={l.key} className="flex items-baseline gap-2" title={l.text}>
                     <span className="font-mono text-[10px] font-bold" style={{ color: l.ok ? C.inkFaint : C.warn }}>
@@ -440,14 +440,19 @@ function WorkCard({ phases, usage, live }: { phases: PhaseSection[]; usage?: Run
     .replace(/\n/g, ' ');
   const truncated = headline.length > 96 ? `${headline.slice(0, 95)}…` : headline;
   return (
+    // soft tinted surface, not a boxed border — one card grammar with the
+    // answer card; the warn outline only when something actually failed
     <div
-      className="bd-msg-in rounded-xl border"
-      style={{ borderColor: anyFlagged ? C.warn : 'var(--fs-band-line)' }}
+      className="bd-msg-in rounded-2xl px-1 py-0.5"
+      style={{
+        background: 'var(--fs-band)',
+        ...(anyFlagged ? { boxShadow: `inset 0 0 0 1px ${C.warn}` } : {}),
+      }}
     >
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
       >
         <span
           className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -469,7 +474,7 @@ function WorkCard({ phases, usage, live }: { phases: PhaseSection[]; usage?: Run
         />
       </button>
       {open && (
-        <div className="flex flex-col gap-1.5 border-t px-2.5 py-2" style={{ borderColor: 'var(--fs-band-line)' }}>
+        <div className="flex flex-col gap-1 px-1.5 pb-2 pt-0.5">
           {phases.map((p, i) => (
             <PhaseSectionView
               key={`${p.phase}-${p.body.think[0]?.key ?? p.body.tools[0]?.key ?? i}`}
@@ -581,8 +586,8 @@ function AnswerCard({ solve, verdict }: { solve?: SolveSummary; verdict?: Critic
     (verdict?.strengths.length ?? 0) + (verdict?.issues.length ?? 0) + (verdict?.suggestions.length ?? 0);
   return (
     <div
-      className="bd-msg-in rounded-xl border px-3 py-2.5"
-      style={{ borderColor: bad ? C.warn : tone, background: C.paper }}
+      className="bd-msg-in rounded-2xl border px-3 py-2.5"
+      style={{ borderColor: bad ? C.warn : 'var(--fs-band-line)', background: C.paper, boxShadow: 'var(--fs-card-shadow)' }}
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="font-mono text-[9.5px] font-extrabold tracking-[0.16em]" style={{ color: C.ink }}>
@@ -828,15 +833,12 @@ export interface SessionPanelProps {
   /** label for the reset button — the edit panel says "Done editing" */
   resetLabel?: string;
   onSave: () => void;
-  onZoomIn: () => void;
   onCollapse: () => void;
   saved: boolean;
   hasGraph: boolean;
   unitCount: number;
   streamCount: number;
   doneOk: boolean | null;
-  tourReady: boolean;
-  onTakeTour: () => void;
   remixName: string | null;
 }
 
@@ -858,15 +860,12 @@ export function SessionPanel({
   onReset,
   resetLabel,
   onSave,
-  onZoomIn,
   onCollapse,
   saved,
   hasGraph,
   unitCount,
   streamCount,
   doneOk,
-  tourReady,
-  onTakeTour,
   remixName,
 }: SessionPanelProps) {
   const blocks = useMemo(() => deriveBlocks(entries), [entries]);
@@ -880,6 +879,9 @@ export function SessionPanel({
   const running = status === 'running';
   const idle = status === 'idle';
   const remixing = remixName !== null;
+  // THE HANDOFF LAW: once a plant is on the table (a run has happened),
+  // this panel IS edit-with-AI — the header says so, the composer edits
+  const editPhase = hasGraph && blocks.length > 0;
 
   // keep the transcript pinned to the latest — unless the reader scrolled up
   useEffect(() => {
@@ -921,7 +923,7 @@ export function SessionPanel({
     ? `${PHASE_LABEL[phase ?? 'engineer']} · ${unitCount} unit${unitCount === 1 ? '' : 's'} · ${streamCount} stream${streamCount === 1 ? '' : 's'}`
     : status === 'finished'
       ? doneOk === true
-        ? 'build passed the critic'
+        ? 'edit with AI below · Learn & Operate up top'
         : doneOk === false
           ? 'build finished with issues'
           : 'session restored from the library'
@@ -931,14 +933,29 @@ export function SessionPanel({
 
   return (
     <div className="flex h-full w-full flex-col" style={{ background: C.paper }}>
-      {/* session header */}
-      <header
-        className="flex h-[54px] shrink-0 items-center gap-2.5 border-b px-3 sm:px-4"
-        style={{ borderColor: 'var(--fs-band-line)' }}
-      >
+      {/* session header — one surface with the transcript below: no hard
+          rule line, the header simply sits above the scroll (the gradient
+          veil keeps scrolled content from colliding with the title) */}
+      <header className="relative z-10 flex h-[54px] shrink-0 items-center gap-2.5 px-3 sm:px-4">
+        {editPhase && !remixing ? (
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: 'var(--fs-band)', color: C.ink }}
+            aria-hidden="true"
+          >
+            <Wand2 size={13} />
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px] font-bold leading-tight" style={{ color: idle ? C.inkFaint : C.ink }}>
-            {remixing ? `${remixName} · edit` : sessionTitle}
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[13.5px] font-bold leading-tight" style={{ color: idle ? C.inkFaint : C.ink }}>
+              {remixing ? `${remixName} · edit` : editPhase ? 'Edit with AI' : sessionTitle}
+            </span>
+            {editPhase && !remixing && (
+              <span className="hidden shrink-0 font-mono text-[9px] font-extrabold tracking-[0.12em] sm:inline" style={{ color: C.inkFaint }}>
+                {sessionTitle}
+              </span>
+            )}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] leading-tight" style={{ color: C.inkSoft }}>
             {running && <span className="bd-pulse inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: phase ? PHASE_COLOR[phase] : C.gas }} />}
@@ -946,11 +963,20 @@ export function SessionPanel({
           </div>
         </div>
         <button
+          onClick={onReset}
+          aria-label={resetLabel ?? 'New session'}
+          title={resetLabel ?? 'New session'}
+          className="hover-band flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ color: C.inkFaint }}
+        >
+          <RotateCcw size={14} />
+        </button>
+        <button
           onClick={onCollapse}
           aria-label="Shrink the session panel"
           title="Shrink the session panel"
-          className="hover-band flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
-          style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
+          className="hover-band flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ color: C.inkSoft }}
         >
           <ChevronLeft size={16} />
         </button>
@@ -1045,7 +1071,9 @@ export function SessionPanel({
         </div>
       ) : (
         <div className="relative min-h-0 flex-1">
-          <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto px-4 py-3 sm:px-5" style={{ background: C.canvas }}>
+          {/* one continuous paper surface — no dark band, no hard rules; the
+              cards carry their own quiet tint and shadow */}
+          <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto px-4 py-3 sm:px-5">
             <div className="flex flex-col gap-3 pb-2">
               {blocks.map((b, i) => {
                 const live = running && i === blocks.length - 1;
@@ -1087,8 +1115,8 @@ export function SessionPanel({
         </div>
       )}
 
-      {/* composer — three honest states */}
-      <div className="shrink-0 border-t px-3 py-3 sm:px-4" style={{ borderColor: 'var(--fs-band-line)', background: C.paper }}>
+      {/* composer — three honest states; one surface with the transcript */}
+      <div className="shrink-0 px-3 pb-3 pt-1 sm:px-4">
         {idle ? (
           <div
             className="rounded-2xl border transition-[box-shadow] focus-within:ring-2"
@@ -1184,27 +1212,11 @@ export function SessionPanel({
                 </button>
               </div>
             </div>
-            {/* the next moves — quiet pills; the input is the hero */}
+            {/* THE HANDOFF LAW: the only action under the input is save —
+                Learn and Operate live in the builder's header (they hand
+                off to the project page), the tour plays there, and the
+                composer is free to be an edit box, nothing else */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                onClick={onTakeTour}
-                disabled={!tourReady}
-                className="hover-band flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-40"
-                style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
-                title="Play the docent's guided tour — voice and music, right here"
-              >
-                <Play size={12} strokeWidth={3} />
-                Take the tour
-              </button>
-              <button
-                onClick={onZoomIn}
-                disabled={!hasGraph}
-                className="hover-band flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-bold disabled:opacity-40"
-                style={{ color: C.ink, borderColor: 'var(--fs-band-line)' }}
-              >
-                <ZoomIn size={13} />
-                Zoom in
-              </button>
               <button
                 onClick={onSave}
                 disabled={!hasGraph || saved}
@@ -1214,30 +1226,7 @@ export function SessionPanel({
                 <Save size={13} />
                 {saved ? 'Saved ✓' : 'Save to library'}
               </button>
-              <button
-                onClick={onReset}
-                className="hover-band ml-auto flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-bold"
-                style={{ color: C.inkSoft, borderColor: 'var(--fs-band-line)' }}
-                title="Close this conversation and start a fresh one"
-              >
-                <RotateCcw size={12} />
-                {resetLabel ?? 'New session'}
-              </button>
             </div>
-            {hasGraph && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {REMIX_EXAMPLES.slice(0, 2).map((text) => (
-                  <button
-                    key={text}
-                    onClick={() => pickBrief(text)}
-                    className="hover-band rounded-full border px-3 py-1 text-[11px] font-semibold"
-                    style={{ borderColor: 'var(--fs-band-line)', color: C.inkSoft }}
-                  >
-                    {text}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>

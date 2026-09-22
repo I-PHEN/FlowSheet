@@ -55,7 +55,7 @@ import type { PlantFamily } from '../families/types';
 import type { FlowGraph } from '../engine/graph';
 import type { Tour, TourStep } from '../content/units';
 
-const MAX_ENGINEER_TURNS = 24;
+const MAX_ENGINEER_TURNS = 32; // section-by-section builds: one LLM turn per section + fix turns
 const MAX_GENERAL_TURNS = 34; // free-design builds need recovery room
 const MAX_ACTIONS_PER_TURN = 12;
 const MAX_ACTIONS_TOTAL = 200;
@@ -103,6 +103,7 @@ const PACE_MS: Record<string, number> = {
   add_controller: 140,
   remove_controller: 140,
   declare_product: 120,
+  relayout: 620, // let the redraw breathe before the next action lands
 };
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -199,15 +200,39 @@ export async function runAgentBuild(
       try {
         raw = await chatJson(llm, trimmedConvo(), `engineer:${turn}`);
       } catch (turnErr) {
-        // transient LLM failure (rate limit, outage): keep everything built
-        // so far and fall through to the forced final solve — never throw
-        // away built state because the model became unreachable
-        emit({
-          type: 'message',
-          role: 'system',
-          text: `Engineer session interrupted (${(turnErr as Error).message}) — verifying the plant as built so far.`,
-        });
-        break;
+        const msg = (turnErr as Error).message ?? String(turnErr);
+        // rate limits are per-minute quota windows — one patient pause
+        // usually clears them (a classroom shares the quota); anything
+        // else (or a second rate-limit) falls through to the honest stop
+        if (/429|too many requests/i.test(msg) && !isLast) {
+          emit({
+            type: 'message',
+            role: 'system',
+            text: 'The API is rate-limiting the engineer — pausing for the quota window to clear before retrying.',
+          });
+          await sleep(30_000);
+          if (shouldStop?.()) throw new StopRequested();
+          try {
+            raw = await chatJson(llm, trimmedConvo(), `engineer:${turn}`);
+          } catch {
+            emit({
+              type: 'message',
+              role: 'system',
+              text: `Engineer session interrupted (${msg}) — verifying the plant as built so far.`,
+            });
+            break;
+          }
+        } else {
+          // transient LLM failure (rate limit, outage): keep everything built
+          // so far and fall through to the forced final solve — never throw
+          // away built state because the model became unreachable
+          emit({
+            type: 'message',
+            role: 'system',
+            text: `Engineer session interrupted (${msg}) — verifying the plant as built so far.`,
+          });
+          break;
+        }
       }
       const thinking = typeof raw.thinking === 'string' ? raw.thinking : '';
       let actions = Array.isArray(raw.actions) ? raw.actions : [];
@@ -451,12 +476,34 @@ export async function runAgentRemix(
       try {
         raw = await chatJson(llm, trimmedConvo(), `remix:${turn}`);
       } catch (turnErr) {
-        emit({
-          type: 'message',
-          role: 'system',
-          text: `Engineer session interrupted (${(turnErr as Error).message}) — verifying the plant as edited so far.`,
-        });
-        break;
+        const msg = (turnErr as Error).message ?? String(turnErr);
+        // one patient pass for per-minute quota windows, then the honest stop
+        if (/429|too many requests/i.test(msg) && !isLast) {
+          emit({
+            type: 'message',
+            role: 'system',
+            text: 'The API is rate-limiting the engineer — pausing for the quota window to clear before retrying.',
+          });
+          await sleep(30_000);
+          if (shouldStop?.()) throw new StopRequested();
+          try {
+            raw = await chatJson(llm, trimmedConvo(), `remix:${turn}`);
+          } catch {
+            emit({
+              type: 'message',
+              role: 'system',
+              text: `Engineer session interrupted (${msg}) — verifying the plant as edited so far.`,
+            });
+            break;
+          }
+        } else {
+          emit({
+            type: 'message',
+            role: 'system',
+            text: `Engineer session interrupted (${msg}) — verifying the plant as edited so far.`,
+          });
+          break;
+        }
       }
       const thinking = typeof raw.thinking === 'string' ? raw.thinking : '';
       let actions = Array.isArray(raw.actions) ? raw.actions : [];

@@ -89,3 +89,5 @@ scripts/restore-list.txt
 scripts/scrub-list.txt
 scripts/strip-artifacts.sh
 scripts/scrub-history.sh
+scripts/t69_*
+scripts/assets/t69_*

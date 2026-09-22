@@ -88,13 +88,25 @@ interface Layout {
   height: number;
   units: Map<string, Placed>;
   bandCount: number;
-  /** rows per band — needed to compute each band's bottom lane */
+  /** rows per band — each band reserves only the height IT needs */
+  bandRows: number[];
+  /** top y of each band's content (index = band) */
+  bandTops: number[];
   maxColLen: number;
 }
 
 function computeLayout(graph: FlowGraph): Layout {
   const units = graph.units;
-  if (units.length === 0) return { width: 900, height: 360, units: new Map(), bandCount: 1, maxColLen: 1 };
+  if (units.length === 0)
+    return {
+      width: 900,
+      height: 360,
+      units: new Map(),
+      bandCount: 1,
+      bandRows: [1],
+      bandTops: [PAD],
+      maxColLen: 1,
+    };
 
   // adjacency (unit digraph, self-loops ignored)
   const preds = new Map<string, Set<string>>();
@@ -147,7 +159,22 @@ function computeLayout(graph: FlowGraph): Layout {
   const cols = maxDepth + 1;
   const bandCount = pickBands(cols, maxColLen);
   const bandCols = Math.ceil(cols / bandCount);
-  const bandGap = BAND_GAP;
+
+  // PER-BAND ROW HEIGHTS: a band reserves only the rows its own columns
+  // actually use — a 1-row band no longer inherits a 3-row gap, so the
+  // sheet never stretches with voids (the #1 complaint about AI sheets)
+  const bandRows: number[] = new Array(bandCount).fill(1);
+  for (const [d, ids] of byDepth) {
+    const b = Math.floor(d / bandCols);
+    if (b >= 0 && b < bandCount) bandRows[b] = Math.max(bandRows[b], ids.length);
+  }
+  const bandTops: number[] = [];
+  let bandAcc = PAD;
+  for (let b = 0; b < bandCount; b++) {
+    bandTops.push(bandAcc);
+    bandAcc += bandRows[b] * ROW_H + BAND_GAP;
+  }
+
   const placed = new Map<string, Placed>();
   for (const u of units) {
     const d = depth.get(u.id) ?? 0;
@@ -156,17 +183,22 @@ function computeLayout(graph: FlowGraph): Layout {
     // wrap the chain into bands: column position within the band, band rows
     // stacked vertically — a long train stays readable and WIDE
     const x = PAD + (d % bandCols) * COL_W;
-    const y = PAD + band * (maxColLen * ROW_H + bandGap) + col * ROW_H + (band % 2 === 1 ? 24 : 0);
+    const y = bandTops[band] + col * ROW_H + (band % 2 === 1 ? 24 : 0);
     placed.set(u.id, { id: u.id, x, y, depth: d, col, band });
   }
 
-  const width = PAD * 2 + bandCols * COL_W;
-  const height = PAD * 2 + bandCount * (maxColLen * ROW_H) + (bandCount - 1) * bandGap + 48;
+  // right slack only when the plant actually has sink streams — margin
+  // labels ("NH3 PRODUCT", "PURGE TO FUEL") need room to breathe
+  const hasSinks = graph.streams.some((s) => !s.to && !s.implicit);
+  const width = PAD * 2 + bandCols * COL_W + (hasSinks ? 104 : 0);
+  const height = bandAcc - BAND_GAP + PAD + 48;
   return {
     width: Math.max(width, 900),
     height: Math.max(height, 360),
     units: placed,
     bandCount,
+    bandRows,
+    bandTops,
     maxColLen,
   };
 }
@@ -174,8 +206,7 @@ function computeLayout(graph: FlowGraph): Layout {
 /** the free lane below a band's content — band flips and blocked sinks run
  *  their horizontals here (one uniform serpentine convention) */
 function bandBottomLane(band: number, layout: Layout): number {
-  const bandTop = PAD + band * (layout.maxColLen * ROW_H + BAND_GAP);
-  return bandTop + layout.maxColLen * ROW_H + BAND_GAP / 2;
+  return layout.bandTops[band] + layout.bandRows[band] * ROW_H + BAND_GAP / 2;
 }
 
 /** pull a route's terminal points from the OBSTACLE edge in to the symbol
@@ -434,6 +465,10 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
       let pill = { x: 0, y: 0 };
       let selfLoop = false;
       let pts: Array<[number, number]> | null = null;
+      // a sink (stream leaving the plant) earns a margin annotation, the
+      // drawing-office way: "NH3 PRODUCT", "PURGE TO FUEL" — never a bare
+      // arrow stabbing into empty paper
+      let sinkLabel: { x: number; y: number; text: string; anchor: 'start' | 'middle' | 'end' } | undefined;
       if (s.to && s.to.unit === s.from.unit) {
         // self-loop (internal recycle, e.g. separator letdown)
         selfLoop = true;
@@ -462,15 +497,28 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           ? inkInsetsFor(graph.units.find((u) => u.id === s.to!.unit)?.type ?? '')
           : null;
         pts = kissTerminals(r.pts, ra, inkA, rb, inkB);
-        d = roundedPath(pts, 10);
+        d = roundedPath(pts, 3); // CAD-crisp elbows — straight is the point
         const last = pts[pts.length - 1];
         endX = last[0];
         endY = last[1];
         endAngle = r.endAngle;
         pill = pillAt(pts);
+        if (!s.to && !s.implicit) {
+          const raw = (s.name || s.cls || 'OUT')
+            .toUpperCase()
+            .replace(/[^A-Z0-9 \u00b7\-]/g, '')
+            .slice(0, 22);
+          if (Math.abs(Math.abs(endAngle) - Math.PI / 2) < 0.1) {
+            sinkLabel = { x: endX, y: endY + 20, text: raw, anchor: 'middle' };
+          } else if (Math.abs(endAngle) < 0.1) {
+            sinkLabel = { x: endX + 10, y: endY + 3.5, text: raw, anchor: 'start' };
+          } else {
+            sinkLabel = { x: endX - 10, y: endY + 3.5, text: raw, anchor: 'end' };
+          }
+        }
       }
       const pillW = 12 + s.id.length * 8;
-      return { s, st, d, pts, endX, endY, endAngle, pill, pillW, selfLoop };
+      return { s, st, d, pts, endX, endY, endAngle, pill, pillW, selfLoop, sinkLabel };
     });
 
     // one collision pass: pills that landed on top of each other get a
@@ -845,6 +893,28 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                   </text>
                 </g>
               )}
+              {/* the margin annotation — where the stream leaves the plant */}
+              {it.sinkLabel && (
+                <g className={fresh.has(it.s.id) ? 'bd-late' : undefined} style={{ pointerEvents: 'none' }}>
+                  <text
+                    x={it.sinkLabel.x}
+                    y={it.sinkLabel.y}
+                    textAnchor={it.sinkLabel.anchor}
+                    fontSize={10}
+                    fontWeight={800}
+                    letterSpacing={1.2}
+                    style={{
+                      fill: C.inkSoft,
+                      stroke: C.sheet,
+                      strokeWidth: 3.5,
+                      paintOrder: 'stroke',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    }}
+                  >
+                    {it.sinkLabel.text}
+                  </text>
+                </g>
+              )}
             </g>
           ) : null,
         )}
@@ -854,11 +924,18 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
           const def = getUnitType(u.type);
           const sel = selected === u.id;
           const cx = OB_W / 2;
+          const freshU = fresh.has(u.id);
           return (
             <g
               key={u.id}
-              transform={`translate(${p.x}, ${p.y})`}
-              style={{ cursor: 'pointer' }}
+              // position as a CSS transform + glide transition: when the
+              // layout re-packs mid-build, equipment SLIDES to its new spot
+              // like a draftsman nudging the sheet — never a hard jump
+              style={{
+                transform: `translate(${p.x}px, ${p.y}px)`,
+                cursor: 'pointer',
+                ...(freshU ? {} : { transition: 'transform 480ms cubic-bezier(0.25, 0.8, 0.35, 1)' }),
+              }}
               onClick={() => {
                 if (!movedRef.current) onUnitClick?.(u.id);
               }}
@@ -869,7 +946,7 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
                   (covers the glyph AND its label block) */}
               <rect x={-12} y={-12} width={OB_W + 24} height={OB_H + 52} fill="rgba(0,0,0,0)" style={{ pointerEvents: 'all' }} />
               <g
-                className={fresh.has(u.id) ? 'bd-unit-in' : undefined}
+                className={freshU ? 'bd-unit-in' : undefined}
                 style={{ pointerEvents: 'none' }}
               >
                 {/* selection halo wraps glyph + label, like the reference sheet */}
@@ -910,6 +987,23 @@ export const BuildCanvas = forwardRef<BuildCanvasHandle, BuildCanvasProps>(funct
             </g>
           );
         })}
+
+        {/* the drawing-office stamp — every issued sheet carries one */}
+        <text
+          x={W - 26}
+          y={H - 22}
+          textAnchor="end"
+          fontSize={9.5}
+          fontWeight={800}
+          letterSpacing={1.4}
+          style={{
+            fill: C.inkFaint,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            pointerEvents: 'none',
+          }}
+        >
+          {`${(graph.family ?? 'process').toUpperCase()} · AGENT-BUILT PFD · SHEET 1 OF 1`}
+        </text>
       </svg>
 
       {/* material movement — dots on the solved flows, sharing the exact
