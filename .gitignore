@@ -69,3 +69,15 @@ tool-results/
 # Owner's private study material — never publish
 download/Flowsheet_The_Builders_Room.html
 scripts/builders-room/
+
+# --- task 65: dev-loop review artifacts — the repo is PUBLIC, screenshots never get committed ---
+upload/
+download/
+scripts/*-shots/
+scripts/*.png
+scripts/*vlm*.json
+scripts/tts-test/
+scripts/*-plant-id.txt
+scripts/strip-list.txt
+scripts/restore-list.txt
+scripts/strip-artifacts.sh
